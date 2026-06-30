@@ -1,0 +1,38 @@
+﻿# Unity generated folders
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+[Mm]emoryCaptures/
+
+# IDE / OS
+.vs/
+.vscode/
+.idea/
+*.csproj
+*.sln
+*.suo
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.tmp
+*.bak
+*.swp
+.DS_Store
+Thumbs.db
+
+# Unity crash / profiler
+sysinfo.txt
+*.stackdump
+
+# Large local package cache
+Packages/com.github.homuler.mediapipe-*.tgz
+Packages/com.github.homuler.mediapipe-download/
+
+# Optional imported package samples can be restored from MediaPipeUnityPlugin
+Assets/Samples/MediaPipe Unity Plugin/
