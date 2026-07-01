@@ -1,0 +1,18 @@
+{
+    "name": "KeepBlinking.MediaPipe",
+    "rootNamespace": "",
+    "references": [
+        "GUID:04c4d86a70aa56c55a78c61f1ab1a56d",
+        "GUID:f32148de13e8ca8369101d3ef3260930",
+        "GUID:7d8b3f5fcd864bc4b8eb7b08f79f1d61"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
