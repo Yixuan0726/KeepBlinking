@@ -26,7 +26,7 @@ The project is not trying to make players stare harder at the screen. The goal i
 ## Unity Version
 
 - Unity `6000.1.8f1`
-- Target format: portrait mobile interaction, currently tested in-editor with webcam / MediaPipe face landmarks.
+- Target format: portrait iPhone interaction, currently tested in-editor with webcam / MediaPipe face landmarks.
 
 ## Important Dependency
 
@@ -48,7 +48,7 @@ Then reopen the Unity project.
 
 ## Key Files
 
-- `Assets/Scenes/EdgeOrbitHarvestMvp.unity`: current MVP scene.
+- `Assets/Scenes/SampleScene.unity`: current MVP scene.
 - `Assets/KeepBlinking/Scripts/Gameplay/EdgeOrbitHarvestMvp.cs`: main playable MVP loop.
 - `Assets/KeepBlinking/Scripts/Gameplay/BlinkBootSequence.cs`: first-step blink boot prototype.
 - `Assets/KeepBlinking/Scripts/Input/EyeInputDebugState.cs`: MediaPipe face landmark bridge for gaze, blink, eye closure, and face distance.
