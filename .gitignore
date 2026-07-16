@@ -1,4 +1,4 @@
-﻿# Unity generated folders
+# Unity generated folders
 [Ll]ibrary/
 [Tt]emp/
 [Oo]bj/
@@ -35,4 +35,4 @@ Packages/com.github.homuler.mediapipe-*.tgz
 Packages/com.github.homuler.mediapipe-download/
 
 # Optional imported package samples can be restored from MediaPipeUnityPlugin
-Assets/Samples/MediaPipe Unity Plugin/
+
