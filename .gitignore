@@ -31,8 +31,4 @@ sysinfo.txt
 *.stackdump
 
 # Large local package cache
-Packages/com.github.homuler.mediapipe-*.tgz
 Packages/com.github.homuler.mediapipe-download/
-
-# Optional imported package samples can be restored from MediaPipeUnityPlugin
-

@@ -1,0 +1,21 @@
+{
+  "name": "KeepBlinking.EditorTests",
+  "rootNamespace": "KeepBlinking.Tests",
+  "references": [
+    "GUID:7d8b3f5fcd864bc4b8eb7b08f79f1d61"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false,
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ]
+}

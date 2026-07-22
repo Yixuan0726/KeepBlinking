@@ -486,13 +486,13 @@ MonoBehaviour:
   _maxSpawnIntervalSeconds: 3
   _maxOrbitingBlocks: 4
   _edgeInsetViewport: 0.09
-  _blockWorldSizeRange: {x: 0.76, y: 1.02}
+  _blockWorldSizeRange: {x: 1.03, y: 1.38}
   _orbitAngularSpeedRange: {x: 0.35, y: 0.58}
   _minCrisisIntervalSeconds: 15
   _maxCrisisIntervalSeconds: 20
   _crisisSpawnCount: 8
   _crisisSpawnPaddingViewport: 0.16
-  _crisisBlockWorldSizeRange: {x: 0.76, y: 1.02}
+  _crisisBlockWorldSizeRange: {x: 1.03, y: 1.38}
   _crisisMoveSpeedRange: {x: 0.75, y: 1.1}
   _purificationRadiusGrowthSpeed: 3.1
   _purificationVisualAlpha: 0.34
@@ -523,20 +523,13 @@ MonoBehaviour:
   _leftIntentDeadZonePixels: 52
   _leftSoftLockExtraAngleDegrees: 8
   _runStartupCalibration: 1
-  _calibrationTargetWorldSize: 0.78
+  _calibrationTargetWorldSize: 1.05
   _calibrationEdgePaddingViewport: 0.22
   _calibrationMaxScale: 3.5
   _calibrationMinScale: 0.25
   _playFreezeFeedbackAudio: 1
   _freezeFeedbackVolume: 0.22
   _showDebugHud: 0
-  _showOpeningGuide: 1
-  _openingGuideSeconds: 25
-  _pauseGameplayDuringOpeningGuide: 1
-  _showAmbientInstructionOverlay: 0
-  _enableSessionReportTimer: 1
-  _sessionDurationSeconds: 180
-  _allowDemoKeyboardShortcuts: 1
   _pushAwayDistanceThreshold: 0.6
   _pushAwayRelativeThreshold: 0.72
   _pushAwayAbsoluteDrop: 0.18
@@ -547,9 +540,11 @@ MonoBehaviour:
   _sampleCollectSpeed: 9
   _sampleCollectDistance: 0.18
   _samplesNeededForUpgrade: 10
-  _progressBarWidthViewport: 0.72
-  _progressBarHeightWorld: 0.42
-  _progressBarBottomViewport: 0.16
+  _upgradesRequiredBeforeBoss: 5
+  _logUpgradeFlowTransitions: 0
+  _progressBarWidthViewport: 0.46
+  _progressBarHeightWorld: 0.14
+  _progressBarBottomViewport: 0.02
   _moduleCardSize: {x: 2.25, y: 3}
   _moduleCardSpacing: 0.38
   _playerMarkerWorldSize: 0.72
@@ -604,6 +599,67 @@ MonoBehaviour:
   _faceLandmarkerResultAnnotationController: {fileID: 0}
   _hideCameraPreviewForKeepBlinking: 1
   _autoCreateKeepBlinkingObjects: 0
+--- !u!1 &1400000001
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1400000002}
+  - component: {fileID: 1400000003}
+  - component: {fileID: 1400000004}
+  m_Layer: 0
+  m_Name: KeepBlinking Tutorial
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1400000002
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1400000001}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1400000003
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1400000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e434572e02d713349ad1b287f12ae6c3, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  _gameplay: {fileID: 1200000003}
+  _state: 0
+  _enableTutorialForDevelopment: 1
+--- !u!114 &1400000004
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1400000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2b84c409d24b4aa9b7220eb613f7810e, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  _controller: {fileID: 1400000003}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -613,3 +669,4 @@ SceneRoots:
   - {fileID: 832575519}
   - {fileID: 1200000002}
   - {fileID: 1300000002}
+  - {fileID: 1400000002}

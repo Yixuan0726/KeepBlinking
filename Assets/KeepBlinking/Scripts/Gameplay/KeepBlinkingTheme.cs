@@ -48,9 +48,9 @@ namespace KeepBlinking.Gameplay
       }
     }
 
-    public static readonly Color BackgroundPrimary = new Color32(0x0F, 0x14, 0x16, 0xFF);
-    public static readonly Color BackgroundSecondary = new Color32(0x14, 0x1C, 0x1D, 0xFF);
-    public static readonly Color BackgroundTertiary = new Color32(0x1B, 0x25, 0x23, 0xFF);
+    public static readonly Color BackgroundPrimary = new Color32(0x17, 0x23, 0x21, 0xFF);
+    public static readonly Color BackgroundSecondary = new Color32(0x19, 0x28, 0x25, 0xFF);
+    public static readonly Color BackgroundTertiary = new Color32(0x14, 0x20, 0x1E, 0xFF);
     public static readonly Color SurfaceBase = new Color32(0x20, 0x29, 0x28, 0xFF);
     public static readonly Color SurfaceElevated = new Color32(0x29, 0x36, 0x33, 0xFF);
     public static readonly Color BorderSubtle = new Color32(0x53, 0x61, 0x5B, 0xFF);
@@ -59,9 +59,9 @@ namespace KeepBlinking.Gameplay
     public static readonly Color TextPrimary = new Color32(0xF2, 0xF4, 0xEA, 0xFF);
     public static readonly Color TextSecondary = new Color32(0xCA, 0xD6, 0xCC, 0xFF);
     public static readonly Color TextMuted = new Color32(0x96, 0xA6, 0x9C, 0xFF);
-    public static readonly Color AccentPrimary = new Color32(0x8B, 0xE3, 0xC1, 0xFF);
-    public static readonly Color AccentSoft = new Color32(0xD6, 0xF2, 0xE5, 0xFF);
-    public static readonly Color AccentWarm = new Color32(0xE4, 0xC6, 0x6D, 0xFF);
+    public static readonly Color AccentPrimary = new Color32(0x9F, 0xCB, 0xB4, 0xFF);
+    public static readonly Color AccentSoft = new Color32(0xC8, 0xD7, 0xCB, 0xFF);
+    public static readonly Color AccentWarm = new Color32(0xCB, 0xBF, 0x9B, 0xFF);
     public static readonly Color WarningSoft = new Color32(0xE7, 0x8E, 0x78, 0xFF);
     public static readonly Color DangerMuted = new Color32(0xD4, 0x6D, 0x62, 0xFF);
     public static readonly Color BackdropClosedEye = new Color32(0x03, 0x05, 0x06, 0xFF);
@@ -69,24 +69,24 @@ namespace KeepBlinking.Gameplay
     public static readonly Color SurfaceOverlay = new Color(32f / 255f, 41f / 255f, 40f / 255f, 0.94f);
     public static readonly Color SurfaceScrim = new Color(5f / 255f, 8f / 255f, 9f / 255f, 0.78f);
     public static readonly Color SurfaceShadow = new Color(0f, 0f, 0f, 0.32f);
-    public static readonly Color PanelGlow = new Color(139f / 255f, 227f / 255f, 193f / 255f, 0.14f);
-    public static readonly Color GridTint = new Color(214f / 255f, 242f / 255f, 229f / 255f, 0.022f);
-    public static readonly Color RingTint = new Color(139f / 255f, 227f / 255f, 193f / 255f, 0.034f);
-    public static readonly Color DustTint = new Color(242f / 255f, 244f / 255f, 234f / 255f, 0.035f);
+    public static readonly Color PanelGlow = new Color(159f / 255f, 203f / 255f, 180f / 255f, 0.10f);
+    public static readonly Color GridTint = new Color(36f / 255f, 51f / 255f, 47f / 255f, 0.24f);
+    public static readonly Color RingTint = new Color(36f / 255f, 51f / 255f, 47f / 255f, 0.10f);
+    public static readonly Color DustTint = new Color(226f / 255f, 229f / 255f, 212f / 255f, 0.045f);
 
-    public static readonly Color OrbitSignal = new Color(214f / 255f, 242f / 255f, 229f / 255f, 0.98f);
-    public static readonly Color OrbitSignalHover = new Color(228f / 255f, 198f / 255f, 109f / 255f, 1.00f);
-    public static readonly Color ConvertedSignal = new Color(242f / 255f, 244f / 255f, 234f / 255f, 1.00f);
-    public static readonly Color GazeIdle = new Color(214f / 255f, 242f / 255f, 229f / 255f, 0.62f);
-    public static readonly Color GazeHover = new Color(228f / 255f, 198f / 255f, 109f / 255f, 0.88f);
+    public static readonly Color OrbitSignal = new Color(226f / 255f, 229f / 255f, 212f / 255f, 0.98f);
+    public static readonly Color OrbitSignalHover = new Color(159f / 255f, 203f / 255f, 180f / 255f, 1.00f);
+    public static readonly Color ConvertedSignal = new Color(177f / 255f, 210f / 255f, 191f / 255f, 1.00f);
+    public static readonly Color GazeIdle = new Color(200f / 255f, 215f / 255f, 203f / 255f, 0.45f);
+    public static readonly Color GazeHover = new Color(159f / 255f, 203f / 255f, 180f / 255f, 0.72f);
     public static readonly Color CalibrationSignal = new Color(242f / 255f, 244f / 255f, 234f / 255f, 1.00f);
     public static readonly Color CalibrationBackplate = new Color(32f / 255f, 41f / 255f, 40f / 255f, 0.98f);
     public static readonly Color CalibrationOuter = new Color(228f / 255f, 198f / 255f, 109f / 255f, 0.96f);
     public static readonly Color CalibrationCore = new Color(250f / 255f, 248f / 255f, 230f / 255f, 1.00f);
     public static readonly Color CrisisSignal = new Color(231f / 255f, 142f / 255f, 120f / 255f, 0.98f);
-    public static readonly Color ProgressBack = new Color(32f / 255f, 41f / 255f, 40f / 255f, 0.99f);
-    public static readonly Color ProgressFill = new Color(242f / 255f, 244f / 255f, 234f / 255f, 1.00f);
-    public static readonly Color ProgressGlow = new Color(139f / 255f, 227f / 255f, 193f / 255f, 0.50f);
+    public static readonly Color ProgressBack = new Color(36f / 255f, 51f / 255f, 47f / 255f, 0.72f);
+    public static readonly Color ProgressFill = new Color(159f / 255f, 203f / 255f, 180f / 255f, 0.92f);
+    public static readonly Color ProgressGlow = new Color(159f / 255f, 203f / 255f, 180f / 255f, 0.28f);
 
     public static readonly ModuleProtocol[] ModuleProtocols =
     {
