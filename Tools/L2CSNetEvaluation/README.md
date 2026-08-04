@@ -45,8 +45,8 @@ accuracy are measured by the Unity Development A/B test.
 
 Required final wording:
 
-> Official Google Drive checkpoint unavailable.  
-> Third-party converted ONNX evaluated.  
+> Official Google Drive checkpoint unavailable.
+> Third-party converted ONNX evaluated.
 > Original PyTorch checkpoint equivalence not verified.
 
 ## Generated local files

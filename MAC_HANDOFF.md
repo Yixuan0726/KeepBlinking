@@ -1,7 +1,7 @@
 # KeepBlinking Mac 开发交接
 
-生成日期：2026-08-04  
-源项目：`D:\111\KeepBlinking`  
+生成日期：2026-08-04
+源项目：`D:\111\KeepBlinking`
 目标 Unity 版本：`6000.1.8f1 (2a5b1522e5ab)`
 
 ## 1. 项目目标与当前范围
