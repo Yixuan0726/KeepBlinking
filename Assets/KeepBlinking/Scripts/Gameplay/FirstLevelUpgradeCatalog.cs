@@ -86,25 +86,25 @@ namespace KeepBlinking.Gameplay
 
     internal static readonly FirstLevelModuleDefinition[] Definitions =
     {
-      new FirstLevelModuleDefinition(FirstLevelModuleId.ChainBlink, FirstLevelModuleCategory.Blink, "BLINK", "Chain Blink", "Blink converts 1 nearby target.", "1 → 2", KeepBlinkingTheme.AccentPrimary, 1),
-      new FirstLevelModuleDefinition(FirstLevelModuleId.WideBlink, FirstLevelModuleCategory.Blink, "BLINK", "Wide Blink", "Blink: convert 2 nearby targets.", "2 → 3", KeepBlinkingTheme.AccentPrimary, 2, FirstLevelModuleId.ChainBlink),
-      new FirstLevelModuleDefinition(FirstLevelModuleId.LockHold, FirstLevelModuleCategory.Blink, "BLINK", "Lock Hold", "Look away: lock holds for 0.4s.", "0s → 0.4s", KeepBlinkingTheme.AccentPrimary, 2, FirstLevelModuleId.ChainBlink),
-      new FirstLevelModuleDefinition(FirstLevelModuleId.WideChain, FirstLevelModuleCategory.Blink, "BLINK", "Wide Chain", "Chain jumps reach 25% farther.", "Range +25%", KeepBlinkingTheme.AccentPrimary, 3, FirstLevelModuleId.WideBlink),
+      new FirstLevelModuleDefinition(FirstLevelModuleId.ChainBlink, FirstLevelModuleCategory.Blink, "FOCUS", "Chain Focus", "Purify 1 more target inside the field.", "Capacity +1", KeepBlinkingTheme.AccentPrimary, 1),
+      new FirstLevelModuleDefinition(FirstLevelModuleId.WideBlink, FirstLevelModuleCategory.Blink, "FOCUS", "Wide Focus", "Expand the Soft Focus Field by 15%.", "Field +15%", KeepBlinkingTheme.AccentPrimary, 2, FirstLevelModuleId.ChainBlink),
+      new FirstLevelModuleDefinition(FirstLevelModuleId.LockHold, FirstLevelModuleCategory.Blink, "FOCUS", "Focus Hold", "Peripheral gaze keeps focus for 0.4s.", "Hold +0.4s", KeepBlinkingTheme.AccentPrimary, 2, FirstLevelModuleId.ChainBlink),
+      new FirstLevelModuleDefinition(FirstLevelModuleId.WideChain, FirstLevelModuleCategory.Blink, "FOCUS", "Calm Capacity", "Purify 1 additional field target.", "Capacity +1", KeepBlinkingTheme.AccentPrimary, 3, FirstLevelModuleId.WideBlink),
 
-      new FirstLevelModuleDefinition(FirstLevelModuleId.QuietWake, FirstLevelModuleCategory.Rest, "REST", "Quiet Wake", "Reopen after cue. Spawns pause.", "0s → 2s", RestColor, 1),
-      new FirstLevelModuleDefinition(FirstLevelModuleId.QuietField, FirstLevelModuleCategory.Rest, "REST", "Quiet Field", "Reopen after the tone. Gain 4s of calm.", "2s → 4s", RestColor, 3, FirstLevelModuleId.QuietWake),
-      new FirstLevelModuleDefinition(FirstLevelModuleId.CoreEcho, FirstLevelModuleCategory.Rest, "REST", "Core Echo", "Successful rest: deal 1 extra core damage.", "+0 → +1", RestColor, 2, FirstLevelModuleId.QuietWake),
-      new FirstLevelModuleDefinition(FirstLevelModuleId.DeepRecovery, FirstLevelModuleCategory.Rest, "REST", "Deep Recovery", "After rest: next lock starts at 50%.", "0% → 50%", RestColor, 2, FirstLevelModuleId.QuietWake),
+      new FirstLevelModuleDefinition(FirstLevelModuleId.QuietWake, FirstLevelModuleCategory.Rest, "REST", "Quiet Wake", "Reopen after the cue. Spawns pause.", "Pause +2s", RestColor, 1),
+      new FirstLevelModuleDefinition(FirstLevelModuleId.QuietField, FirstLevelModuleCategory.Rest, "REST", "Quiet Field", "Correct reopen briefly expands the field.", "Field +15%", RestColor, 3, FirstLevelModuleId.QuietWake),
+      new FirstLevelModuleDefinition(FirstLevelModuleId.CoreEcho, FirstLevelModuleCategory.Rest, "REST", "Core Echo", "Successful rest deals 1 extra core damage.", "Damage +1", RestColor, 2, FirstLevelModuleId.QuietWake),
+      new FirstLevelModuleDefinition(FirstLevelModuleId.DeepRecovery, FirstLevelModuleCategory.Rest, "REST", "Deep Recovery", "After rest, the next target starts at 50%.", "Start 50%", RestColor, 2, FirstLevelModuleId.QuietWake),
 
-      new FirstLevelModuleDefinition(FirstLevelModuleId.BonusSample, FirstLevelModuleCategory.Distance, "DISTANCE", "Bonus Sample", "Push away for 1 extra XP.", "+0 → +1", KeepBlinkingTheme.AccentWarm, 1),
-      new FirstLevelModuleDefinition(FirstLevelModuleId.XpDiscount, FirstLevelModuleCategory.Distance, "DISTANCE", "XP Discount", "Next upgrade costs 1 less XP.", "Cost −1", KeepBlinkingTheme.AccentWarm, 2, FirstLevelModuleId.BonusSample),
-      new FirstLevelModuleDefinition(FirstLevelModuleId.XpReserve, FirstLevelModuleCategory.Distance, "DISTANCE", "XP Reserve", "Keep 30% XP after upgrading.", "0% → 30%", KeepBlinkingTheme.AccentWarm, 2, FirstLevelModuleId.BonusSample),
-      new FirstLevelModuleDefinition(FirstLevelModuleId.LoopBonus, FirstLevelModuleCategory.Distance, "DISTANCE", "Loop Bonus", "New module: next push-away gains 2 XP.", "+0 → +2", KeepBlinkingTheme.AccentWarm, 3, FirstLevelModuleId.BonusSample),
+      new FirstLevelModuleDefinition(FirstLevelModuleId.BonusSample, FirstLevelModuleCategory.Distance, "DISTANCE", "Bonus Sample", "Push away for 1 extra XP.", "XP +1", KeepBlinkingTheme.AccentWarm, 1),
+      new FirstLevelModuleDefinition(FirstLevelModuleId.XpDiscount, FirstLevelModuleCategory.Distance, "DISTANCE", "XP Discount", "Next upgrade costs 1 less XP.", "Cost -1", KeepBlinkingTheme.AccentWarm, 2, FirstLevelModuleId.BonusSample),
+      new FirstLevelModuleDefinition(FirstLevelModuleId.XpReserve, FirstLevelModuleCategory.Distance, "DISTANCE", "XP Reserve", "Keep 30% XP after upgrading.", "Keep 30%", KeepBlinkingTheme.AccentWarm, 2, FirstLevelModuleId.BonusSample),
+      new FirstLevelModuleDefinition(FirstLevelModuleId.LoopBonus, FirstLevelModuleCategory.Distance, "DISTANCE", "Loop Bonus", "The next push-away gains 2 XP.", "XP +2", KeepBlinkingTheme.AccentWarm, 3, FirstLevelModuleId.BonusSample),
 
-      new FirstLevelModuleDefinition(FirstLevelModuleId.WakeEcho, FirstLevelModuleCategory.Combo, "COMBO", "Wake Echo", "After rest: next blink reaches farther.", "Range +50%", KeepBlinkingTheme.TextPrimary, 3, requiredCategories: FirstLevelCategoryMask.Blink | FirstLevelCategoryMask.Rest),
-      new FirstLevelModuleDefinition(FirstLevelModuleId.RestCache, FirstLevelModuleCategory.Combo, "COMBO", "Rest Cache", "Rest creates 1 sample for push-away.", "+0 → +1", KeepBlinkingTheme.TextPrimary, 3, requiredCategories: FirstLevelCategoryMask.Rest | FirstLevelCategoryMask.Distance),
-      new FirstLevelModuleDefinition(FirstLevelModuleId.PreciseHarvest, FirstLevelModuleCategory.Combo, "COMBO", "Precise Harvest", "Convert 3 together: create 1 sample.", "+0 → +1", KeepBlinkingTheme.TextPrimary, 3, requiredCategories: FirstLevelCategoryMask.Blink | FirstLevelCategoryMask.Distance),
-      new FirstLevelModuleDefinition(FirstLevelModuleId.FullLoop, FirstLevelModuleCategory.Combo, "COMBO", "Full Loop", "Complete all 3 actions: gain 1 gold sample.", "+0 → +1", KeepBlinkingTheme.TextPrimary, 4, requiredCategories: FirstLevelCategoryMask.Blink | FirstLevelCategoryMask.Rest | FirstLevelCategoryMask.Distance),
+      new FirstLevelModuleDefinition(FirstLevelModuleId.WakeEcho, FirstLevelModuleCategory.Combo, "COMBO", "Wake Echo", "After rest, the field briefly reaches farther.", "Field +15%", KeepBlinkingTheme.TextPrimary, 3, requiredCategories: FirstLevelCategoryMask.Blink | FirstLevelCategoryMask.Rest),
+      new FirstLevelModuleDefinition(FirstLevelModuleId.RestCache, FirstLevelModuleCategory.Combo, "COMBO", "Rest Cache", "Rest creates 1 sample for push-away.", "XP +1", KeepBlinkingTheme.TextPrimary, 3, requiredCategories: FirstLevelCategoryMask.Rest | FirstLevelCategoryMask.Distance),
+      new FirstLevelModuleDefinition(FirstLevelModuleId.PreciseHarvest, FirstLevelModuleCategory.Combo, "COMBO", "Field Harmony", "Purify 3 together to create 1 sample.", "XP +1", KeepBlinkingTheme.TextPrimary, 3, requiredCategories: FirstLevelCategoryMask.Blink | FirstLevelCategoryMask.Distance),
+      new FirstLevelModuleDefinition(FirstLevelModuleId.FullLoop, FirstLevelModuleCategory.Combo, "COMBO", "Full Loop", "Complete all 3 actions to gain 1 gold sample.", "XP +1", KeepBlinkingTheme.TextPrimary, 4, requiredCategories: FirstLevelCategoryMask.Blink | FirstLevelCategoryMask.Rest | FirstLevelCategoryMask.Distance),
     };
 
     internal static FirstLevelModuleDefinition Get(FirstLevelModuleId id)

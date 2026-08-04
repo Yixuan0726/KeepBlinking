@@ -32,3 +32,16 @@ sysinfo.txt
 
 # Large local package cache
 Packages/com.github.homuler.mediapipe-download/
+
+# Local L2CS-Net research environment and large artifacts
+Tools/L2CSNetEvaluation/.venv/
+Tools/L2CSNetEvaluation/upstream/
+Tools/L2CSNetEvaluation/models/
+Tools/L2CSNetEvaluation/artifacts/
+Tools/L2CSNetEvaluation/results/
+Tools/L2CSNetEvaluation/**/__pycache__/
+Assets/KeepBlinking/Resources/L2CSExperimental/*.onnx
+Assets/KeepBlinking/Resources/L2CSExperimental/*.onnx.meta
+
+# Unrelated generated presentation and document extraction output
+outputs/

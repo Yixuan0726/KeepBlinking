@@ -193,9 +193,28 @@ namespace Mediapipe.Unity
         throw new InvalidOperationException("Not permitted to access cameras");
       }
 
-      InitializeWebCamTexture();
+      InitializeWebCamTexture(true);
       webCamTexture.Play();
       yield return WaitForWebCamTexture();
+      if (webCamTexture.width > 16)
+      {
+        Debug.Log($"WebCamTexture started: {sourceName} at {webCamTexture.width}x{webCamTexture.height}.");
+        yield break;
+      }
+
+      Debug.LogWarning($"Webcam {sourceName} did not start at requested {resolution.width}x{resolution.height}. Retrying with the device default mode.");
+      webCamTexture.Stop();
+      webCamTexture = null;
+      yield return null;
+      InitializeWebCamTexture(false);
+      webCamTexture.Play();
+      yield return WaitForWebCamTexture();
+      if (webCamTexture.width <= 16)
+      {
+        throw new TimeoutException($"Failed to start WebCam {sourceName} in requested and device-default modes");
+      }
+
+      Debug.Log($"WebCamTexture started with device fallback: {sourceName} at {webCamTexture.width}x{webCamTexture.height}.");
     }
 
     public override IEnumerator Resume()
@@ -209,6 +228,10 @@ namespace Mediapipe.Unity
         webCamTexture.Play();
       }
       yield return WaitForWebCamTexture();
+      if (webCamTexture.width <= 16)
+      {
+        throw new TimeoutException($"Failed to resume WebCam {sourceName}");
+      }
     }
 
     public override void Pause()
@@ -236,12 +259,17 @@ namespace Mediapipe.Unity
       return resolutions == null || resolutions.Length == 0 ? new ResolutionStruct() : resolutions.OrderBy(resolution => resolution, new ResolutionStructComparer(_preferableDefaultWidth)).First();
     }
 
-    private void InitializeWebCamTexture()
+    private void InitializeWebCamTexture(bool requestResolution)
     {
       Stop();
       if (webCamDevice is WebCamDevice valueOfWebCamDevice)
       {
-        webCamTexture = new WebCamTexture(valueOfWebCamDevice.name, resolution.width, resolution.height, (int)resolution.frameRate);
+        webCamTexture = requestResolution
+          ? new WebCamTexture(valueOfWebCamDevice.name, resolution.width, resolution.height, (int)resolution.frameRate)
+          : new WebCamTexture(valueOfWebCamDevice.name);
+        Debug.Log(requestResolution
+          ? $"Starting webcam '{valueOfWebCamDevice.name}' at requested {resolution.width}x{resolution.height} @{resolution.frameRate:0} FPS."
+          : $"Starting webcam '{valueOfWebCamDevice.name}' with its native default mode.");
         return;
       }
       throw new InvalidOperationException("Cannot initialize WebCamTexture because WebCamDevice is not selected");
@@ -249,15 +277,10 @@ namespace Mediapipe.Unity
 
     private IEnumerator WaitForWebCamTexture()
     {
-      const int timeoutFrame = 2000;
+      const int timeoutFrame = 300;
       var count = 0;
       Debug.Log("Waiting for WebCamTexture to start");
       yield return new WaitUntil(() => count++ > timeoutFrame || webCamTexture.width > 16);
-
-      if (webCamTexture.width <= 16)
-      {
-        throw new TimeoutException("Failed to start WebCam");
-      }
     }
 
     private class ResolutionStructComparer : IComparer<ResolutionStruct>

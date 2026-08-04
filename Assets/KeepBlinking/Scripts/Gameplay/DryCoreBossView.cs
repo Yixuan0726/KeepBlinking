@@ -42,10 +42,10 @@ namespace KeepBlinking.Gameplay
     private float _activationPulseRemaining;
 
     internal DryCoreBossPromptView Prompt => _prompt;
-    internal Vector2 BossViewportAnchor => new Vector2(0.5f, 0.68f);
+    internal Vector2 BossViewportAnchor => new Vector2(0.5f, 0.60f);
 
     internal Vector2 BossCenterScreenPosition => _bossRoot == null
-      ? new Vector2(Screen.width * 0.5f, Screen.height * 0.68f)
+      ? new Vector2(Screen.width * 0.5f, Screen.height * 0.60f)
       : RectTransformUtility.WorldToScreenPoint(null, _bossRoot.position);
 
     internal void EnsureCreated()
@@ -64,8 +64,8 @@ namespace KeepBlinking.Gameplay
       _bossRoot = FirstLevelUiFactory.CreateObject("Dry Core", _safeRoot).GetComponent<RectTransform>();
       FirstLevelUiFactory.SetRect(
         _bossRoot,
-        new Vector2(0.5f, 0.68f), new Vector2(0.5f, 0.68f), new Vector2(0.5f, 0.5f),
-        Vector2.zero, new Vector2(300f, 300f));
+        new Vector2(0.5f, 0.60f), new Vector2(0.5f, 0.60f), new Vector2(0.5f, 0.5f),
+        Vector2.zero, new Vector2(360f, 360f));
 
       var title = FirstLevelUiFactory.CreateText(
         "Boss Title", _safeRoot, "DRY CORE", 50f, FontStyles.Bold,
@@ -75,9 +75,9 @@ namespace KeepBlinking.Gameplay
       _titleGroup.alpha = 0f;
 
       _layers = new Image[3];
-      _layers[0] = CreateCoreLayer("Outer Shell", 294f, KeepBlinkingTheme.AccentWarm, 0f);
-      _layers[1] = CreateCoreLayer("Middle Shell", 216f, KeepBlinkingTheme.TextPrimary, 13f);
-      _layers[2] = CreateCoreLayer("Inner Shell", 140f, KeepBlinkingTheme.AccentPrimary, -9f);
+      _layers[0] = CreateCoreLayer("Outer Shell", 350f, KeepBlinkingTheme.AccentWarm, 0f);
+      _layers[1] = CreateCoreLayer("Middle Shell", 260f, KeepBlinkingTheme.TextPrimary, 13f);
+      _layers[2] = CreateCoreLayer("Inner Shell", 170f, KeepBlinkingTheme.AccentPrimary, -9f);
 
       var crackObject = FirstLevelUiFactory.CreateObject("Dry Cracks", _bossRoot);
       FirstLevelUiFactory.Stretch(crackObject.GetComponent<RectTransform>(), new Vector2(18f, 18f), new Vector2(-18f, -18f));
@@ -90,7 +90,7 @@ namespace KeepBlinking.Gameplay
 
       _coverageWave = FirstLevelUiFactory.CreateImage(
         "Coverage Wave", _safeRoot, KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.AccentPrimary, 0.32f), FirstLevelUiFactory.RingSprite).rectTransform;
-      FirstLevelUiFactory.SetRect(_coverageWave, new Vector2(0.5f, 0.68f), new Vector2(0.5f, 0.68f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
+      FirstLevelUiFactory.SetRect(_coverageWave, new Vector2(0.5f, 0.60f), new Vector2(0.5f, 0.60f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
       _coverageWave.gameObject.SetActive(false);
       _coverageWave.SetAsFirstSibling();
 

@@ -16,6 +16,7 @@ namespace KeepBlinking.Gameplay
     public int ValidRestCycleCount { get; }
     public int DistanceShiftCount { get; }
     public int FullLoopCount { get; }
+    public int OffScreenGazeBreakCount { get; }
     public int EarlyReopenCount { get; }
     public int BossCyclesCompleted { get; }
     public IReadOnlyList<FirstLevelModuleId> SelectedModuleIds => _selectedModuleIds;
@@ -33,6 +34,7 @@ namespace KeepBlinking.Gameplay
       int validRestCycleCount,
       int distanceShiftCount,
       int fullLoopCount,
+      int offScreenGazeBreakCount,
       int earlyReopenCount,
       int bossCyclesCompleted,
       FirstLevelModuleId[] selectedModuleIds,
@@ -49,6 +51,7 @@ namespace KeepBlinking.Gameplay
       ValidRestCycleCount = Math.Max(0, validRestCycleCount);
       DistanceShiftCount = Math.Max(0, distanceShiftCount);
       FullLoopCount = Math.Max(0, fullLoopCount);
+      OffScreenGazeBreakCount = Math.Max(0, offScreenGazeBreakCount);
       EarlyReopenCount = Math.Max(0, earlyReopenCount);
       BossCyclesCompleted = Math.Max(0, bossCyclesCompleted);
       _selectedModuleIds = selectedModuleIds == null ? Array.Empty<FirstLevelModuleId>() : (FirstLevelModuleId[])selectedModuleIds.Clone();

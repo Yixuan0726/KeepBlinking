@@ -152,7 +152,7 @@ namespace KeepBlinking.Gameplay
     {
       var heading = CreateSectionHeading("BEHAVIOR", -222f, KeepBlinkingTheme.AccentPrimary);
       _revealRows.Add(heading.gameObject.AddComponent<CanvasGroup>());
-      var labels = new[] { "SOFT BLINKS", "REST CYCLES", "DISTANCE SHIFTS", "FULL LOOPS" };
+      var labels = new[] { "NATURAL BLINKS", "REST CYCLES", "DISTANCE SHIFTS", "FULL LOOPS" };
       var accents = new[]
       {
         KeepBlinkingTheme.AccentPrimary,

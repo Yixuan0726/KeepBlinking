@@ -962,13 +962,9 @@ namespace KeepBlinking.Gameplay
       switch (Category)
       {
         case FirstLevelModuleCategory.Blink:
-          var closure = phase < 0.58f
-            ? 0f
-            : phase < 0.76f
-              ? Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.58f, 0.76f, phase))
-              : 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.76f, 1f, phase));
-          _lineArt.rectTransform.localScale = new Vector3(1f, Mathf.Lerp(1f, 0.24f, closure), 1f);
-          _lineArt.color = Color.white;
+          var focusBreath = 0.96f + breathe * 0.08f;
+          _lineArt.rectTransform.localScale = new Vector3(focusBreath, focusBreath, 1f);
+          _lineArt.color = new Color(1f, 1f, 1f, 0.82f + breathe * 0.16f);
           break;
         case FirstLevelModuleCategory.Rest:
           _lineArt.rectTransform.localScale = Vector3.one;

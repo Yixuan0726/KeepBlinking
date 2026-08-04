@@ -1,7 +1,10 @@
 {
   "name": "KeepBlinking.Editor",
   "rootNamespace": "KeepBlinking.Editor",
-  "references": [],
+  "references": [
+    "KeepBlinking.Runtime",
+    "Unity.InferenceEngine"
+  ],
   "includePlatforms": [
     "Editor"
   ],

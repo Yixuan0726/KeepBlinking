@@ -27,6 +27,7 @@ namespace KeepBlinking.Gameplay
     public int ValidRestCycleCount { get; private set; }
     public int DistanceShiftCount { get; private set; }
     public int FullLoopCount { get; private set; }
+    public int OffScreenGazeBreakCount { get; private set; }
     public int EarlyReopenCount { get; private set; }
     public int BossCyclesCompleted { get; private set; }
     public ComfortScores? PreComfortScores { get; private set; }
@@ -95,6 +96,7 @@ namespace KeepBlinking.Gameplay
         ValidRestCycleCount,
         DistanceShiftCount,
         FullLoopCount,
+        OffScreenGazeBreakCount,
         EarlyReopenCount,
         BossCyclesCompleted,
         _selectedModuleIds.ToArray(),
@@ -107,7 +109,7 @@ namespace KeepBlinking.Gameplay
     {
       if (_gameplay != null)
       {
-        _gameplay.NormalBlinkConversionCompleted += HandleNormalBlinkConversionCompleted;
+        _gameplay.BlinkInputAccepted += HandleNaturalBlinkAccepted;
         _gameplay.ReopenReleaseCompleted += HandleCrisisReleaseCompleted;
         _gameplay.CrisisReleaseInterrupted += HandleEarlyReopen;
         _gameplay.ConvertedCollectionStarted += HandleCollectionStarted;
@@ -119,13 +121,15 @@ namespace KeepBlinking.Gameplay
         _boss.BossCycleCompleted += HandleBossCycleCompleted;
         _boss.BossEarlyReopen += HandleEarlyReopen;
       }
+
+      OffScreenEyeBreakController.OffScreenGazeBreakCompleted += HandleOffScreenGazeBreakCompleted;
     }
 
     private void Unsubscribe()
     {
       if (_gameplay != null)
       {
-        _gameplay.NormalBlinkConversionCompleted -= HandleNormalBlinkConversionCompleted;
+        _gameplay.BlinkInputAccepted -= HandleNaturalBlinkAccepted;
         _gameplay.ReopenReleaseCompleted -= HandleCrisisReleaseCompleted;
         _gameplay.CrisisReleaseInterrupted -= HandleEarlyReopen;
         _gameplay.ConvertedCollectionStarted -= HandleCollectionStarted;
@@ -137,11 +141,13 @@ namespace KeepBlinking.Gameplay
         _boss.BossCycleCompleted -= HandleBossCycleCompleted;
         _boss.BossEarlyReopen -= HandleEarlyReopen;
       }
+
+      OffScreenEyeBreakController.OffScreenGazeBreakCompleted -= HandleOffScreenGazeBreakCompleted;
     }
 
-    private void HandleNormalBlinkConversionCompleted(int targetId, int convertedCount)
+    private void HandleNaturalBlinkAccepted()
     {
-      if (!_sessionStarted || convertedCount <= 0)
+      if (!_sessionStarted)
       {
         return;
       }
@@ -211,6 +217,14 @@ namespace KeepBlinking.Gameplay
       if (moduleId != FirstLevelModuleId.None && !_selectedModuleIds.Contains(moduleId))
       {
         _selectedModuleIds.Add(moduleId);
+      }
+    }
+
+    private void HandleOffScreenGazeBreakCompleted()
+    {
+      if (_sessionStarted && !_sessionEnded)
+      {
+        OffScreenGazeBreakCount++;
       }
     }
 

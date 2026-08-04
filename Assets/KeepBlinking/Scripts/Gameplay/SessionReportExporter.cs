@@ -44,6 +44,8 @@ namespace KeepBlinking.Gameplay
       AppendJson(builder, "validRestCycleCount", data.ValidRestCycleCount, true);
       AppendJson(builder, "distanceShiftCount", data.DistanceShiftCount, true);
       AppendJson(builder, "fullLoopCount", data.FullLoopCount, true);
+      AppendJson(builder, "offScreenGazeBreakLabel", OffScreenEyeBreakController.ReportDisplayName, true);
+      AppendJson(builder, "offScreenGazeBreakCount", data.OffScreenGazeBreakCount, true);
       AppendJson(builder, "earlyReopenCount", data.EarlyReopenCount, true);
       AppendJson(builder, "bossCyclesCompleted", data.BossCyclesCompleted, true);
       builder.Append("  \"selectedModuleIds\": [");
@@ -58,7 +60,7 @@ namespace KeepBlinking.Gameplay
 
     private static string BuildCsv(SessionReportData data)
     {
-      var header = "subjectId,sessionIndex,totalSessions,sessionStartUtc,sessionDurationSeconds,softBlinkCount,validRestCycleCount,distanceShiftCount,fullLoopCount,earlyReopenCount,bossCyclesCompleted,selectedModuleIds,preEyeStrain,preDryness,preVisualFatigue,postEyeStrain,postDryness,postVisualFatigue,buildVersion";
+      var header = "subjectId,sessionIndex,totalSessions,sessionStartUtc,sessionDurationSeconds,softBlinkCount,validRestCycleCount,distanceShiftCount,fullLoopCount,offScreenGazeBreakCount,earlyReopenCount,bossCyclesCompleted,selectedModuleIds,preEyeStrain,preDryness,preVisualFatigue,postEyeStrain,postDryness,postVisualFatigue,buildVersion";
       var modules = string.Join("|", data.SelectedModuleIds.Select(id => id.ToString()));
       var pre = data.PreComfortScores;
       var post = data.PostComfortScores;
@@ -73,6 +75,7 @@ namespace KeepBlinking.Gameplay
         data.ValidRestCycleCount.ToString(CultureInfo.InvariantCulture),
         data.DistanceShiftCount.ToString(CultureInfo.InvariantCulture),
         data.FullLoopCount.ToString(CultureInfo.InvariantCulture),
+        data.OffScreenGazeBreakCount.ToString(CultureInfo.InvariantCulture),
         data.EarlyReopenCount.ToString(CultureInfo.InvariantCulture),
         data.BossCyclesCompleted.ToString(CultureInfo.InvariantCulture),
         Csv(modules),

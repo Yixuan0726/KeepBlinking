@@ -38,7 +38,7 @@ namespace KeepBlinking.Gameplay
     [SerializeField, Min(0.01f)] private float _coverageGrowthScreenRatioPerSecond = 0.1f;
     [SerializeField, Min(5.5f)] private float _coverageSafetyLimitSeconds = 6f;
     [SerializeField, Min(0.1f)] private float _earlyReopenRetryDelaySeconds = 1.5f;
-    [SerializeField, Min(0.05f)] private float _softBlinkArmOpenSeconds = 0.12f;
+    [SerializeField, Min(0.2f)] private float _faceScreenPreparationSeconds = 1.2f;
     [SerializeField, Min(0.1f)] private float _hitFeedbackSeconds = 0.55f;
     [SerializeField, Min(0.1f)] private float _observationCompleteSeconds = 1f;
 
@@ -52,16 +52,14 @@ namespace KeepBlinking.Gameplay
     private float _coverageElapsed;
     private float _coverageRadiusPixels;
     private float _quietSecondsAfterRound;
-    private float _softBlinkOpenArmingElapsed;
+    private float _faceScreenPreparationElapsed;
     private bool _coverageCuePlayed;
     private bool _trackingPaused;
     private bool _trackingResumedDuringCoverage;
-    private bool _softBlinkArmed;
     private bool _resolvingRestModules;
     private bool _dryCoreDefeatedEmitted;
     private bool _bossRewardCompletedEmitted;
     private bool _firstBossDefeatedEmitted;
-    private int _softBlinkSerialAtArm;
     private int _pendingExtraCoreDamage;
     private int _remainingCores = 3;
     private int _completedCycles;
@@ -108,7 +106,6 @@ namespace KeepBlinking.Gameplay
       _expectedRoundSampleCount = 0;
       _trackingPaused = false;
       _trackingResumedDuringCoverage = false;
-      _softBlinkArmed = false;
       _defeatedRewardState = DefeatedRewardState.None;
       _dryCoreDefeatedEmitted = false;
       _bossRewardCompletedEmitted = false;
@@ -134,8 +131,7 @@ namespace KeepBlinking.Gameplay
         if (!_trackingPaused)
         {
           _trackingPaused = true;
-          _softBlinkArmed = false;
-          _softBlinkOpenArmingElapsed = 0f;
+          _faceScreenPreparationElapsed = 0f;
           _view.SetPrompt(DryCoreBossPrompt.None);
         }
         _view.TickVisuals(0f, false);
@@ -145,9 +141,9 @@ namespace KeepBlinking.Gameplay
       if (_trackingPaused)
       {
         _trackingPaused = false;
+        _faceScreenPreparationElapsed = 0f;
         _trackingResumedDuringCoverage = _state == DryCoreBossState.ExpandingCoverage &&
                                          !_gameplay.AreEyesClosed;
-        _softBlinkArmed = false;
         RestorePromptForState();
       }
 
@@ -168,7 +164,7 @@ namespace KeepBlinking.Gameplay
           }
           break;
         case DryCoreBossState.WaitSoftBlink:
-          UpdateSoftBlinkArming(deltaTime);
+          UpdateFaceScreenPreparation(deltaTime);
           break;
         case DryCoreBossState.PromptClose:
           if (_gameplay.HasStableOpenEyesForSoftBlink)
@@ -248,9 +244,7 @@ namespace KeepBlinking.Gameplay
       _coverageElapsed = 0f;
       _coverageRadiusPixels = 0f;
       _expectedRoundSampleCount = 0;
-      _softBlinkArmed = false;
-      _softBlinkOpenArmingElapsed = 0f;
-      _softBlinkSerialAtArm = _gameplay.SoftBlinkSerial;
+      _faceScreenPreparationElapsed = 0f;
       _view.EndCoverage(false);
       _view.SetFragmentFeedbackCount(0);
       _view.SetSoftBlinkReady(true);
@@ -258,46 +252,32 @@ namespace KeepBlinking.Gameplay
       SetState(DryCoreBossState.WaitSoftBlink);
     }
 
-    private void UpdateSoftBlinkArming(float deltaTime)
+    private void UpdateFaceScreenPreparation(float deltaTime)
     {
-      if (_softBlinkArmed)
+      if (!_gameplay.IsComfortGazeForBoss)
+      {
+        _faceScreenPreparationElapsed = 0f;
+        return;
+      }
+
+      _faceScreenPreparationElapsed += Mathf.Max(0f, deltaTime);
+      if (_faceScreenPreparationElapsed < Mathf.Max(0.2f, _faceScreenPreparationSeconds))
       {
         return;
       }
 
-      if (!_gameplay.HasStableOpenEyesForSoftBlink)
-      {
-        _softBlinkOpenArmingElapsed = 0f;
-        return;
-      }
-
-      _softBlinkOpenArmingElapsed += Mathf.Max(0f, deltaTime);
-      if (_softBlinkOpenArmingElapsed >= Mathf.Max(0.05f, _softBlinkArmOpenSeconds))
-      {
-        _softBlinkArmed = true;
-        _softBlinkSerialAtArm = _gameplay.SoftBlinkSerial;
-      }
-    }
-
-    private void HandleSoftBlinkPerformed(int softBlinkSerial)
-    {
-      if (_trackingPaused ||
-          _state != DryCoreBossState.WaitSoftBlink ||
-          !_softBlinkArmed ||
-          !_gameplay.IsTrackingAvailable ||
-          softBlinkSerial <= _softBlinkSerialAtArm)
-      {
-        return;
-      }
-
-      _softBlinkArmed = false;
-      _softBlinkOpenArmingElapsed = 0f;
+      _faceScreenPreparationElapsed = 0f;
       _view.SetSoftBlinkReady(false);
       _view.PlaySoftBlinkActivation();
       var fragmentCount = _gameplay.ApplyBossBlinkModules();
       _view.SetFragmentFeedbackCount(fragmentCount);
       _view.SetPrompt(DryCoreBossPrompt.None);
       SetState(DryCoreBossState.PromptClose);
+    }
+
+    private void HandleSoftBlinkPerformed(int softBlinkSerial)
+    {
+      // Retained for compatibility with the existing signal. Boss preparation no longer requires a blink.
     }
 
     private void BeginCoverage()

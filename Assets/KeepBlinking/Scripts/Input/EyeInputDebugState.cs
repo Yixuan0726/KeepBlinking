@@ -33,6 +33,9 @@ namespace KeepBlinking.Input
     public int BlinkCount;
     public float LastBlinkStartedSeconds;
     public bool IsHardSqueeze;
+    public bool HasHeadPose;
+    public float HeadYawDegrees;
+    public float HeadPitchDegrees;
     public float LastUpdateSeconds;
   }
 
@@ -109,6 +112,7 @@ namespace KeepBlinking.Input
       var isBlinking = leftEyeOpen <= BlinkOpenThreshold && rightEyeOpen <= BlinkOpenThreshold;
       var averageBlink = (leftBlinkScore + rightBlinkScore) * 0.5f;
       var averageSquint = (leftSquintScore + rightSquintScore) * 0.5f;
+      var hasHeadPose = TryGetHeadPose(result, out var headYawDegrees, out var headPitchDegrees);
 
       lock (_lock)
       {
@@ -156,6 +160,9 @@ namespace KeepBlinking.Input
           BlinkCount = _blinkCount,
           LastBlinkStartedSeconds = _lastBlinkStartedSeconds,
           IsHardSqueeze = averageBlink >= HardSqueezeBlinkThreshold && averageSquint >= 0.2f,
+          HasHeadPose = hasHeadPose,
+          HeadYawDegrees = headYawDegrees,
+          HeadPitchDegrees = headPitchDegrees,
           LastUpdateSeconds = now,
         };
         _lastBlinking = isBlinking;
@@ -298,6 +305,41 @@ namespace KeepBlinking.Input
       TryGetCategoryScore(categories, "eyeSquintLeft", out leftSquintScore);
       TryGetCategoryScore(categories, "eyeSquintRight", out rightSquintScore);
       return foundLeftBlink && foundRightBlink;
+    }
+
+    private static bool TryGetHeadPose(FaceLandmarkerResult result, out float yawDegrees, out float pitchDegrees)
+    {
+      yawDegrees = 0f;
+      pitchDegrees = 0f;
+      var matrices = result.facialTransformationMatrixes;
+      if (matrices == null || matrices.Count == 0)
+      {
+        return false;
+      }
+
+      var matrix = matrices[0];
+      var forward = new Vector3(matrix.m02, matrix.m12, matrix.m22);
+      var up = new Vector3(matrix.m01, matrix.m11, matrix.m21);
+      if (forward.sqrMagnitude <= 0.0001f || up.sqrMagnitude <= 0.0001f ||
+          Vector3.Cross(forward, up).sqrMagnitude <= 0.0001f)
+      {
+        return false;
+      }
+
+      var euler = Quaternion.LookRotation(forward.normalized, up.normalized).eulerAngles;
+      pitchDegrees = NormalizeSignedAngle(euler.x);
+      yawDegrees = NormalizeSignedAngle(euler.y);
+      return IsFinite(pitchDegrees) && IsFinite(yawDegrees);
+    }
+
+    private static float NormalizeSignedAngle(float angle)
+    {
+      return angle > 180f ? angle - 360f : angle;
+    }
+
+    private static bool IsFinite(float value)
+    {
+      return !float.IsNaN(value) && !float.IsInfinity(value);
     }
 
     private static bool TryGetCategoryScore(IReadOnlyList<Category> categories, string categoryName, out float score)

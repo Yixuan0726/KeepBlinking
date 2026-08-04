@@ -1,0 +1,6 @@
+numpy==2.2.6
+onnx==1.18.0
+onnxruntime==1.22.0
+opencv-python==4.11.0.86
+Pillow==11.2.1
+psutil==7.0.0

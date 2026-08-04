@@ -76,7 +76,7 @@ namespace KeepBlinking.Gameplay
       switch (prompt)
       {
         case DryCoreBossPrompt.SoftBlink:
-          SetCopy("SOFT BLINK", KeepBlinkingTheme.AccentPrimary);
+          SetCopy("HOLD CENTER", KeepBlinkingTheme.AccentPrimary);
           break;
         case DryCoreBossPrompt.CloseEyes:
           SetCopy("CLOSE EYES", new Color32(0x91, 0xB8, 0xD0, 0xFF));

@@ -22,6 +22,7 @@ namespace Mediapipe.Unity.Sample.FaceLandmarkDetection
     [SerializeField] private global::Mediapipe.Logger.LogLevel _runtimeLogLevel = global::Mediapipe.Logger.LogLevel.Warn;
 
     private Experimental.TextureFramePool _textureFramePool;
+    private bool _usingCpuReadbackFallback;
 
     public readonly FaceLandmarkDetectionConfig config = new FaceLandmarkDetectionConfig();
 
@@ -103,6 +104,12 @@ namespace Mediapipe.Unity.Sample.FaceLandmarkDetection
         SetupAnnotationController(_faceLandmarkerResultAnnotationController, imageSource);
       }
       HideKeepBlinkingCameraPreview();
+      GazeProviderComparisonController.EnsureExists().BindFrameSource(
+        imageSource.GetCurrentTexture,
+        () => imageSource.isPrepared && imageSource.isPlaying,
+        () => imageSource.GetTransformationOptions().flipHorizontally,
+        () => imageSource.GetTransformationOptions().flipVertically,
+        () => ((int)imageSource.rotation / 90 + 4) % 4);
 
       var transformationOptions = imageSource.GetTransformationOptions();
       var flipHorizontally = transformationOptions.flipHorizontally;
@@ -159,7 +166,13 @@ namespace Mediapipe.Unity.Sample.FaceLandmarkDetection
 
             if (req.hasError)
             {
-              Debug.LogWarning($"Failed to read texture from the image source");
+              textureFrame.Release();
+              if (!_usingCpuReadbackFallback)
+              {
+                _usingCpuReadbackFallback = true;
+                config.ImageReadMode = ImageReadMode.CPU;
+                Debug.LogWarning("Async camera texture read failed. Falling back to CPU camera readback.");
+              }
               continue;
             }
             image = textureFrame.BuildCPUImage();
