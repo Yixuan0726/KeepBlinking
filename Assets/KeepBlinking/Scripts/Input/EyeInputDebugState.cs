@@ -42,6 +42,8 @@ namespace KeepBlinking.Input
   public static class EyeInputDebugState
   {
     public const float BlinkOpenThreshold = 0.35f;
+    public const float NaturalBlinkBlendshapeThreshold = 0.42f;
+    public const float NaturalBlinkLandmarkOpenThreshold = 0.52f;
     public const float HardSqueezeBlinkThreshold = 0.82f;
     public const float MovingAwayDeltaThreshold = -0.0015f;
 
@@ -54,6 +56,9 @@ namespace KeepBlinking.Input
     private static float _lastBlinkStartedSeconds = -1f;
     private static bool _hasSmoothedFaceArea;
     private static float _smoothedFaceArea;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    private static float _nextDiagnosticLogSeconds;
+#endif
 
     public static EyeInputDebugSnapshot Latest
     {
@@ -68,18 +73,27 @@ namespace KeepBlinking.Input
 
     public static void Clear()
     {
+      var now = SecondsSinceStart();
       lock (_lock)
       {
         _latest = new EyeInputDebugSnapshot
         {
-          LastUpdateSeconds = SecondsSinceStart(),
+          BlinkCount = _blinkCount,
+          LastBlinkStartedSeconds = _lastBlinkStartedSeconds,
+          LastUpdateSeconds = now,
         };
         _lastBlinking = false;
-        _blinkCount = 0;
-        _lastBlinkStartedSeconds = -1f;
         _hasSmoothedFaceArea = false;
         _smoothedFaceArea = 0f;
       }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      if (now >= _nextDiagnosticLogSeconds)
+      {
+        _nextDiagnosticLogSeconds = now + 1f;
+        Debug.Log($"Eye input sample: face=false blinkCount={_blinkCount}");
+      }
+#endif
     }
 
     public static void UpdateFrom(FaceLandmarkerResult result)
@@ -109,11 +123,20 @@ namespace KeepBlinking.Input
 
       var leftEyeOpen = Mathf.Clamp01(1f - leftBlinkScore);
       var rightEyeOpen = Mathf.Clamp01(1f - rightBlinkScore);
-      var isBlinking = leftEyeOpen <= BlinkOpenThreshold && rightEyeOpen <= BlinkOpenThreshold;
+      // Face blendshapes are more stable for natural blinks, while the landmark
+      // fallback uses a wider threshold because a short blink may only be sampled
+      // once at webcam frame rates. Both eyes must agree, preventing winks and
+      // single-landmark noise from becoming gameplay blinks.
+      var isBlinking = hasBlendshapes
+        ? leftBlinkScore >= NaturalBlinkBlendshapeThreshold && rightBlinkScore >= NaturalBlinkBlendshapeThreshold
+        : leftOpenByLandmarks <= NaturalBlinkLandmarkOpenThreshold && rightOpenByLandmarks <= NaturalBlinkLandmarkOpenThreshold;
       var averageBlink = (leftBlinkScore + rightBlinkScore) * 0.5f;
       var averageSquint = (leftSquintScore + rightSquintScore) * 0.5f;
       var hasHeadPose = TryGetHeadPose(result, out var headYawDegrees, out var headPitchDegrees);
 
+      var blinkStartedForDiagnostics = false;
+      var shouldLogDiagnostics = false;
+      EyeInputDebugSnapshot diagnosticSnapshot = default;
       lock (_lock)
       {
         var now = SecondsSinceStart();
@@ -166,7 +189,29 @@ namespace KeepBlinking.Input
           LastUpdateSeconds = now,
         };
         _lastBlinking = isBlinking;
+        blinkStartedForDiagnostics = blinkStarted;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        shouldLogDiagnostics = now >= _nextDiagnosticLogSeconds;
+        if (shouldLogDiagnostics)
+        {
+          _nextDiagnosticLogSeconds = now + 1f;
+        }
+#endif
+        diagnosticSnapshot = _latest;
       }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      if (blinkStartedForDiagnostics || shouldLogDiagnostics)
+      {
+        var eventName = blinkStartedForDiagnostics ? "BLINK STARTED" : "sample";
+        Debug.Log(
+          $"Eye input {eventName}: face=true blendshapes={hasBlendshapes} " +
+          $"L={diagnosticSnapshot.LeftEyeOpen:F3} R={diagnosticSnapshot.RightEyeOpen:F3} " +
+          $"blinkL={diagnosticSnapshot.LeftBlinkScore:F3} blinkR={diagnosticSnapshot.RightBlinkScore:F3} " +
+          $"earL={diagnosticSnapshot.LeftEyeAspectRatio:F3} earR={diagnosticSnapshot.RightEyeAspectRatio:F3} " +
+          $"blinking={diagnosticSnapshot.IsBlinking} blinkCount={diagnosticSnapshot.BlinkCount}");
+      }
+#endif
     }
 
     private static UnityEngine.Rect CalculateFaceRect(IReadOnlyList<NormalizedLandmark> landmarks)

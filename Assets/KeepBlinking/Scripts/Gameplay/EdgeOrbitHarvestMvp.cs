@@ -435,6 +435,17 @@ namespace KeepBlinking.Gameplay
       _sessionBlinkCount++;
       _acceptedBlinkSerial++;
       InvokeSignalSafely(BlinkInputAccepted, nameof(BlinkInputAccepted));
+
+      // Startup calibration still uses a gentle blink to accept each of its
+      // five large targets. This must be handled before normal-play blink
+      // attacks are disabled, otherwise formal (non-tutorial) sessions can
+      // detect blinks correctly but never advance past calibration.
+      if (_calibrationActive)
+      {
+        _blinkQueued = true;
+        return;
+      }
+
       if (!_tutorialMode)
       {
         _blinkQueued = false;
@@ -1292,11 +1303,13 @@ namespace KeepBlinking.Gameplay
         return;
       }
 
-      GUILayout.BeginArea(new Rect(18f, 18f, Mathf.Min(820f, Screen.width - 36f), 390f));
+      GUILayout.BeginArea(new Rect(18f, 18f, Mathf.Min(920f, Screen.width - 36f), 420f));
       GUILayout.Label("Edge Orbit & Harvest MVP // Hardware Eye Input", _hudStyle);
       GUILayout.Label($"Gaze sensor: {realGazeScreenPosition.x:F0}, {realGazeScreenPosition.y:F0}   Raw: {_rawGazeScreenPosition.x:F0}, {_rawGazeScreenPosition.y:F0}", _hudStyle);
       GUILayout.Label(GetHardwareStatusLine(), _hudStyle);
       GUILayout.Label(GetEyeClosedStatusLine(), _hudStyle);
+      var eyeDebug = EyeInputDebugState.Latest;
+      GUILayout.Label($"Eye signal L/R: {eyeDebug.LeftEyeOpen:F3} / {eyeDebug.RightEyeOpen:F3}   Blink score L/R: {eyeDebug.LeftBlinkScore:F3} / {eyeDebug.RightBlinkScore:F3}   Detector: {eyeDebug.IsBlinking}   Count: {eyeDebug.BlinkCount}", _hudStyle);
       if (_calibrationActive)
       {
         GUILayout.Label($"Calibration: {_calibrationIndex + 1} / {_calibrationTargets.Length}   Look at the soft target, then blink gently.", _hudStyle);
