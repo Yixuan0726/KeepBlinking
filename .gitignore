@@ -45,3 +45,12 @@ Assets/KeepBlinking/Resources/L2CSExperimental/*.onnx.meta
 
 # Unrelated generated presentation and document extraction output
 outputs/
+
+# Build artifacts (APK, Android native build intermediates, Burst debug output)
+*.apk
+Build.apk
+.utmp/
+*_BurstDebugInformation_DoNotShip/
+
+# Visual Studio component config
+.vsconfig

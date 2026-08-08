@@ -35,6 +35,34 @@ namespace Mediapipe.Unity.Sample.FaceLandmarkDetection
 
     protected override IEnumerator Run()
     {
+      // Android: request the camera permission first and WAIT until it is granted.
+      // The plugin's WebCamSource already calls RequestUserPermission, but it only
+      // waits 0.1s before checking, so on first launch (before the user taps "Allow")
+      // it always fails and the camera never starts. Requesting + awaiting here means
+      // the permission is already granted by the time WebCamSource runs.
+#if UNITY_ANDROID && !UNITY_EDITOR
+      if (!UnityEngine.Android.Permission.HasUserAuthorizedPermission(UnityEngine.Android.Permission.Camera))
+      {
+        var permissionAnswered = false;
+        var cameraGranted = false;
+        var callbacks = new UnityEngine.Android.PermissionCallbacks();
+        callbacks.PermissionGranted += _ => { cameraGranted = true; permissionAnswered = true; };
+        callbacks.PermissionDenied += _ => { permissionAnswered = true; };
+        callbacks.PermissionDeniedAndDontAskAgain += _ => { permissionAnswered = true; };
+        UnityEngine.Android.Permission.RequestUserPermission(UnityEngine.Android.Permission.Camera, callbacks);
+
+        yield return new WaitUntil(() => permissionAnswered);
+
+        if (!cameraGranted)
+        {
+          // KeepBlinking cannot run without the camera; fall back to quitting the app.
+          Debug.LogWarning("Camera permission denied. Quitting.");
+          Application.Quit();
+          yield break;
+        }
+      }
+#endif
+
       if (_autoCreateKeepBlinkingObjects)
       {
         EyeInputDebugOverlay.EnsureExists();

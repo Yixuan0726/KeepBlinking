@@ -133,6 +133,17 @@ namespace Mediapipe.Unity
       if (availableSources != null && availableSources.Length > 0)
       {
         webCamDevice = availableSources[0];
+
+        // KeepBlinking: prefer the front-facing (selfie) camera — face/gaze tracking
+        // needs the user's face, but WebCamTexture.devices[0] is often the rear camera.
+        foreach (var device in availableSources)
+        {
+          if (device.isFrontFacing)
+          {
+            webCamDevice = device;
+            break;
+          }
+        }
       }
     }
 
