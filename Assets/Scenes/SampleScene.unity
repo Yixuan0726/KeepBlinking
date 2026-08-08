@@ -522,7 +522,7 @@ MonoBehaviour:
   _preferSameSideWhenIntentIsClear: 1
   _leftIntentDeadZonePixels: 52
   _leftSoftLockExtraAngleDegrees: 8
-  _runStartupCalibration: 1
+  _runStartupCalibration: 0
   _calibrationTargetWorldSize: 1.05
   _calibrationEdgePaddingViewport: 0.22
   _calibrationMaxScale: 3.5
@@ -540,7 +540,7 @@ MonoBehaviour:
   _sampleCollectSpeed: 9
   _sampleCollectDistance: 0.18
   _samplesNeededForUpgrade: 10
-  _upgradesRequiredBeforeBoss: 5
+  _upgradesRequiredBeforeBoss: 4
   _logUpgradeFlowTransitions: 0
   _progressBarWidthViewport: 0.46
   _progressBarHeightWorld: 0.14

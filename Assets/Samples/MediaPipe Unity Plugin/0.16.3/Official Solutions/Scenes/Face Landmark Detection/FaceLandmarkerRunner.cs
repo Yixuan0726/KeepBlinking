@@ -114,6 +114,10 @@ namespace Mediapipe.Unity.Sample.FaceLandmarkDetection
       var transformationOptions = imageSource.GetTransformationOptions();
       var flipHorizontally = transformationOptions.flipHorizontally;
       var flipVertically = transformationOptions.flipVertically;
+      EyeInputDebugState.SetFrameTransformMetadata(
+        flipHorizontally,
+        (int)transformationOptions.rotationAngle,
+        UnityEngine.Screen.orientation);
       var imageProcessingOptions = new Tasks.Vision.Core.ImageProcessingOptions(rotationDegrees: (int)transformationOptions.rotationAngle);
 
       AsyncGPUReadbackRequest req = default;
@@ -127,6 +131,10 @@ namespace Mediapipe.Unity.Sample.FaceLandmarkDetection
 
       while (true)
       {
+        EyeInputDebugState.SetFrameTransformMetadata(
+          flipHorizontally,
+          (int)transformationOptions.rotationAngle,
+          UnityEngine.Screen.orientation);
         if (isPaused)
         {
           yield return new WaitWhile(() => isPaused);

@@ -29,17 +29,17 @@ namespace KeepBlinking.Tests
     }
 
     [Test]
-    public void MissingBossUpgradeConfigurationFallsBackToFive()
+    public void MissingBossUpgradeConfigurationFallsBackToFour()
     {
       var gameplay = CreateGameplay();
       SetField(gameplay, "_upgradesRequiredBeforeBoss", 0);
 
-      Assert.That(gameplay.UpgradesRequiredBeforeBoss, Is.EqualTo(5));
+      Assert.That(gameplay.UpgradesRequiredBeforeBoss, Is.EqualTo(4));
     }
 
-    [TestCase(0, FirstLevelModuleId.ChainBlink)]
-    [TestCase(1, FirstLevelModuleId.QuietWake)]
-    [TestCase(2, FirstLevelModuleId.BonusSample)]
+    [TestCase(0, FirstLevelModuleId.WiderField)]
+    [TestCase(1, FirstLevelModuleId.BlinkBloom)]
+    [TestCase(2, FirstLevelModuleId.ExtraSamples)]
     public void EveryFirstOfferCardCommitsOnceAndReturnsToGameplay(int selectedIndex, FirstLevelModuleId expectedModule)
     {
       var gameplay = CreateGameplay();
@@ -60,7 +60,7 @@ namespace KeepBlinking.Tests
 
       PrepareTransaction(
         gameplay,
-        new[] { FirstLevelModuleId.ChainBlink, FirstLevelModuleId.QuietWake, FirstLevelModuleId.BonusSample },
+        new[] { FirstLevelModuleId.WiderField, FirstLevelModuleId.BlinkBloom, FirstLevelModuleId.ExtraSamples },
         selectedIndex);
       Invoke(gameplay, "FinalizeModuleInstallation");
       Invoke(gameplay, "FinalizeModuleInstallation");
@@ -77,7 +77,7 @@ namespace KeepBlinking.Tests
     }
 
     [Test]
-    public void FiveSequentialChoicesCompleteBuildExactlyOnce()
+    public void FourSequentialChoicesCompleteBuildExactlyOnce()
     {
       var gameplay = CreateGameplay();
       var moduleEvents = 0;
@@ -90,11 +90,10 @@ namespace KeepBlinking.Tests
       gameplay.FirstLevelBuildCompleted += () => buildEvents++;
       var modules = new[]
       {
-        FirstLevelModuleId.ChainBlink,
-        FirstLevelModuleId.WideBlink,
-        FirstLevelModuleId.WideChain,
-        FirstLevelModuleId.QuietWake,
-        FirstLevelModuleId.BonusSample,
+        FirstLevelModuleId.WiderField,
+        FirstLevelModuleId.MoreTargets,
+        FirstLevelModuleId.RestBloom,
+        FirstLevelModuleId.DoublePulse,
       };
 
       for (var i = 0; i < modules.Length; i++)
@@ -109,8 +108,8 @@ namespace KeepBlinking.Tests
         Assert.That(buildEvents, Is.EqualTo(i == modules.Length - 1 ? 1 : 0));
       }
 
-      Assert.That(moduleEvents, Is.EqualTo(5));
-      Assert.That(choiceEvents, Is.EqualTo(5));
+      Assert.That(moduleEvents, Is.EqualTo(4));
+      Assert.That(choiceEvents, Is.EqualTo(4));
       Assert.That(sequenceEvents, Is.EqualTo(1));
       Assert.That(buildEvents, Is.EqualTo(1));
       Assert.That(gameplay.IsFirstLevelBuildComplete, Is.True);
@@ -194,7 +193,7 @@ namespace KeepBlinking.Tests
 
       LogAssert.Expect(
         LogType.Warning,
-        "KeepBlinking ignored an early build-complete signal at 0/5 modules.");
+        "KeepBlinking ignored an early build-complete signal at 0/4 modules.");
       Invoke(session, "HandleBuildCompleted");
 
       Assert.That(session.State, Is.EqualTo(FirstLevelSessionState.Gameplay));
@@ -207,7 +206,7 @@ namespace KeepBlinking.Tests
       var choiceEvents = 0;
       gameplay.FirstLevelModuleInstalled += _ => throw new InvalidOperationException("observer failure");
       gameplay.ModuleChoiceCompleted += _ => choiceEvents++;
-      PrepareTransaction(gameplay, new[] { FirstLevelModuleId.ChainBlink }, 0);
+      PrepareTransaction(gameplay, new[] { FirstLevelModuleId.WiderField }, 0);
 
       LogAssert.Expect(
         LogType.Error,
@@ -221,7 +220,7 @@ namespace KeepBlinking.Tests
     }
 
     [Test]
-    public void EveryFiveChoicePoolBranchHasThreeUniqueLegalCards()
+    public void EveryFourChoicePoolBranchHasThreeUniqueLegalCards()
     {
       var catalogType = typeof(FirstLevelModuleId).Assembly.GetType("KeepBlinking.Gameplay.FirstLevelUpgradeCatalog");
       Assert.That(catalogType, Is.Not.Null);
@@ -232,7 +231,69 @@ namespace KeepBlinking.Tests
     }
 
     [Test]
-    public void DryCoreUsesNewSoftBlinkWithoutAnyGazeLockState()
+    public void EveryFinalCareCardIsReachableInTheFourChoiceTree()
+    {
+      var catalogType = typeof(FirstLevelModuleId).Assembly.GetType("KeepBlinking.Gameplay.FirstLevelUpgradeCatalog");
+      var buildOffer = catalogType.GetMethod("BuildOffer", StaticPrivate);
+      var seen = new HashSet<FirstLevelModuleId>();
+      CollectReachableCards(buildOffer, 1, new HashSet<FirstLevelModuleId>(), seen);
+
+      for (var raw = (int)FirstLevelModuleId.WiderField; raw <= (int)FirstLevelModuleId.FullRecovery; raw++)
+      {
+        if ((FirstLevelModuleId)raw == FirstLevelModuleId.ShiftReward) continue;
+        Assert.That(seen.Contains((FirstLevelModuleId)raw), Is.True, "CARE card is unreachable: " + (FirstLevelModuleId)raw);
+      }
+    }
+
+    [Test]
+    public void EveryCareCardPassesHealthInvariantAudit()
+    {
+      var catalogType = typeof(FirstLevelModuleId).Assembly.GetType("KeepBlinking.Gameplay.FirstLevelUpgradeCatalog");
+      var definitionsProperty = catalogType.GetProperty("Definitions", StaticPrivate);
+      var definitions = (Array)definitionsProperty.GetValue(null);
+
+      Assert.That(definitions.Length, Is.EqualTo(14));
+      foreach (var definition in definitions)
+      {
+        var type = definition.GetType();
+        Assert.That((bool)type.GetMethod("PassesHealthInvariantAudit", InstancePrivate | BindingFlags.Public).Invoke(definition, null), Is.True);
+        Assert.That(((string)type.GetProperty("Title").GetValue(definition)).Split(' '), Has.Length.LessThanOrEqualTo(2));
+        Assert.That(((string)type.GetProperty("CategoryLabel").GetValue(definition)).Split(' '), Has.Length.EqualTo(1));
+        Assert.That(((string)type.GetProperty("Description").GetValue(definition)).Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries), Has.Length.LessThanOrEqualTo(5));
+      }
+    }
+
+    [Test]
+    public void ScreenDownRestRejectsNormalPortraitOrientation()
+    {
+      var normal = Vector3.forward;
+      Assert.That(ScreenDownRestMotionLogic.IsScreenDown(normal, normal, Vector3.down, 150f, 30f), Is.False);
+    }
+
+    [Test]
+    public void ScreenDownRestAcceptsRelativeFlipOrGroundFacingNormal()
+    {
+      Assert.That(ScreenDownRestMotionLogic.IsScreenDown(Vector3.forward, Vector3.back, Vector3.down, 150f, 30f), Is.True);
+      Assert.That(ScreenDownRestMotionLogic.IsScreenDown(Vector3.forward, Vector3.down, Vector3.down, 150f, 30f), Is.True);
+    }
+
+    [Test]
+    public void ScreenDownRestRequiresStableMotion()
+    {
+      Assert.That(ScreenDownRestMotionLogic.IsStable(1f, 1f, 0.18f, 0.2f, 0.35f), Is.True);
+      Assert.That(ScreenDownRestMotionLogic.IsStable(1.4f, 1f, 0.18f, 0.2f, 0.35f), Is.False);
+      Assert.That(ScreenDownRestMotionLogic.IsStable(1f, 1f, 0.18f, 0.8f, 0.35f), Is.False);
+    }
+
+    [Test]
+    public void ScreenDownRestRequiresReturnNearCapturedAttitude()
+    {
+      Assert.That(ScreenDownRestMotionLogic.IsReturned(Quaternion.identity, Quaternion.Euler(0f, 18f, 0f), 20f), Is.True);
+      Assert.That(ScreenDownRestMotionLogic.IsReturned(Quaternion.identity, Quaternion.Euler(0f, 24f, 0f), 20f), Is.False);
+    }
+
+    [Test]
+    public void DryCorePreparationHasNoGazeLockAndBlinkSignalCannotAdvance()
     {
       Assert.That(Enum.IsDefined(typeof(DryCoreBossState), "FocusWeakPoint"), Is.False);
       Assert.That(Enum.IsDefined(typeof(DryCoreBossPrompt), "FocusCore"), Is.False);
@@ -243,15 +304,55 @@ namespace KeepBlinking.Tests
       boss.Initialize(gameplay);
       SetField(boss, "_remainingCores", 3);
       Invoke(boss, "BeginSoftBlinkRound");
-      SetField(boss, "_softBlinkArmed", true);
-      SetField(boss, "_softBlinkSerialAtArm", 5);
-
-      Invoke(boss, "HandleSoftBlinkPerformed", 5);
-      Assert.That(boss.State, Is.EqualTo(DryCoreBossState.WaitSoftBlink));
 
       Invoke(boss, "HandleSoftBlinkPerformed", 6);
-      Assert.That(boss.State, Is.EqualTo(DryCoreBossState.PromptClose));
+      Assert.That(boss.State, Is.EqualTo(DryCoreBossState.WaitSoftBlink));
       Assert.That(boss.RemainingCores, Is.EqualTo(3));
+    }
+
+    [Test]
+    public void SoftBlinkReopenThresholdAdaptsBelowTheLegacyAbsoluteGate()
+    {
+      var gameplay = CreateGameplay();
+      SetField(gameplay, "_softBlinkRelativeReopenRatio", 0.62f);
+      SetField(gameplay, "_softBlinkMinimumReopenValue", 0.30f);
+      SetField(gameplay, "_openEyeReleaseThreshold", 0.55f);
+      var method = typeof(EdgeOrbitHarvestMvp).GetMethod(
+        "CalculateAdaptiveSoftBlinkReopenThreshold",
+        InstancePrivate);
+
+      Assert.That(method, Is.Not.Null);
+      Assert.That((float)method.Invoke(gameplay, new object[] { 0.80f }), Is.EqualTo(0.496f).Within(0.001f));
+      Assert.That((float)method.Invoke(gameplay, new object[] { 0.35f }), Is.EqualTo(0.30f).Within(0.001f));
+    }
+
+    [Test]
+    public void BlinkBloomCompletedBlinkStartsVisibleSixSecondExpansion()
+    {
+      var gameplay = CreateGameplay();
+      SetField(gameplay, "_autoReadKeepBlinkingEyeInput", false);
+      SetField(gameplay, "_tutorialMode", false);
+      SetEnumField(gameplay, "_gameplayState", "Orbiting");
+      ((List<FirstLevelModuleId>)GetField(gameplay, "_installedModuleOrder")).Add(FirstLevelModuleId.BlinkBloom);
+      ((HashSet<FirstLevelModuleId>)GetField(gameplay, "_installedModules")).Add(FirstLevelModuleId.BlinkBloom);
+
+      var fieldOwner = new GameObject("Blink Bloom Field Test");
+      _objectsToDestroy.Add(fieldOwner);
+      var field = fieldOwner.AddComponent<SoftFocusFieldController>();
+      SoftFocusFieldController.EnsureExists(gameplay);
+
+      var upgradeOwner = new GameObject("Blink Bloom Upgrade Test");
+      _objectsToDestroy.Add(upgradeOwner);
+      var upgrades = upgradeOwner.AddComponent<CareUpgradeController>();
+      CareUpgradeController.EnsureExists(gameplay);
+      Invoke(upgrades, "HandleNaturalBlink", 1);
+
+      Assert.That(field.IsTemporaryExpansionActive, Is.True);
+      Assert.That(field.TemporaryExpansionTargetScale, Is.EqualTo(1.35f).Within(0.001f));
+      Assert.That(field.TemporaryExpansionRemainingSeconds, Is.GreaterThan(5.8f));
+      var canvas = field.GetComponentInChildren<Canvas>(true);
+      Assert.That(canvas, Is.Not.Null);
+      Assert.That(canvas.sortingOrder, Is.EqualTo(60));
     }
 
     private static void AuditOfferBranch(
@@ -262,13 +363,20 @@ namespace KeepBlinking.Tests
       var offer = (List<FirstLevelModuleId>)buildOffer.Invoke(null, new object[] { upgradeNumber, installed });
       Assert.That(offer, Has.Count.EqualTo(3), "Offer count failed at upgrade " + upgradeNumber);
       Assert.That(new HashSet<FirstLevelModuleId>(offer), Has.Count.EqualTo(3));
+      var catalogType = typeof(FirstLevelModuleId).Assembly.GetType("KeepBlinking.Gameplay.FirstLevelUpgradeCatalog");
+      var getDefinition = catalogType.GetMethod("Get", StaticPrivate);
+      var categories = new HashSet<object>();
       for (var i = 0; i < offer.Count; i++)
       {
         Assert.That(offer[i], Is.Not.EqualTo(FirstLevelModuleId.None));
         Assert.That(installed.Contains(offer[i]), Is.False, "Installed module was offered again: " + offer[i]);
+        Assert.That((int)offer[i], Is.GreaterThanOrEqualTo((int)FirstLevelModuleId.WiderField), "Legacy combat card entered CARE pool: " + offer[i]);
+        var definition = getDefinition.Invoke(null, new object[] { offer[i] });
+        categories.Add(definition.GetType().GetProperty("Category").GetValue(definition));
       }
+      Assert.That(categories.Count, Is.GreaterThanOrEqualTo(2), "Offer must contain at least two CARE categories.");
 
-      if (upgradeNumber >= 5)
+      if (upgradeNumber >= 4)
       {
         return;
       }
@@ -277,6 +385,22 @@ namespace KeepBlinking.Tests
       {
         var nextInstalled = new HashSet<FirstLevelModuleId>(installed) { offer[i] };
         AuditOfferBranch(buildOffer, upgradeNumber + 1, nextInstalled);
+      }
+    }
+
+    private static void CollectReachableCards(
+      MethodInfo buildOffer,
+      int upgradeNumber,
+      HashSet<FirstLevelModuleId> installed,
+      HashSet<FirstLevelModuleId> seen)
+    {
+      var offer = (List<FirstLevelModuleId>)buildOffer.Invoke(null, new object[] { upgradeNumber, installed });
+      for (var i = 0; i < offer.Count; i++) seen.Add(offer[i]);
+      if (upgradeNumber >= 4) return;
+      for (var i = 0; i < offer.Count; i++)
+      {
+        var nextInstalled = new HashSet<FirstLevelModuleId>(installed) { offer[i] };
+        CollectReachableCards(buildOffer, upgradeNumber + 1, nextInstalled, seen);
       }
     }
 

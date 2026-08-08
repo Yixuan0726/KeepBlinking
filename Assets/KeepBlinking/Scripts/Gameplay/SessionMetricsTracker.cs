@@ -122,7 +122,7 @@ namespace KeepBlinking.Gameplay
         _boss.BossEarlyReopen += HandleEarlyReopen;
       }
 
-      OffScreenEyeBreakController.OffScreenGazeBreakCompleted += HandleOffScreenGazeBreakCompleted;
+      ScreenDownRestController.ScreenDownRestCompleted += HandleOffScreenGazeBreakCompleted;
     }
 
     private void Unsubscribe()
@@ -142,7 +142,7 @@ namespace KeepBlinking.Gameplay
         _boss.BossEarlyReopen -= HandleEarlyReopen;
       }
 
-      OffScreenEyeBreakController.OffScreenGazeBreakCompleted -= HandleOffScreenGazeBreakCompleted;
+      ScreenDownRestController.ScreenDownRestCompleted -= HandleOffScreenGazeBreakCompleted;
     }
 
     private void HandleNaturalBlinkAccepted()

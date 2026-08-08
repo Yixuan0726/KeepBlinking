@@ -190,11 +190,7 @@ namespace KeepBlinking.Tutorial
         return;
       }
 
-      if (_controller.State == KeepBlinkingTutorialState.WaitFirstConverted)
-      {
-        DrawBlinkPrompt();
-      }
-      else if (_controller.State == KeepBlinkingTutorialState.WaitFirstCollected &&
+      if (_controller.State == KeepBlinkingTutorialState.WaitFirstCollected &&
                !_controller.PushAwayTriggeredObserved)
       {
         DrawPushAwayPrompt();
@@ -423,7 +419,6 @@ namespace KeepBlinking.Tutorial
           {
             _gameplay.PlayTutorialFeedback(TutorialFeedbackCue.Focus);
           }
-          StartLoopPrompt(LoopPrompt.Blink);
           break;
         case KeepBlinkingTutorialState.WaitFirstPushAway:
           if (playEntryCue)

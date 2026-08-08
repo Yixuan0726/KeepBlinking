@@ -5,7 +5,7 @@ using UnityEngine.UI;
 
 namespace KeepBlinking.Gameplay
 {
-  internal sealed class FirstLevelUpgradeView : MonoBehaviour
+  internal class FirstLevelUpgradeView : MonoBehaviour
   {
     private const float ReferenceWidth = 1080f;
     private const float ReferenceHeight = 1920f;
@@ -281,7 +281,7 @@ namespace KeepBlinking.Gameplay
       Stretch(_overlayContentRoot);
 
       _headerText = CreateText("Header", _overlayContentRoot, "CHOOSE ONE", 54f, 42f, 58f, FontStyles.Bold, TextAlignmentOptions.Center, false);
-      _instructionText = CreateText("Instruction", _overlayContentRoot, "CLICK TO INSTALL", 25f, 22f, 28f, FontStyles.Bold, TextAlignmentOptions.Center, false);
+      _instructionText = CreateText("Instruction", _overlayContentRoot, "TAP TO INSTALL", 25f, 22f, 28f, FontStyles.Bold, TextAlignmentOptions.Center, false);
 
       var hud = CreateUiObject("Module HUD Slots", _safeAreaRoot);
       _hudRoot = hud.GetComponent<RectTransform>();
@@ -295,7 +295,7 @@ namespace KeepBlinking.Gameplay
       _overlayContentObject.SetActive(false);
     }
 
-    private CardVisual CreateCard(FirstLevelModuleDefinition definition, int index)
+    private CardVisual CreateCard(CareUpgradeDefinition definition, int index)
     {
       var rootObject = CreateUiObject($"Card {index + 1} {definition.Title}", _overlayContentRoot);
       var root = rootObject.GetComponent<RectTransform>();
@@ -333,7 +333,7 @@ namespace KeepBlinking.Gameplay
       border.color = new Color(126f / 255f, 145f / 255f, 135f / 255f, 0.5f);
       border.raycastTarget = false;
 
-      var progressObject = CreateUiObject("Gaze Progress", root);
+      var progressObject = CreateUiObject("Selection Progress", root);
       var progressRect = progressObject.GetComponent<RectTransform>();
       Stretch(progressRect);
       var progress = progressObject.AddComponent<UpgradeFocusProgressGraphic>();
@@ -353,33 +353,33 @@ namespace KeepBlinking.Gameplay
       accent.color = KeepBlinkingTheme.WithAlpha(definition.AccentColor, 0.9f);
       accent.raycastTarget = false;
 
-      var category = CreateText("Category", root, definition.CategoryLabel, 24f, 20f, 25f, FontStyles.Bold, TextAlignmentOptions.Left, false);
-      SetRect(category.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(62f, -22f), new Vector2(590f, 34f));
-      category.characterSpacing = 2f;
-      category.color = KeepBlinkingTheme.WithAlpha(definition.AccentColor, 0.96f);
-
       var title = CreateText("Title", root, definition.Title, 46f, 34f, 47f, FontStyles.Bold, TextAlignmentOptions.Left, false);
-      SetRect(title.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(62f, -62f), new Vector2(630f, 54f));
+      SetRect(title.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(62f, -32f), new Vector2(600f, 54f));
       title.color = KeepBlinkingTheme.TextPrimary;
 
-      var description = CreateText("Description", root, definition.Description, 28f, 23f, 29f, FontStyles.Normal, TextAlignmentOptions.TopLeft, true);
-      SetRect(description.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(62f, -122f), new Vector2(650f, 58f));
+      var delta = CreateText("Value", root, definition.Delta, 32f, 27f, 34f, FontStyles.Bold, TextAlignmentOptions.Left, false);
+      SetRect(delta.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(62f, -88f), new Vector2(580f, 42f));
+      delta.color = KeepBlinkingTheme.TextPrimary;
+
+      var description = CreateText("Effect", root, definition.Description, 28f, 23f, 29f, FontStyles.Normal, TextAlignmentOptions.TopLeft, true);
+      SetRect(description.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(62f, -142f), new Vector2(600f, 54f));
       description.color = KeepBlinkingTheme.TextSecondary;
       description.maxVisibleLines = 2;
 
-      var delta = CreateText("Value", root, definition.Delta, 32f, 27f, 34f, FontStyles.Bold, TextAlignmentOptions.Left, false);
-      SetRect(delta.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(62f, 24f), new Vector2(520f, 40f));
-      delta.color = KeepBlinkingTheme.TextPrimary;
+      var category = CreateText("Category", root, definition.CategoryLabel, 24f, 20f, 25f, FontStyles.Bold, TextAlignmentOptions.Left, false);
+      SetRect(category.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(62f, 20f), new Vector2(520f, 34f));
+      category.characterSpacing = 2f;
+      category.color = KeepBlinkingTheme.WithAlpha(definition.AccentColor, 0.96f);
 
       var iconObject = CreateUiObject("Module Icon", root);
       var iconRect = iconObject.GetComponent<RectTransform>();
       iconRect.anchorMin = new Vector2(1f, 0.5f);
       iconRect.anchorMax = new Vector2(1f, 0.5f);
       iconRect.pivot = new Vector2(0.5f, 0.5f);
-      iconRect.sizeDelta = new Vector2(190f, 190f);
-      iconRect.anchoredPosition = new Vector2(-126f, 0f);
-      var icon = iconObject.AddComponent<UpgradeModuleIconVisual>();
-      icon.Configure(definition.Category, definition.AccentColor, Mathf.Max(1, definition.Tier));
+      iconRect.sizeDelta = new Vector2(220f, 190f);
+      iconRect.anchoredPosition = new Vector2(-132f, 0f);
+      var icon = iconObject.AddComponent<CareUpgradePreviewGraphic>();
+      icon.Configure(definition);
       icon.raycastTarget = false;
 
       return new CardVisual(root, canvasGroup, surface, border, progress, icon, category, title, description, delta);
@@ -528,8 +528,10 @@ namespace KeepBlinking.Gameplay
 
         var targetScale = isSelected ? (_installing ? 1.035f : 1.015f) : 1f;
         card.Root.localScale = Vector3.Lerp(card.Root.localScale, Vector3.one * targetScale, 1f - Mathf.Exp(-11f * Time.unscaledDeltaTime));
-        var forwardOffset = isSelected && _installing ? new Vector2(0f, 10f * Mathf.SmoothStep(0f, 1f, _installProgress)) : Vector2.zero;
-        card.Root.anchoredPosition = Vector2.Lerp(card.Root.anchoredPosition, card.BaseAnchoredPosition + forwardOffset, 1f - Mathf.Exp(-10f * Time.unscaledDeltaTime));
+        var targetPosition = isSelected && _installing
+          ? Vector2.Lerp(card.BaseAnchoredPosition, Vector2.zero, Mathf.SmoothStep(0f, 1f, _installProgress))
+          : card.BaseAnchoredPosition;
+        card.Root.anchoredPosition = Vector2.Lerp(card.Root.anchoredPosition, targetPosition, 1f - Mathf.Exp(-10f * Time.unscaledDeltaTime));
 
         var baseSurface = new Color(30f / 255f, 43f / 255f, 40f / 255f, 0.96f);
         var focusedSurface = new Color(38f / 255f, 54f / 255f, 49f / 255f, 0.98f);
@@ -543,7 +545,9 @@ namespace KeepBlinking.Gameplay
         card.FocusProgress.Progress = isFocused && !isSelected
           ? (_focusedCardIndex == i ? _focusProgress : 0f)
           : isSelected ? 1f : 0f;
-        card.Icon.Phase = Mathf.Repeat(Time.unscaledTime / GetIconLoopSeconds(card.Icon.Category), 1f);
+        card.Icon.Phase = isSelected && _installing
+          ? _installProgress * 0.5f
+          : Mathf.Repeat(Time.unscaledTime / 2f, 1f);
       }
     }
 
@@ -585,7 +589,7 @@ namespace KeepBlinking.Gameplay
 
       _instructionText.text = _installing
         ? "INSTALLED"
-        : "CLICK TO INSTALL";
+        : "TAP TO INSTALL";
       _instructionText.color = _focusedCardIndex >= 0 || _selectedCardIndex >= 0
         ? KeepBlinkingTheme.TextPrimary
         : KeepBlinkingTheme.TextMuted;
@@ -781,7 +785,7 @@ namespace KeepBlinking.Gameplay
       public Image Surface { get; }
       public Image Border { get; }
       public UpgradeFocusProgressGraphic FocusProgress { get; }
-      public UpgradeModuleIconVisual Icon { get; }
+      public CareUpgradePreviewGraphic Icon { get; }
       public TextMeshProUGUI Category { get; }
       public TextMeshProUGUI Title { get; }
       public TextMeshProUGUI Description { get; }
@@ -794,7 +798,7 @@ namespace KeepBlinking.Gameplay
         Image surface,
         Image border,
         UpgradeFocusProgressGraphic focusProgress,
-        UpgradeModuleIconVisual icon,
+        CareUpgradePreviewGraphic icon,
         TextMeshProUGUI category,
         TextMeshProUGUI title,
         TextMeshProUGUI description,

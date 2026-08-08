@@ -22,6 +22,10 @@ namespace KeepBlinking.Gameplay
   {
     [SerializeField, Min(0.1f)] private float _bossQuietTransitionSeconds = 1.5f;
 
+    [Header("Legacy Tutorial Compatibility")]
+    [Tooltip("Keeps the retired gaze-driven Soft Focus tutorial available for explicit development checks. The first-level care flow must leave this disabled.")]
+    [SerializeField] private bool _runLegacyGazeTutorial;
+
     private EdgeOrbitHarvestMvp _gameplay;
     private KeepBlinkingTutorialController _tutorial;
     private DryCoreBossController _boss;
@@ -154,10 +158,34 @@ namespace KeepBlinking.Gameplay
       }
 
       _gameplay.SetFirstLevelModalPaused(false, false);
-      _tutorial?.SetExternalStartBlocked(false);
-      SetState(_tutorial != null && _tutorial.IsRunning
-        ? FirstLevelSessionState.Tutorial
-        : FirstLevelSessionState.Gameplay);
+      if (_runLegacyGazeTutorial)
+      {
+        _tutorial?.SetExternalStartBlocked(false);
+        SetState(_tutorial != null && _tutorial.IsRunning
+          ? FirstLevelSessionState.Tutorial
+          : FirstLevelSessionState.Gameplay);
+        if (_tutorial == null || !_tutorial.IsRunning)
+        {
+          FirstLevelCareFlowController.EnsureExists(_gameplay);
+        }
+        return;
+      }
+
+      BeginCareFlowWithoutLegacyGazeTutorial();
+    }
+
+    private void BeginCareFlowWithoutLegacyGazeTutorial()
+    {
+      _tutorial?.SetExternalStartBlocked(true, false);
+      if (_tutorial != null && _tutorial.IsRunning)
+      {
+        _tutorial.InterruptTutorial();
+      }
+
+      _gameplay.SetFirstLevelModalPaused(false, false);
+      SetState(FirstLevelSessionState.Gameplay);
+      FirstLevelCareFlowController.EnsureExists(_gameplay);
+      Debug.Log("First-level care flow started without the retired gaze-action tutorial.", this);
     }
 
     private void HandleTutorialStateChanged(KeepBlinkingTutorialState previous, KeepBlinkingTutorialState next)
@@ -165,6 +193,7 @@ namespace KeepBlinking.Gameplay
       if (next == KeepBlinkingTutorialState.Completed && _state == FirstLevelSessionState.Tutorial)
       {
         SetState(FirstLevelSessionState.Gameplay);
+        FirstLevelCareFlowController.EnsureExists(_gameplay);
       }
     }
 
@@ -175,6 +204,14 @@ namespace KeepBlinking.Gameplay
 
     private void Update()
     {
+      // Hot reload can leave a running Play Mode session inside the retired
+      // tutorial. Reconcile it immediately instead of requiring a restart.
+      if (!_runLegacyGazeTutorial && _state == FirstLevelSessionState.Tutorial)
+      {
+        BeginCareFlowWithoutLegacyGazeTutorial();
+        return;
+      }
+
       if (_gameplay == null ||
           !_gameplay.IsFirstLevelBuildComplete ||
           _gameplay.InstalledFirstLevelModuleCount < _gameplay.UpgradesRequiredBeforeBoss)

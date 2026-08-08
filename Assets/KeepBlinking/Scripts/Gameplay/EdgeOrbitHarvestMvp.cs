@@ -51,6 +51,8 @@ namespace KeepBlinking.Gameplay
     public event Action<int> TargetConverted;
     public event Action PushAwayCollectionReady;
     public event Action PushAwayTriggered;
+    public event Action PushAwayReturnedNeutral;
+    public event Action<int> SoftFocusBatchCompleted;
     public event Action<int> ConvertedCollectionStarted;
     public event Action<int> ExperienceReachedBar;
     public event Action<ExperienceProgressSignal> ExperienceProgressChanged;
@@ -113,6 +115,8 @@ namespace KeepBlinking.Gameplay
     [SerializeField] private float _preBlinkIgnoreRecentSeconds = 0.04f;
     [SerializeField, Min(0.05f)] private float _softBlinkStableOpenSeconds = 0.16f;
     [SerializeField, Min(0.2f)] private float _softBlinkMaximumClosedSeconds = 0.65f;
+    [SerializeField, Range(0.45f, 0.85f)] private float _softBlinkRelativeReopenRatio = 0.62f;
+    [SerializeField, Range(0.15f, 0.5f)] private float _softBlinkMinimumReopenValue = 0.30f;
 
     [Header("Camera")]
     [SerializeField] private Camera _camera;
@@ -171,7 +175,7 @@ namespace KeepBlinking.Gameplay
     [SerializeField] private float _leftSoftLockExtraAngleDegrees = 8f;
 
     [Header("Startup Gaze Calibration")]
-    [SerializeField] private bool _runStartupCalibration = true;
+    [SerializeField] private bool _runStartupCalibration;
     [SerializeField] private float _calibrationTargetWorldSize = 1.05f;
     [SerializeField] private float _calibrationEdgePaddingViewport = 0.22f;
     [SerializeField] private float _calibrationMaxScale = 3.5f;
@@ -202,8 +206,16 @@ namespace KeepBlinking.Gameplay
     [Header("Sampling & Module Upgrade")]
     [SerializeField] private float _sampleCollectSpeed = 9f;
     [SerializeField] private float _sampleCollectDistance = 0.18f;
+    [SerializeField, Range(0.01f, 0.12f)] private float _careSampleReleaseInterval = 0.04f;
+    [SerializeField, Range(32, 128)] private int _experienceSamplePoolCapacity = 96;
+    [SerializeField, Range(8, 24)] private int _careWaitingVisibleCapacity = 20;
+    [SerializeField, Range(0.06f, 0.25f)] private float _careWaitingLeftViewport = 0.12f;
+    [SerializeField, Range(0.75f, 0.94f)] private float _careWaitingRightViewport = 0.88f;
+    [SerializeField, Range(0.18f, 0.45f)] private float _careWaitingBottomViewport = 0.28f;
+    [SerializeField, Range(0.55f, 0.86f)] private float _careWaitingTopViewport = 0.76f;
+    [SerializeField, Range(3f, 24f)] private float _careWaitingLayoutResponse = 12f;
     [SerializeField] private int _samplesNeededForUpgrade = 10;
-    [SerializeField, Min(1)] private int _upgradesRequiredBeforeBoss = 5;
+    [SerializeField, Min(1)] private int _upgradesRequiredBeforeBoss = 4;
     [SerializeField] private float _progressBarWidthViewport = 0.46f;
     [SerializeField] private float _progressBarHeightWorld = 0.14f;
     [SerializeField] private float _progressBarBottomViewport = 0.02f;
@@ -295,6 +307,7 @@ namespace KeepBlinking.Gameplay
     private float _softBlinkCandidateStartedAt = -1f;
     private bool _softBlinkCandidateActive;
     private int _softBlinkSerial;
+    private int _lastSoftBlinkObservedPluginCount = -1;
     private float _nextSpawnAt;
     private float _nextCrisisAt;
     private float _eyesClosedStartedAt = -1f;
@@ -322,6 +335,14 @@ namespace KeepBlinking.Gameplay
     private bool _pushAwayReady;
     private bool _softFocusHiddenByPushAway;
     private bool _offScreenEyeBreakPending;
+    private bool _focusShiftActive;
+    private bool _guidedEyeMovementActive;
+    private bool _screenDownRestActive;
+    private bool _careActionActive;
+    private bool _careCollectionArmed;
+    private bool _careRoundFlowEnabled;
+    private bool _careRoundPresentationActive;
+    private readonly Stack<OrbitBlock> _experienceSamplePool = new Stack<OrbitBlock>(96);
     private bool _tutorialMode;
     private bool _tutorialRandomSpawningPaused;
     private bool _tutorialRandomCrisisPaused;
@@ -403,6 +424,7 @@ namespace KeepBlinking.Gameplay
     private bool _hasLastPurificationAnchor;
     private bool _tutorialReady;
     private int _tutorialOrbitTargetId = NoTargetId;
+    private readonly List<int> _tutorialSoftFocusTargetIds = new List<int>(2);
     private float _tutorialProgressGlowUntil = -1f;
 
     private const string ProtocolDayPrefsKey = "KeepBlinking.ProtocolDay";
@@ -475,9 +497,22 @@ namespace KeepBlinking.Gameplay
     public float BaselineFaceScale => _distanceTracker.BaselineFaceScale;
     public float CurrentFaceScale => _distanceTracker.CurrentFaceScale;
     public float DistanceRatio => _distanceTracker.DistanceRatio;
-    public bool IsTooClose => _distanceTracker.IsTooClose;
+    public bool HasValidDistanceSample => _distanceTracker.HasValidSample;
+    public bool HasDistanceBaseline => _distanceTracker.HasBaseline;
+    public bool IsFocusShiftActive => _focusShiftActive;
+    public bool IsGuidedEyeMovementActive => _guidedEyeMovementActive;
+    public bool IsScreenDownRestActive => _screenDownRestActive;
+    public bool IsCareInteractionActive => _focusShiftActive || _guidedEyeMovementActive || _screenDownRestActive || _careActionActive;
+    public bool IsTooClose => _focusShiftActive
+      ? _distanceTracker.HasValidSample && _distanceTracker.DistanceRatio >= _tooCloseEnterRatio
+      : _distanceTracker.IsTooClose;
     public SessionDistanceState DistanceState => _distanceTracker.State;
     public int PendingConvertedExperienceCount => CountState(BlockState.Converted);
+    public int PendingUnsettledExperienceCount => CountState(BlockState.Converted) + CountState(BlockState.Collecting);
+    public bool IsCareCollectionArmed => _careCollectionArmed;
+    public bool IsCareActionActive => _careActionActive;
+    public bool IsCareRoundFlowEnabled => _careRoundFlowEnabled;
+    public bool IsCareRoundPresentationActive => _careRoundPresentationActive;
     public bool IsFaceInputAvailable => !_autoReadKeepBlinkingEyeInput || EyeInputDebugState.Latest.FaceDetected;
     public int CrisisSpawnCount => Mathf.Max(1, _crisisSpawnCount);
     public bool IsCalibrationInputReady
@@ -497,7 +532,7 @@ namespace KeepBlinking.Gameplay
     public float CameraNearAmount => _distanceCameraFeedback != null ? _distanceCameraFeedback.NearAmount : 0f;
     public bool IsExperienceCollectionInProgress => CountState(BlockState.Collecting) > 0;
     public bool HasUncollectedExperience => HasCollectableSamples() || IsExperienceCollectionInProgress;
-    public bool IsSoftFocusNormalGameplayActive => !_tutorialMode &&
+    public bool IsSoftFocusNormalGameplayActive => (!_tutorialMode || _tutorialSoftFocusTargetIds.Count > 0) &&
                                                     !_calibrationActive &&
                                                     !_sessionEnded &&
                                                     !_firstLevelModalPaused &&
@@ -507,24 +542,27 @@ namespace KeepBlinking.Gameplay
                                                     !_softFocusHiddenByPushAway &&
                                                     _gameplayState == GameplayState.Orbiting;
     public bool IsSoftFocusBlinkHealthActive => IsSoftFocusNormalGameplayActive;
-    public bool ShouldShowSoftFocusField => !_tutorialMode &&
+    public bool ShouldShowSoftFocusField => (!_tutorialMode || _tutorialSoftFocusTargetIds.Count > 0) &&
                                             !_calibrationActive &&
                                             !_sessionEnded &&
                                             !_firstLevelBossMode &&
                                             !_softFocusHiddenByPushAway &&
                                             _gameplayState != GameplayState.ModuleUpgrade &&
                                             _gameplayState != GameplayState.SessionReport;
-    public bool CanStartOffScreenEyeBreak => !_tutorialMode &&
-                                             !_calibrationActive &&
-                                             !_sessionEnded &&
-                                             !_firstLevelBossMode &&
-                                             !_firstLevelBossTransitionActive &&
-                                             !_firstLevelModalPaused &&
-                                             !_distanceTracker.IsTooClose &&
-                                             IsTrackingAvailable &&
-                                             _gameplayState == GameplayState.Orbiting &&
-                                             !_moduleChoicePending &&
-                                             !HasUncollectedExperience;
+    public bool CanStartCareInteraction => !_tutorialMode &&
+                                           !_calibrationActive &&
+                                           !_sessionEnded &&
+                                           !_firstLevelBossMode &&
+                                           !_firstLevelBossTransitionActive &&
+                                           !_firstLevelModalPaused &&
+                                           !_distanceTracker.IsTooClose &&
+                                           IsTrackingAvailable &&
+                                           _gameplayState == GameplayState.Orbiting &&
+                                           !_moduleChoicePending &&
+                                           !HasUncollectedExperience;
+    public bool CanStartFocusShift => false;
+    public bool CanStartGuidedEyeMovement => false;
+    public bool CanStartOffScreenEyeBreak => false;
     public float ExperienceProgress => _sampleProgress;
     public int CurrentUpgradeSampleRequirement => GetCurrentUpgradeSampleRequirement();
     public int InstalledFirstLevelModuleCount => _installedModuleOrder.Count;
@@ -559,9 +597,10 @@ namespace KeepBlinking.Gameplay
     }
     public bool AreEyesClosed => isEyesClosed;
     public Vector2 CurrentGazeScreenPosition => realGazeScreenPosition;
+    public Sprite CareExperienceSprite => _dataSeedSprite;
     public int UpgradesRequiredBeforeBoss => _upgradesRequiredBeforeBoss > 0
       ? _upgradesRequiredBeforeBoss
-      : 5;
+      : 4;
     public bool HasUnsettledSamples => HasCollectableSamples() || CountState(BlockState.Collecting) > 0;
     public bool IsFirstLevelFieldSettled => !_moduleChoicePending &&
                                             _gameplayState != GameplayState.ModuleUpgrade &&
@@ -582,9 +621,177 @@ namespace KeepBlinking.Gameplay
       _offScreenEyeBreakPending = pending;
     }
 
+    public void SetFocusShiftActive(bool active)
+    {
+      _focusShiftActive = active;
+      _offScreenEyeBreakPending = active || _guidedEyeMovementActive;
+      ResetPushAwayInputState();
+    }
+
+    public void SetGuidedEyeMovementActive(bool active)
+    {
+      _guidedEyeMovementActive = active;
+      _offScreenEyeBreakPending = active || _focusShiftActive;
+      _blinkQueued = false;
+      ResetPushAwayInputState();
+      if (active) RefreshTutorialReadiness(false);
+    }
+
+    public void SetScreenDownRestActive(bool active)
+    {
+      _screenDownRestActive = active;
+      _offScreenEyeBreakPending = active;
+      _blinkQueued = false;
+      ResetPushAwayInputState();
+      if (!active) return;
+
+      isEyesClosed = false;
+      _eyesClosedCandidateStartedAt = -1f;
+      RefreshTutorialReadiness(false);
+    }
+
+    public void SetCareActionActive(bool active)
+    {
+      _careActionActive = active;
+      _offScreenEyeBreakPending = active || _screenDownRestActive;
+      if (active)
+      {
+        _careCollectionArmed = false;
+        _blinkQueued = false;
+      }
+      ResetPushAwayInputState();
+      if (active) SetCareRoundPresentationActive(true);
+    }
+
+    public void SetCareCollectionArmed(bool armed)
+    {
+      _careCollectionArmed = armed;
+      ResetPushAwayInputState();
+    }
+
+    public void SetCareRoundFlowEnabled(bool enabled)
+    {
+      _careRoundFlowEnabled = enabled;
+      _firstLevelRandomFlowPaused = enabled;
+      if (!enabled) SetCareRoundPresentationActive(false);
+      if (!enabled && CanScheduleFormalFlow())
+      {
+        ScheduleNextSpawn(0.45f);
+        ScheduleNextCrisis();
+      }
+    }
+
+    public void SetCareRoundSpawningPaused(bool paused)
+    {
+      if (!_careRoundFlowEnabled) return;
+      _firstLevelRandomFlowPaused = paused;
+      SetCareRoundPresentationActive(paused && !_firstLevelBossMode);
+      if (!paused && CanScheduleFormalFlow()) ScheduleNextSpawn(0.18f);
+    }
+
+    public void SetCareRoundPresentationActive(bool active)
+    {
+      if (_careRoundPresentationActive == active)
+      {
+        RefreshCareRoundBlockPresentation();
+        return;
+      }
+
+      _careRoundPresentationActive = active;
+      if (active) DisableNormalTargetLock();
+      if (!active)
+      {
+        for (var i = 0; i < _blocks.Count; i++)
+        {
+          if (_blocks[i] != null) _blocks[i].CareWaitingOverflowHidden = false;
+        }
+      }
+      RefreshCareRoundBlockPresentation();
+    }
+
+    public void ConfigureCareRoundExperienceRequirement(int requirement)
+    {
+      _currentUpgradeSampleRequirement = Mathf.Max(1, requirement);
+      _collectedSampleCount = 0;
+      _sampleProgress = 0f;
+      UpdateProgressBarVisual();
+      InvokeSignalSafely(ExperienceProgressChanged, new ExperienceProgressSignal(
+        0,
+        _currentUpgradeSampleRequirement,
+        0f), nameof(ExperienceProgressChanged));
+    }
+
+    public int SpawnPendingCareExperienceFragment(bool gold, Vector2 viewportPosition)
+    {
+      if (_camera == null) return NoTargetId;
+      var safe = GetGameplayViewportRect(0.08f, 0.14f);
+      viewportPosition = new Vector2(
+        Mathf.Clamp(viewportPosition.x, safe.xMin, safe.xMax),
+        Mathf.Clamp(viewportPosition.y, safe.yMin, safe.yMax));
+      var world = _camera.ViewportToWorldPoint(new Vector3(viewportPosition.x, viewportPosition.y, _blockDepthFromCamera));
+      return SpawnConvertedModuleSample(
+        world,
+        gold ? KeepBlinkingTheme.AccentWarm : KeepBlinkingTheme.AccentPrimary,
+        0,
+        gold).Serial;
+    }
+
     public void NotifySoftFocusModuleActivated(FirstLevelModuleId moduleId)
     {
       ActivateModuleEffect(moduleId);
+    }
+
+    public void NotifyCareUpgradeActivated(FirstLevelModuleId moduleId)
+    {
+      ActivateModuleEffect(moduleId);
+    }
+
+    public void PauseNormalSpawns(float seconds)
+    {
+      _normalSpawnPausedUntil = Mathf.Max(_normalSpawnPausedUntil, Time.time + Mathf.Max(0f, seconds));
+    }
+
+    public void AdvanceActiveSoftFocusTargets(float normalizedAmount)
+    {
+      var amount = Mathf.Clamp01(normalizedAmount);
+      if (amount <= 0f) return;
+      for (var i = 0; i < _blocks.Count; i++)
+      {
+        var block = _blocks[i];
+        if (block == null || block.State != BlockState.Orbiting || !block.IsInsideSoftFocusField || block.SoftFocusProgress <= 0f)
+        {
+          continue;
+        }
+        block.SoftFocusProgress = Mathf.Min(0.999f, block.SoftFocusProgress + amount);
+        UpdateSoftFocusProgressVisual(block);
+      }
+    }
+
+    public int SpawnCareRewardSamples(int count, bool gold)
+    {
+      count = Mathf.Max(0, count);
+      if (count == 0 || _camera == null) return 0;
+      var anchor = GetProgressBarFillWorldPosition() + Vector3.up * 1.35f;
+      var started = 0;
+      for (var i = 0; i < count; i++)
+      {
+        var angle = count == 1 ? Mathf.PI * 0.5f : i * Mathf.PI * 2f / count;
+        var offset = new Vector3(Mathf.Cos(angle), Mathf.Sin(angle), 0f) * (count == 1 ? 0f : 0.34f);
+        var sample = SpawnConvertedModuleSample(
+          anchor + offset,
+          gold ? KeepBlinkingTheme.AccentWarm : KeepBlinkingTheme.AccentPrimary,
+          0,
+          gold);
+        sample.State = BlockState.Collecting;
+        sample.Renderer.sortingOrder = 70;
+        if (sample.GlowRenderer != null) sample.GlowRenderer.sortingOrder = 69;
+        started++;
+      }
+      if (started > 0)
+      {
+        InvokeSignalSafely(ConvertedCollectionStarted, started, nameof(ConvertedCollectionStarted));
+      }
+      return started;
     }
 
     public void SetFirstLevelModalPaused(bool paused, bool hidePresentation)
@@ -610,6 +817,7 @@ namespace KeepBlinking.Gameplay
 
     public void BeginFirstLevelBossTransition()
     {
+      SetCareRoundPresentationActive(false);
       _firstLevelBossTransitionActive = true;
       _firstLevelRandomFlowPaused = true;
       _blinkQueued = false;
@@ -655,6 +863,7 @@ namespace KeepBlinking.Gameplay
 
     public void BeginFirstLevelBossMode()
     {
+      SetCareRoundPresentationActive(false);
       _firstLevelBossTransitionActive = false;
       _firstLevelRandomFlowPaused = true;
       _firstLevelBossMode = true;
@@ -677,6 +886,7 @@ namespace KeepBlinking.Gameplay
 
     public void CompleteFirstLevelFlow()
     {
+      SetCareRoundPresentationActive(false);
       _sessionEnded = true;
       _firstLevelBossTransitionActive = false;
       _firstLevelRandomFlowPaused = true;
@@ -691,6 +901,7 @@ namespace KeepBlinking.Gameplay
 
     public void BeginFirstLevelSettlement()
     {
+      SetCareRoundPresentationActive(false);
       _sessionEnded = true;
       _firstLevelBossTransitionActive = false;
       _firstLevelRandomFlowPaused = true;
@@ -715,6 +926,7 @@ namespace KeepBlinking.Gameplay
       _firstLevelRandomFlowPaused = false;
       _firstLevelBossTransitionActive = false;
       _firstLevelBossMode = false;
+      SetCareRoundPresentationActive(false);
       SetFirstLevelModalPaused(false, false);
     }
 
@@ -1034,16 +1246,39 @@ namespace KeepBlinking.Gameplay
 
     public int SpawnTutorialOrbitTarget()
     {
-      if (!_tutorialMode || _gameplayState != GameplayState.Orbiting || _sessionEnded)
+      var targets = SpawnTutorialSoftFocusTargets(1);
+      return targets.Length > 0 ? targets[0] : NoTargetId;
+    }
+
+    public int[] SpawnTutorialSoftFocusTargets(int count)
+    {
+      if (!_tutorialMode || _gameplayState != GameplayState.Orbiting || _sessionEnded || count <= 0)
       {
-        return NoTargetId;
+        return Array.Empty<int>();
       }
 
-      _tutorialOrbitTargetId = SpawnOrbitBlock(
-        0f,
-        0f,
-        (_blockWorldSizeRange.x + _blockWorldSizeRange.y) * 0.5f);
-      return _tutorialOrbitTargetId;
+      _tutorialSoftFocusTargetIds.Clear();
+      var result = new int[Mathf.Clamp(count, 1, 2)];
+      for (var targetIndex = 0; targetIndex < result.Length; targetIndex++)
+      {
+        var phase = targetIndex == 0 ? -0.48f : 2.64f;
+        var speed = targetIndex == 0 ? 0.10f : -0.09f;
+        var id = SpawnOrbitBlock(phase, speed, (_blockWorldSizeRange.x + _blockWorldSizeRange.y) * 0.5f);
+        result[targetIndex] = id;
+        _tutorialSoftFocusTargetIds.Add(id);
+        for (var i = 0; i < _blocks.Count; i++)
+        {
+          var block = _blocks[i];
+          if (block == null || block.Serial != id) continue;
+          block.SoftFocusLaneOffset = targetIndex == 0
+            ? -_softFocusLaneSpacingNormalized * 1.25f
+            : _softFocusLaneSpacingNormalized * 1.25f;
+          block.Transform.position = EvaluateSoftFocusPathWorldPosition(block.Phase, block.SoftFocusLaneOffset);
+          break;
+        }
+      }
+      _tutorialOrbitTargetId = result[0];
+      return result;
     }
 
     public int SpawnTutorialCrisisTargets(int count)
@@ -1069,6 +1304,7 @@ namespace KeepBlinking.Gameplay
       _tutorialCollectionInputPaused = false;
       _tutorialMode = false;
       _tutorialOrbitTargetId = NoTargetId;
+      _tutorialSoftFocusTargetIds.Clear();
       StopTutorialFeedback();
       if (wasTutorialMode)
       {
@@ -1168,9 +1404,12 @@ namespace KeepBlinking.Gameplay
       CreateRuntimeSprite();
       CreateRuntimeCircleSprite();
       CreateRuntimeUiSprites();
+      WarmExperienceSamplePool();
       CreateBackgroundVisual();
       EnsureDistanceCameraFeedback();
       _softFocusField = SoftFocusFieldController.EnsureExists(this);
+      CareRhythmController.EnsureExists(this);
+      CareUpgradeController.EnsureExists(this);
       CreateGazeIndicator();
       CreatePlayerMarker();
       CreateCalibrationTarget();
@@ -1180,10 +1419,10 @@ namespace KeepBlinking.Gameplay
       _distanceCameraFeedback?.RegisterHudRoot(_progressBarRoot);
       CreateFreezeFeedbackAudio();
       EnsureModuleUpgradeView();
+      ScreenDownRestController.EnsureExists(this);
       realGazeScreenPosition = GetSafeInitialGazePosition();
       _rawGazeScreenPosition = realGazeScreenPosition;
       WarnIfEyeHardwareMissing();
-      OffScreenEyeBreakController.EnsureExists(this);
       BeginGameFlow();
     }
 
@@ -1267,15 +1506,18 @@ namespace KeepBlinking.Gameplay
         return;
       }
 
+      if (_careActionActive)
+      {
+        UpdateConvertedBlocks();
+        UpdatePlayerMarker();
+        UpdateGazeIndicator();
+        UpdateBlackoutOverlay();
+        UpdateObservationMetrics();
+        return;
+      }
+
       UpdateGameplayState();
-      if (_tutorialMode)
-      {
-        UpdateHoverState();
-      }
-      else
-      {
-        DisableNormalTargetLock();
-      }
+      DisableNormalTargetLock();
       UpdateBlocksByGameplayState();
       UpdateSoftFocusPurification();
       UpdateSampleCollection();
@@ -1285,6 +1527,13 @@ namespace KeepBlinking.Gameplay
       UpdateBlackoutOverlay();
       UpdateModuleCardVisuals();
       UpdateObservationMetrics();
+    }
+
+    private void LateUpdate()
+    {
+      if (!_careRoundPresentationActive) return;
+      UpdateCareWaitingLayout();
+      RefreshCareRoundBlockPresentation();
     }
 
     private void OnGUI()
@@ -1341,7 +1590,7 @@ namespace KeepBlinking.Gameplay
 
     private void WarnIfEyeHardwareMissing()
     {
-      if (!_autoReadKeepBlinkingEyeInput)
+      if (!_autoReadKeepBlinkingEyeInput || _screenDownRestActive)
       {
         return;
       }
@@ -1374,7 +1623,7 @@ namespace KeepBlinking.Gameplay
       var snapshot = EyeInputDebugState.Latest;
       var inputReady = !_autoReadKeepBlinkingEyeInput ||
                        (inputReadyOverride ?? (snapshot.FaceDetected && snapshot.HasGazeScreenPosition));
-      var ready = inputReady && _calibrationComplete && _distanceTracker.HasBaseline && !_sessionEnded;
+      var ready = inputReady && !_screenDownRestActive && _calibrationComplete && _distanceTracker.HasBaseline && !_sessionEnded;
       if (_tutorialReady == ready)
       {
         return;
@@ -1405,12 +1654,12 @@ namespace KeepBlinking.Gameplay
     {
       if (_moduleUpgradeView == null)
       {
-        _moduleUpgradeView = GetComponent<FirstLevelUpgradeView>();
+        _moduleUpgradeView = GetComponent<CareUpgradeCardView>();
       }
 
       if (_moduleUpgradeView == null)
       {
-        _moduleUpgradeView = gameObject.AddComponent<FirstLevelUpgradeView>();
+        _moduleUpgradeView = gameObject.AddComponent<CareUpgradeCardView>();
       }
 
       _moduleUpgradeView.EnsureCreated();
@@ -1449,6 +1698,7 @@ namespace KeepBlinking.Gameplay
       {
         _calibrationTargetRoot.SetActive(!upgradeVisible && _calibrationActive);
       }
+      if (!upgradeVisible) RefreshCareRoundBlockPresentation();
     }
 
     private void SetFirstLevelPresentationHidden(bool hidden)
@@ -1482,6 +1732,112 @@ namespace KeepBlinking.Gameplay
 
       SetProgressBarVisible(!hidden);
       _moduleUpgradeView?.SetHudVisible(!hidden);
+      if (!hidden) RefreshCareRoundBlockPresentation();
+    }
+
+    private void UpdateCareWaitingLayout()
+    {
+      if (!_careRoundPresentationActive || _camera == null) return;
+
+      var capacity = Mathf.Clamp(_careWaitingVisibleCapacity, 8, 24);
+      var rowsPerSide = Mathf.Max(1, (capacity + 1) / 2);
+      var convertedIndex = 0;
+      var safeViewport = GetGameplayViewportRect(0.08f, 0.14f);
+      var response = 1f - Mathf.Exp(-Mathf.Max(1f, _careWaitingLayoutResponse) * Time.unscaledDeltaTime);
+      for (var i = 0; i < _blocks.Count; i++)
+      {
+        var block = _blocks[i];
+        if (block == null || block.GameObject == null || block.State != BlockState.Converted) continue;
+
+        var slot = convertedIndex++;
+        var visible = slot < capacity;
+        block.CareWaitingOverflowHidden = !visible;
+
+        // Overflow samples remain real Converted blocks. They share a hidden rail
+        // anchor until their staggered collection release makes them visible.
+        var sideSlot = slot % capacity;
+        var right = (sideSlot & 1) != 0;
+        var row = Mathf.Min(rowsPerSide - 1, sideSlot / 2);
+        var t = rowsPerSide <= 1 ? 0.5f : row / (float)(rowsPerSide - 1);
+        var arc = Mathf.Sin(t * Mathf.PI) * 0.025f;
+        var viewport = new Vector2(
+          right ? _careWaitingRightViewport - arc : _careWaitingLeftViewport + arc,
+          Mathf.Lerp(_careWaitingBottomViewport, _careWaitingTopViewport, t));
+        viewport.x = Mathf.Clamp(viewport.x, safeViewport.xMin, safeViewport.xMax);
+        viewport.y = Mathf.Clamp(viewport.y, safeViewport.yMin, safeViewport.yMax);
+        var target = _camera.ViewportToWorldPoint(
+          new Vector3(viewport.x, viewport.y, _blockDepthFromCamera));
+        target.z = block.Transform.position.z;
+        block.Transform.position = Vector3.Lerp(block.Transform.position, target, response);
+
+        var waitingScaleRatio = Mathf.Clamp(_harvestScaleRatio, 0.45f, 0.55f);
+        var targetScale = block.BaseScale * waitingScaleRatio;
+        block.Transform.localScale = Vector3.Lerp(block.Transform.localScale, targetScale, response);
+        block.Transform.rotation = Quaternion.Lerp(block.Transform.rotation, Quaternion.identity, response);
+      }
+    }
+
+    private void RefreshCareRoundBlockPresentation()
+    {
+      var globallyHidden = _firstLevelPresentationHidden || _gameplayState == GameplayState.ModuleUpgrade;
+      for (var i = 0; i < _blocks.Count; i++)
+      {
+        var block = _blocks[i];
+        if (block == null || block.GameObject == null) continue;
+
+        if (globallyHidden)
+        {
+          SetBlockRenderersEnabled(block, false);
+          SetSoftFocusProgressSegmentsVisible(block, false, false);
+          continue;
+        }
+
+        switch (block.State)
+        {
+          case BlockState.Orbiting:
+            SetBlockRenderersEnabled(block, !_careRoundPresentationActive);
+            SetSoftFocusProgressSegmentsVisible(
+              block,
+              !_careRoundPresentationActive,
+              _careRoundPresentationActive);
+            break;
+          case BlockState.Converted:
+            SetBlockRenderersEnabled(block, !block.CareWaitingOverflowHidden);
+            SetSoftFocusProgressSegmentsVisible(block, false, true);
+            break;
+          case BlockState.Collecting:
+            SetBlockRenderersEnabled(block, !block.CareWaitingOverflowHidden);
+            SetSoftFocusProgressSegmentsVisible(block, false, true);
+            break;
+          default:
+            SetBlockRenderersEnabled(block, !_careRoundPresentationActive);
+            if (_careRoundPresentationActive)
+              SetSoftFocusProgressSegmentsVisible(block, false, true);
+            break;
+        }
+      }
+    }
+
+    private static void SetBlockRenderersEnabled(OrbitBlock block, bool visible)
+    {
+      if (block.Renderer != null) block.Renderer.enabled = visible;
+      if (block.GlowRenderer != null) block.GlowRenderer.enabled = visible;
+    }
+
+    private static void SetSoftFocusProgressSegmentsVisible(OrbitBlock block, bool visible, bool clear)
+    {
+      var segments = block.SoftFocusProgressSegments;
+      if (segments == null) return;
+      for (var i = 0; i < segments.Length; i++)
+      {
+        var segment = segments[i];
+        if (segment == null) continue;
+        segment.enabled = visible;
+        if (!clear) continue;
+        var color = segment.color;
+        color.a = 0f;
+        segment.color = color;
+      }
     }
 
     private string GetHardwareStatusLine()
@@ -1577,14 +1933,14 @@ namespace KeepBlinking.Gameplay
       return true;
     }
 
-    private FirstLevelModuleDefinition GetModuleDefinitionForCard(int cardIndex)
+    private CareUpgradeDefinition GetModuleDefinitionForCard(int cardIndex)
     {
       if (cardIndex >= 0 && cardIndex < _currentModuleOffer.Count)
       {
         return FirstLevelUpgradeCatalog.Get(_currentModuleOffer[cardIndex]);
       }
 
-      return FirstLevelUpgradeCatalog.Get(FirstLevelModuleId.ChainBlink);
+      return FirstLevelUpgradeCatalog.Get(FirstLevelModuleId.WiderField);
     }
 
     private string FormatDuration(float seconds)
@@ -1703,7 +2059,7 @@ namespace KeepBlinking.Gameplay
       GUI.Label(new Rect(safeRect.x, safeRect.y + 8f * uiScale, safeRect.width, 34f * uiScale), "CHOOSE A MODULE", _moduleHeaderStyle);
       var instruction = _moduleChoicePending
         ? "INSTALLED"
-        : "CLICK TO INSTALL";
+        : "TAP TO INSTALL";
       GUI.Label(new Rect(safeRect.x, safeRect.y + 40f * uiScale, safeRect.width, 24f * uiScale), instruction, _moduleInstructionStyle);
 
       for (var i = 0; i < _moduleCards.Count; i++)
@@ -1745,7 +2101,7 @@ namespace KeepBlinking.Gameplay
       }
     }
 
-    private void DrawModulePreview(FirstLevelModuleDefinition definition, Rect rect, bool selected)
+    private void DrawModulePreview(CareUpgradeDefinition definition, Rect rect, bool selected)
     {
       var phase = Mathf.Repeat(Time.unscaledTime * 0.62f + (int)definition.Id * 0.07f, 1f);
       var center = rect.center;
@@ -1867,7 +2223,7 @@ namespace KeepBlinking.Gameplay
 
     private bool ShouldShowHardwareWarningOverlay()
     {
-      if (!_autoReadKeepBlinkingEyeInput)
+      if (!_autoReadKeepBlinkingEyeInput || _screenDownRestActive)
       {
         return false;
       }
@@ -1932,6 +2288,15 @@ namespace KeepBlinking.Gameplay
       var snapshot = EyeInputDebugState.Latest;
       if (!snapshot.FaceDetected)
       {
+        if (_screenDownRestActive)
+        {
+          RefreshTutorialReadiness(false);
+          ResetSoftBlinkDetection();
+          isEyesClosed = false;
+          _eyesClosedCandidateStartedAt = -1f;
+          return;
+        }
+
         if (!_hardwareWarningLogged)
         {
           Debug.LogWarning("Eye hardware not detected. Please check the MediaPipe connection.");
@@ -1995,9 +2360,21 @@ namespace KeepBlinking.Gameplay
       var closedByExistingThreshold = snapshot.IsBlinking ||
                                       (baselineAverage > 0f &&
                                        averageOpen <= baselineAverage * _relativeBlinkCloseRatio);
+      var leftReopenThreshold = CalculateAdaptiveSoftBlinkReopenThreshold(_baselineLeftEyeOpen);
+      var rightReopenThreshold = CalculateAdaptiveSoftBlinkReopenThreshold(_baselineRightEyeOpen);
       var openByExistingThreshold = !snapshot.IsBlinking &&
-                                    snapshot.LeftEyeOpen >= _openEyeReleaseThreshold &&
-                                    snapshot.RightEyeOpen >= _openEyeReleaseThreshold;
+                                    snapshot.LeftEyeOpen >= leftReopenThreshold &&
+                                    snapshot.RightEyeOpen >= rightReopenThreshold;
+      var pluginBlinkStarted = false;
+      if (_lastSoftBlinkObservedPluginCount < 0)
+      {
+        _lastSoftBlinkObservedPluginCount = snapshot.BlinkCount;
+      }
+      else if (snapshot.BlinkCount > _lastSoftBlinkObservedPluginCount)
+      {
+        pluginBlinkStarted = true;
+        _lastSoftBlinkObservedPluginCount = snapshot.BlinkCount;
+      }
 
       if (_softBlinkCandidateActive)
       {
@@ -2026,6 +2403,25 @@ namespace KeepBlinking.Gameplay
         _softBlinkStableOpenStartedAt = now;
         _softBlinkSerial++;
         InvokeSignalSafely(SoftBlinkPerformed, _softBlinkSerial, nameof(SoftBlinkPerformed));
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        Debug.Log(
+          $"KeepBlinking natural blink completed: serial={_softBlinkSerial}, " +
+          $"open L/R={snapshot.LeftEyeOpen:F3}/{snapshot.RightEyeOpen:F3}, " +
+          $"release L/R={leftReopenThreshold:F3}/{rightReopenThreshold:F3}.",
+          this);
+#endif
+        return;
+      }
+
+      // The MediaPipe detector only increments BlinkCount after both eyes agree
+      // on a real blink. Arm from that reliable signal even if the stricter
+      // pre-blink stability window missed a low-frame-rate webcam sample; the
+      // completed event is still deferred until both eyes visibly reopen.
+      if (pluginBlinkStarted)
+      {
+        _softBlinkCandidateActive = true;
+        _softBlinkCandidateStartedAt = now;
+        _softBlinkStableOpenStartedAt = -1f;
         return;
       }
 
@@ -2047,6 +2443,18 @@ namespace KeepBlinking.Gameplay
       }
 
       _softBlinkStableOpenStartedAt = -1f;
+    }
+
+    private float CalculateAdaptiveSoftBlinkReopenThreshold(float eyeBaseline)
+    {
+      if (eyeBaseline <= 0f || float.IsNaN(eyeBaseline) || float.IsInfinity(eyeBaseline))
+      {
+        return Mathf.Min(_openEyeReleaseThreshold, Mathf.Max(0.15f, _softBlinkMinimumReopenValue));
+      }
+
+      return Mathf.Min(
+        _openEyeReleaseThreshold,
+        Mathf.Max(_softBlinkMinimumReopenValue, eyeBaseline * _softBlinkRelativeReopenRatio));
     }
 
     private void ResetSoftBlinkDetection()
@@ -2081,7 +2489,7 @@ namespace KeepBlinking.Gameplay
         sampleValid,
         _calibrationComplete,
         CanUpdateDistanceState(sampleValid),
-        HasCollectableSamples(),
+        IsCollectionEligible(),
         now,
         Time.unscaledDeltaTime,
         BuildDistanceSettings());
@@ -2090,9 +2498,11 @@ namespace KeepBlinking.Gameplay
       _pushAwayTriggerPending |= update.PushAwayTriggered;
       if (_softFocusHiddenByPushAway &&
           _distanceTracker.HasValidSample &&
-          _distanceTracker.DistanceRatio >= _pushAwayRearmRatio)
+          _distanceTracker.IsPushAwayArmed &&
+          !_distanceTracker.PushAwayTriggeredSinceRearm)
       {
         _softFocusHiddenByPushAway = false;
+        InvokeSignalSafely(PushAwayReturnedNeutral, nameof(PushAwayReturnedNeutral));
       }
 
       if (update.BaselineCaptured)
@@ -2151,12 +2561,17 @@ namespace KeepBlinking.Gameplay
     {
       return sampleValid &&
              Time.timeScale > 0f &&
+             !_focusShiftActive &&
+             !_guidedEyeMovementActive &&
+             !_screenDownRestActive &&
+             !_careActionActive &&
              !_calibrationActive &&
              !_sessionEnded &&
              !_firstLevelModalPaused &&
-             !_firstLevelRandomFlowPaused &&
+             (!_firstLevelRandomFlowPaused ||
+              (_careRoundFlowEnabled && _careCollectionArmed) ||
+              _firstLevelBossMode) &&
              !_firstLevelBossTransitionActive &&
-             !_firstLevelBossMode &&
              _gameplayState == GameplayState.Orbiting &&
              !(_tutorialMode && _tutorialCollectionInputPaused) &&
              !ShouldShowHardwareWarningOverlay();
@@ -2173,6 +2588,8 @@ namespace KeepBlinking.Gameplay
       _sessionStartedAt = Time.time;
       ScheduleNextSpawn(0.35f);
       ScheduleNextCrisis();
+      BlinkBootSequence.BeginPassiveCalibration();
+      FirstLevelCareFlowController.EnsureExists(this);
       FirstLevelSessionController.EnsureExists(this);
       RefreshTutorialReadiness();
     }
@@ -2197,13 +2614,36 @@ namespace KeepBlinking.Gameplay
         return;
       }
 
+      var feedbackRatio = _distanceTracker.DistanceRatio;
+      var feedbackSampleValid = _distanceTracker.HasValidSample;
+      if (_focusShiftActive)
+      {
+        var snapshot = EyeInputDebugState.Latest;
+        feedbackSampleValid = snapshot.FaceDetected &&
+                              IsValidFaceScale(snapshot.SmoothedFaceArea) &&
+                              _distanceTracker.BaselineFaceScale > 0f;
+        if (feedbackSampleValid)
+        {
+          var rawFocusRatio = snapshot.SmoothedFaceArea / _distanceTracker.BaselineFaceScale;
+          // The Focus Shift safety ring takes over at Too Close. Hold the
+          // world effect at that boundary instead of magnifying further.
+          feedbackRatio = Mathf.Min(rawFocusRatio, _tooCloseEnterRatio);
+        }
+      }
+
       var feedbackAllowed = _distanceTracker.HasBaseline &&
-                            CanUpdateDistanceState(_distanceTracker.HasValidSample);
+                            (_focusShiftActive
+                              ? feedbackSampleValid
+                              : CanUpdateDistanceState(feedbackSampleValid));
+      var tooClose = _focusShiftActive
+        ? feedbackSampleValid &&
+          EyeInputDebugState.Latest.SmoothedFaceArea / _distanceTracker.BaselineFaceScale >= _tooCloseEnterRatio
+        : feedbackAllowed && _distanceTracker.IsTooClose;
       _distanceCameraFeedback.SetInput(
-        _distanceTracker.DistanceRatio,
-        _distanceTracker.HasValidSample,
+        feedbackRatio,
+        feedbackSampleValid,
         feedbackAllowed,
-        feedbackAllowed && _distanceTracker.IsTooClose);
+        tooClose);
       _distanceCameraFeedback.Tick(Time.unscaledDeltaTime);
     }
 
@@ -3376,6 +3816,7 @@ namespace KeepBlinking.Gameplay
       {
         case GameplayState.Orbiting:
           if (!_firstLevelRandomFlowPaused &&
+              !_careRoundFlowEnabled &&
               !_firstLevelModalPaused &&
               !_distanceTracker.IsTooClose &&
               !IsTutorialRandomCrisisPaused &&
@@ -3993,16 +4434,27 @@ namespace KeepBlinking.Gameplay
       }
 
       _pushAwayTriggerPending = false;
-      if (!HasCollectableSamples())
+      if (!IsCollectionEligible())
       {
         return;
       }
 
       InvokeSignalSafely(PushAwayTriggered, nameof(PushAwayTriggered));
+      _careCollectionArmed = false;
       _softFocusHiddenByPushAway = true;
+      if (_careRoundFlowEnabled && !_firstLevelBossMode && !_tutorialMode)
+      {
+        // Capture rewards that were legally queued after arming but before the
+        // real movement trigger, then derive the threshold from the exact batch.
+        CareExperienceRewardEmitter.Instance?.FlushQueuedImmediately();
+      }
       PreparePushAwayModuleSamples();
       HandleSuccessfulPushAwayModules();
-      StartCollectingConvertedSamples();
+      var startedCollecting = StartCollectingConvertedSamples();
+      if (_careRoundFlowEnabled && !_firstLevelBossMode && !_tutorialMode && startedCollecting > 0)
+      {
+        ConfigureCareRoundExperienceRequirement(startedCollecting);
+      }
       _pushAwayReady = false;
     }
 
@@ -4025,6 +4477,13 @@ namespace KeepBlinking.Gameplay
       return false;
     }
 
+    private bool IsCollectionEligible()
+    {
+      if (!HasCollectableSamples()) return false;
+      if (!_careRoundFlowEnabled) return true;
+      return _careCollectionArmed || _firstLevelBossMode || _tutorialMode;
+    }
+
     private int StartCollectingConvertedSamples()
     {
       var startedCollectingCount = 0;
@@ -4037,12 +4496,14 @@ namespace KeepBlinking.Gameplay
         }
 
         block.State = BlockState.Collecting;
+        block.CollectionReleaseAt = Time.time + startedCollectingCount * Mathf.Max(0.01f, _careSampleReleaseInterval);
         block.IsHovered = false;
         block.Renderer.sortingOrder = 70;
         if (block.GlowRenderer != null)
         {
           block.GlowRenderer.sortingOrder = 69;
         }
+        if (!block.CareWaitingOverflowHidden) SetBlockRenderersEnabled(block, true);
         startedCollectingCount++;
       }
 
@@ -4064,6 +4525,14 @@ namespace KeepBlinking.Gameplay
         if (block.State != BlockState.Collecting)
         {
           continue;
+        }
+
+        if (Time.time < block.CollectionReleaseAt) continue;
+
+        if (block.CareWaitingOverflowHidden)
+        {
+          block.CareWaitingOverflowHidden = false;
+          SetBlockRenderersEnabled(block, true);
         }
 
         block.Transform.position = Vector3.Lerp(
@@ -4100,10 +4569,18 @@ namespace KeepBlinking.Gameplay
       var bossRoundId = block.BossRoundId;
       block.State = BlockState.FadingOut;
       block.IsHovered = false;
+      block.CareWaitingOverflowHidden = false;
 
       if (block.GameObject != null)
       {
-        Destroy(block.GameObject);
+        if (block.IsPooledExperienceSample)
+        {
+          block.GameObject.SetActive(false);
+        }
+        else
+        {
+          Destroy(block.GameObject);
+        }
       }
 
       _collectedSampleCount++;
@@ -4337,41 +4814,90 @@ namespace KeepBlinking.Gameplay
       bool isGold,
       int bossRoundId = 0)
     {
-      var sampleObject = new GameObject(isGold
-        ? $"Gold Loop Sample {_spawnSerial + 1}"
-        : $"Module Experience Sample {_spawnSerial + 1}");
-      sampleObject.transform.SetParent(transform, false);
-      var renderer = sampleObject.AddComponent<SpriteRenderer>();
+      var sample = AcquireExperienceSample();
+      var sampleObject = sample.GameObject;
+      sampleObject.name = isGold
+        ? $"Gold Care Sample {_spawnSerial + 1}"
+        : $"Care Experience Sample {_spawnSerial + 1}";
+      sampleObject.SetActive(true);
+      var renderer = sample.Renderer;
       renderer.sprite = _dataSeedSprite;
       renderer.color = color;
       renderer.sortingOrder = 14;
-      var glowRenderer = CreateTargetGlow(sampleObject, KeepBlinkingTheme.WithAlpha(color, isGold ? 0.2f : 0.13f), 13);
+      renderer.enabled = true;
+      var glowRenderer = sample.GlowRenderer;
+      if (glowRenderer != null)
+      {
+        glowRenderer.color = KeepBlinkingTheme.WithAlpha(color, isGold ? 0.2f : 0.13f);
+        glowRenderer.sortingOrder = 13;
+        glowRenderer.transform.localScale = new Vector3(1.55f, 1.55f, 1f);
+        glowRenderer.enabled = true;
+      }
       var size = isGold ? 0.7f : 0.58f;
       var baseScale = new Vector3(size, size, 1f);
       sampleObject.transform.position = worldPosition;
       sampleObject.transform.localScale = baseScale * _harvestScaleRatio;
 
-      var sample = new OrbitBlock(
-        sampleObject,
-        renderer,
-        glowRenderer,
-        0f,
-        0f,
-        _spawnSerial,
-        Time.time,
-        baseScale)
-      {
-        State = BlockState.Converted,
-        CrisisWaveId = crisisWaveId,
-        ConvertedAt = Time.time - _harvestSeconds,
-        IsModuleSample = true,
-        ModuleSampleColor = color,
-        BossRoundId = bossRoundId,
-      };
+      sample.Serial = _spawnSerial;
+      sample.CreatedAt = Time.time;
+      sample.BaseScale = baseScale;
+      sample.State = BlockState.Converted;
+      sample.CrisisWaveId = crisisWaveId;
+      sample.ConvertedAt = Time.time - _harvestSeconds;
+      sample.IsModuleSample = true;
+      sample.ModuleSampleColor = color;
+      sample.BossRoundId = bossRoundId;
+      sample.CollectionReleaseAt = -1f;
+      sample.IsHovered = false;
+      sample.IsInsideSoftFocusField = false;
+      sample.IsSoftFocused = false;
+      sample.SoftFocusProgress = 0f;
+      sample.CareWaitingOverflowHidden = false;
 
       _blocks.Add(sample);
       _spawnSerial++;
       return sample;
+    }
+
+    private void WarmExperienceSamplePool()
+    {
+      var capacity = Mathf.Clamp(_experienceSamplePoolCapacity, 32, 128);
+      while (_experienceSamplePool.Count < capacity)
+      {
+        _experienceSamplePool.Push(CreateExperienceSampleForPool());
+      }
+    }
+
+    private OrbitBlock AcquireExperienceSample()
+    {
+      return _experienceSamplePool.Count > 0
+        ? _experienceSamplePool.Pop()
+        : CreateExperienceSampleForPool();
+    }
+
+    private OrbitBlock CreateExperienceSampleForPool()
+    {
+      var sampleObject = new GameObject("Pooled Care Experience Sample");
+      sampleObject.transform.SetParent(transform, false);
+      var renderer = sampleObject.AddComponent<SpriteRenderer>();
+      renderer.sprite = _dataSeedSprite;
+      renderer.sortingOrder = 14;
+      var glow = CreateTargetGlow(sampleObject, Color.clear, 13);
+      var block = new OrbitBlock(
+        sampleObject,
+        renderer,
+        glow,
+        0f,
+        0f,
+        NoTargetId,
+        0f,
+        Vector3.one * 0.58f)
+      {
+        State = BlockState.FadingOut,
+        IsPooledExperienceSample = true,
+      };
+      sampleObject.SetActive(false);
+      return block;
     }
 
     private Vector3 GetConvertedSampleAnchorWorldPosition()
@@ -4608,9 +5134,17 @@ namespace KeepBlinking.Gameplay
       }
 
       var hoveredCardIndex = -1;
+      var pointerPosition = (Vector2)UnityEngine.Input.mousePosition;
+      var pointerPressedThisFrame = UnityEngine.Input.GetMouseButtonDown(0);
+      if (UnityEngine.Input.touchCount > 0)
+      {
+        var touch = UnityEngine.Input.GetTouch(0);
+        pointerPosition = touch.position;
+        pointerPressedThisFrame = touch.phase == TouchPhase.Began;
+      }
       if (_moduleUpgradeView != null)
       {
-        _moduleUpgradeView.TryGetCardAtScreenPosition(UnityEngine.Input.mousePosition, out hoveredCardIndex);
+        _moduleUpgradeView.TryGetCardAtScreenPosition(pointerPosition, out hoveredCardIndex);
       }
 
       var previousHoveredCardIndex = _moduleHoveredCardIndex;
@@ -4628,7 +5162,7 @@ namespace KeepBlinking.Gameplay
         false,
         0f);
 
-      if (hoveredCardIndex < 0 || !UnityEngine.Input.GetMouseButtonDown(0))
+      if (hoveredCardIndex < 0 || !pointerPressedThisFrame)
       {
         return;
       }
@@ -4953,16 +5487,17 @@ namespace KeepBlinking.Gameplay
           continue;
         }
 
-        var movementMultiplier = !_tutorialMode && block.IsInsideSoftFocusField
+        var isTutorialTarget = _tutorialMode && _tutorialSoftFocusTargetIds.Contains(block.Serial);
+        var usesSoftFocusPath = !_tutorialMode || isTutorialTarget;
+        var movementMultiplier = usesSoftFocusPath && block.IsInsideSoftFocusField
           ? _softFocusInsideSpeedMultiplier
           : 1f;
         block.Phase += block.AngularSpeed * movementMultiplier * Time.deltaTime;
-        var targetPosition = _tutorialMode
-          ? EvaluateOrbitWorldPosition(block.Phase)
-          : EvaluateSoftFocusPathWorldPosition(block.Phase, block.SoftFocusLaneOffset);
+        var targetPosition = usesSoftFocusPath
+          ? EvaluateSoftFocusPathWorldPosition(block.Phase, block.SoftFocusLaneOffset)
+          : EvaluateOrbitWorldPosition(block.Phase);
         block.Transform.position = Vector3.Lerp(block.Transform.position, targetPosition, Time.deltaTime * 2.6f);
 
-        var isTutorialTarget = _tutorialMode && block.Serial == _tutorialOrbitTargetId;
         var tutorialHighlight = 0.5f + Mathf.Sin(Time.time * 2.1f) * 0.12f;
         var targetColor = block.IsSoftFocused
           ? Color.Lerp(OrbitColor, ConvertedColor, 0.72f)
@@ -5010,7 +5545,7 @@ namespace KeepBlinking.Gameplay
       {
         var block = _blocks[i];
         var usesConvertedBreathing =
-          (_tutorialMode && block.Serial == _tutorialOrbitTargetId) || block.CrisisWaveId > 0 || block.IsModuleSample;
+          (_tutorialMode && _tutorialSoftFocusTargetIds.Contains(block.Serial)) || block.CrisisWaveId > 0 || block.IsModuleSample;
         if (block.State != BlockState.Converted ||
             !usesConvertedBreathing ||
             Time.time - block.ConvertedAt < _harvestSeconds)
@@ -5321,7 +5856,7 @@ namespace KeepBlinking.Gameplay
 
     private void UpdateSoftFocusPurification()
     {
-      if (_tutorialMode || _softFocusField == null)
+      if (_softFocusField == null)
       {
         return;
       }
@@ -5353,6 +5888,11 @@ namespace KeepBlinking.Gameplay
         block.IsSoftFocused = block.IsInsideSoftFocusField && canAccumulate && activeCount < capacity;
         if (!block.IsSoftFocused)
         {
+          if (_softFocusField.GazeState == SoftFocusGazeState.Peripheral &&
+              !_softFocusField.PreservePeripheralProgress)
+          {
+            block.SoftFocusProgress = Mathf.MoveTowards(block.SoftFocusProgress, 0f, Time.deltaTime * 0.25f);
+          }
           UpdateSoftFocusProgressVisual(block);
           continue;
         }
@@ -5394,6 +5934,8 @@ namespace KeepBlinking.Gameplay
       {
         return;
       }
+
+      InvokeSignalSafely(SoftFocusBatchCompleted, convertedThisFrame, nameof(SoftFocusBatchCompleted));
 
       if (_installedModules.Contains(FirstLevelModuleId.FullLoop))
       {
@@ -5686,70 +6228,9 @@ namespace KeepBlinking.Gameplay
 
     private void ConsumeBlinkForHarvest()
     {
-      if (!_tutorialMode)
-      {
-        _blinkQueued = false;
-        return;
-      }
-
-      if (_distanceTracker.IsTooClose)
-      {
-        _blinkQueued = false;
-        return;
-      }
-
-      if (Time.frameCount == _suppressBlinkHarvestFrame)
-      {
-        _blinkQueued = false;
-        return;
-      }
-
-      if (_calibrationActive)
-      {
-        return;
-      }
-
-      if (_gameplayState == GameplayState.Crisis ||
-          _gameplayState == GameplayState.EyesClosedFreeze)
-      {
-        _blinkQueued = false;
-        return;
-      }
-
-      if (!_blinkQueued)
-      {
-        return;
-      }
-
+      // Natural blinks feed Blink Health and CARE RHYTHM. They are never a
+      // normal-target attack command, including during the Soft Focus tutorial.
       _blinkQueued = false;
-      var block = GetBlinkHarvestTarget();
-
-      if (block == null || block.State != BlockState.Orbiting)
-      {
-        return;
-      }
-
-      if (_hoveredBlock == block)
-      {
-        _hoveredBlock = null;
-      }
-
-      if (_lastHoveredBlock == block)
-      {
-        _lastHoveredBlock = null;
-      }
-
-      PublishTargetLockChangedIfNeeded();
-
-      StartCoroutine(HarvestRoutine(block));
-      var chainConvertedCount = ConvertNearbyTargetsFromBlink(block);
-      HandleBlinkModuleSequence(block, chainConvertedCount);
-      InvokeSignalSafely(
-        NormalBlinkConversionCompleted,
-        block.Serial,
-        1 + chainConvertedCount,
-        nameof(NormalBlinkConversionCompleted));
-      _blinkCaptureCount++;
     }
 
     private int ConvertNearbyTargetsFromBlink(OrbitBlock primaryBlock)
@@ -5921,6 +6402,8 @@ namespace KeepBlinking.Gameplay
       block.State = BlockState.Converted;
       block.ConvertedAt = Time.time;
       block.IsHovered = false;
+      block.CareWaitingOverflowHidden = false;
+      SetSoftFocusProgressSegmentsVisible(block, false, true);
       block.Renderer.sortingOrder = 12;
       if (block.GlowRenderer != null)
       {
@@ -6058,7 +6541,17 @@ namespace KeepBlinking.Gameplay
     {
       for (var i = _blocks.Count - 1; i >= 0; i--)
       {
-        if (_blocks[i] == null || _blocks[i].GameObject == null)
+        var block = _blocks[i];
+        if (block != null && block.IsPooledExperienceSample &&
+            block.State == BlockState.FadingOut && block.GameObject != null &&
+            !block.GameObject.activeSelf)
+        {
+          _blocks.RemoveAt(i);
+          _experienceSamplePool.Push(block);
+          continue;
+        }
+
+        if (block == null || block.GameObject == null)
         {
           _blocks.RemoveAt(i);
         }
@@ -6330,10 +6823,10 @@ namespace KeepBlinking.Gameplay
       public readonly Transform Transform;
       public readonly SpriteRenderer Renderer;
       public readonly SpriteRenderer GlowRenderer;
-      public readonly int Serial;
-      public readonly float CreatedAt;
+      public int Serial;
+      public float CreatedAt;
       public readonly string Name;
-      public readonly Vector3 BaseScale;
+      public Vector3 BaseScale;
 
       public BlockState State;
       public bool IsHovered;
@@ -6351,6 +6844,9 @@ namespace KeepBlinking.Gameplay
       public bool StartsHalfLocked;
       public bool IsModuleSample;
       public Color ModuleSampleColor;
+      public bool IsPooledExperienceSample;
+      public bool CareWaitingOverflowHidden;
+      public float CollectionReleaseAt = -1f;
 
       public OrbitBlock(
         GameObject gameObject,

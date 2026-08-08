@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using KeepBlinking.Gameplay;
 using UnityEngine;
 
@@ -40,6 +41,9 @@ namespace KeepBlinking.Tutorial
     private bool _inputSuspended;
     private bool _externalStartBlocked;
     private int _tutorialTargetId = EdgeOrbitHarvestMvp.NoTargetId;
+    private readonly HashSet<int> _tutorialTargetIds = new HashSet<int>();
+    private readonly HashSet<int> _convertedTutorialTargetIds = new HashSet<int>();
+    private readonly HashSet<int> _collectedTutorialTargetIds = new HashSet<int>();
     private Coroutine _countdownRoutine;
     private Coroutine _crisisSuccessRoutine;
     private int _currentCountdownNumber;
@@ -106,14 +110,21 @@ namespace KeepBlinking.Tutorial
       _gameplay.SetTutorialSessionTimerPaused(true);
       SetState(KeepBlinkingTutorialState.ShowGoal);
 
-      _tutorialTargetId = _gameplay.SpawnTutorialOrbitTarget();
-      if (_tutorialTargetId == EdgeOrbitHarvestMvp.NoTargetId)
+      var tutorialTargets = _gameplay.SpawnTutorialSoftFocusTargets(2);
+      if (tutorialTargets == null || tutorialTargets.Length != 2)
       {
         InterruptTutorial();
         return false;
       }
 
-      SetState(KeepBlinkingTutorialState.WaitFirstLock);
+      _tutorialTargetIds.Clear();
+      _convertedTutorialTargetIds.Clear();
+      _collectedTutorialTargetIds.Clear();
+      for (var i = 0; i < tutorialTargets.Length; i++) _tutorialTargetIds.Add(tutorialTargets[i]);
+      _tutorialTargetId = tutorialTargets[0];
+      _gameplay.SetTutorialCollectionInputPaused(true);
+
+      SetState(KeepBlinkingTutorialState.WaitFirstConverted);
       return true;
     }
 
@@ -136,6 +147,9 @@ namespace KeepBlinking.Tutorial
       _tutorialRunning = false;
       _inputSuspended = false;
       _tutorialTargetId = EdgeOrbitHarvestMvp.NoTargetId;
+      _tutorialTargetIds.Clear();
+      _convertedTutorialTargetIds.Clear();
+      _collectedTutorialTargetIds.Clear();
       StopCrisisSuccessDelay();
       StopCountdown();
       _gameplay?.ResumeFormalGameFlow();
@@ -171,6 +185,9 @@ namespace KeepBlinking.Tutorial
         _tutorialRunning = false;
         _inputSuspended = false;
         _tutorialTargetId = EdgeOrbitHarvestMvp.NoTargetId;
+        _tutorialTargetIds.Clear();
+        _convertedTutorialTargetIds.Clear();
+        _collectedTutorialTargetIds.Clear();
         _gameplay?.ResumeFormalGameFlow();
       }
 
@@ -346,9 +363,14 @@ namespace KeepBlinking.Tutorial
       LastConvertedTargetId = targetId;
       if (CanAdvanceTutorial &&
           _state == KeepBlinkingTutorialState.WaitFirstConverted &&
-          targetId == _tutorialTargetId)
+          _tutorialTargetIds.Contains(targetId))
       {
-        SetState(KeepBlinkingTutorialState.WaitFirstPushAway);
+        _convertedTutorialTargetIds.Add(targetId);
+        if (_convertedTutorialTargetIds.Count >= _tutorialTargetIds.Count)
+        {
+          _gameplay?.SetTutorialCollectionInputPaused(false);
+          SetState(KeepBlinkingTutorialState.WaitFirstPushAway);
+        }
       }
     }
 
@@ -376,24 +398,17 @@ namespace KeepBlinking.Tutorial
       LastExperienceTargetId = targetId;
       if (CanAdvanceTutorial &&
           _state == KeepBlinkingTutorialState.WaitFirstCollected &&
-          targetId == _tutorialTargetId)
+          _tutorialTargetIds.Contains(targetId))
       {
+        _collectedTutorialTargetIds.Add(targetId);
+        if (_collectedTutorialTargetIds.Count < _tutorialTargetIds.Count) return;
+
         _tutorialTargetId = EdgeOrbitHarvestMvp.NoTargetId;
         PushAwayReadyObserved = false;
         PushAwayTriggeredObserved = false;
-        EyesClosedFreezeObserved = false;
-        FullCoverageObserved = false;
         LastLockedTargetId = EdgeOrbitHarvestMvp.NoTargetId;
-        var crisisCount = _gameplay != null ? _gameplay.CrisisSpawnCount : 0;
-        if (_gameplay == null ||
-            crisisCount <= 0 ||
-            _gameplay.SpawnTutorialCrisisTargets(crisisCount) != crisisCount)
-        {
-          InterruptTutorial();
-          return;
-        }
-
-        SetState(KeepBlinkingTutorialState.WaitEyesClosed);
+        SetState(KeepBlinkingTutorialState.Countdown);
+        StartCountdown();
       }
     }
 

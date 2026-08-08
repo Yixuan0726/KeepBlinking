@@ -166,7 +166,10 @@ namespace KeepBlinking.Gameplay
       }
 
       var eventSystem = new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
-      Object.DontDestroyOnLoad(eventSystem);
+      if (Application.isPlaying)
+      {
+        Object.DontDestroyOnLoad(eventSystem);
+      }
     }
 
     private static Sprite CreateRoundedSprite()

@@ -44,7 +44,7 @@ namespace KeepBlinking.Gameplay
       AppendJson(builder, "validRestCycleCount", data.ValidRestCycleCount, true);
       AppendJson(builder, "distanceShiftCount", data.DistanceShiftCount, true);
       AppendJson(builder, "fullLoopCount", data.FullLoopCount, true);
-      AppendJson(builder, "offScreenGazeBreakLabel", OffScreenEyeBreakController.ReportDisplayName, true);
+      AppendJson(builder, "offScreenGazeBreakLabel", ScreenDownRestController.ReportDisplayName, true);
       AppendJson(builder, "offScreenGazeBreakCount", data.OffScreenGazeBreakCount, true);
       AppendJson(builder, "earlyReopenCount", data.EarlyReopenCount, true);
       AppendJson(builder, "bossCyclesCompleted", data.BossCyclesCompleted, true);

@@ -1,3 +1,4 @@
+using KeepBlinking.Input;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -17,7 +18,8 @@ namespace KeepBlinking.Gameplay
     [SerializeField, Range(0.3f, 0.9f)] private float _baseWidthNormalized = 0.55f;
     [SerializeField, Range(0.2f, 0.8f)] private float _baseHeightNormalized = 0.40f;
     [SerializeField, Range(-0.2f, 0.2f)] private float _verticalOffsetNormalized = 0.05f;
-    [SerializeField, Range(0.05f, 0.6f)] private float _fieldVisualAlpha = 0.38f;
+    [SerializeField, Range(0.05f, 0.9f)] private float _fieldVisualAlpha = 0.58f;
+    [SerializeField, Range(0.1f, 1f)] private float _expandedFieldVisualAlpha = 0.76f;
     [SerializeField, Min(0.05f)] private float _fieldResponseSeconds = 0.4f;
 
     [Header("Comfort Gaze Hysteresis")]
@@ -25,7 +27,16 @@ namespace KeepBlinking.Gameplay
     [SerializeField, Range(0.1f, 0.5f)] private float _comfortEnterHalfHeight = 0.28f;
     [SerializeField, Range(0.1f, 0.5f)] private float _comfortExitHalfWidth = 0.33f;
     [SerializeField, Range(0.1f, 0.5f)] private float _comfortExitHalfHeight = 0.33f;
-    [SerializeField, Min(0f)] private float _focusHoldSeconds = 0.4f;
+    [SerializeField, Min(0f)] private float _focusHoldSeconds = 1f;
+    [SerializeField, Min(1f)] private float _upgradedFocusHoldSeconds = 4f;
+
+    [Header("Care Flow Comfort Sensor")]
+    [Tooltip("During the phone-movement care rounds, use a broad face-present/open-eyes check instead of requiring a precise gaze coordinate.")]
+    [SerializeField] private bool _useFaceCenterDuringCareRounds = true;
+    [SerializeField, Range(0.1f, 0.5f)] private float _careFaceEnterHalfWidth = 0.32f;
+    [SerializeField, Range(0.1f, 0.5f)] private float _careFaceEnterHalfHeight = 0.38f;
+    [SerializeField, Range(0.1f, 0.5f)] private float _careFaceExitHalfWidth = 0.38f;
+    [SerializeField, Range(0.1f, 0.5f)] private float _careFaceExitHalfHeight = 0.44f;
 
     [Header("Purification")]
     [SerializeField, Min(0.2f)] private float _purificationSeconds = 1.2f;
@@ -46,7 +57,7 @@ namespace KeepBlinking.Gameplay
     [SerializeField, Range(0.2f, 1f)] private float _maximumTooCloseFieldScale = 0.55f;
     [SerializeField, Range(1f, 1.4f)] private float _distanceShrinkStartRatio = 1.10f;
     [SerializeField, Range(1f, 1.5f)] private float _distanceShrinkMaximumRatio = 1.30f;
-    [SerializeField, Range(1f, 1.5f)] private float _wideFocusScale = 1.15f;
+    [SerializeField, Range(1f, 1.6f)] private float _wideFocusWidthScale = 75f / 55f;
     [SerializeField, Range(1f, 1.5f)] private float _freshFocusScale = 1.15f;
     [SerializeField, Min(0.1f)] private float _freshFocusSeconds = 8f;
 
@@ -60,6 +71,7 @@ namespace KeepBlinking.Gameplay
     private float _secondsSinceLastBlink;
     private float _blinkGraceRemaining;
     private float _freshFocusUntil = -1f;
+    private float _temporaryExpansionScale = 1f;
     private float _quietFieldUntil = -1f;
     private float _currentScale = 1f;
     private float _currentAlpha;
@@ -71,6 +83,12 @@ namespace KeepBlinking.Gameplay
     public bool IsBlinkHealthPaused => _eyeBreakPaused;
     public float SecondsSinceLastBlink => _secondsSinceLastBlink;
     public float FieldScale => _currentScale;
+    public bool IsTemporaryExpansionActive =>
+      Time.unscaledTime < _freshFocusUntil && _temporaryExpansionScale > 1.001f;
+    public float TemporaryExpansionTargetScale => IsTemporaryExpansionActive ? _temporaryExpansionScale : 1f;
+    public float TemporaryExpansionRemainingSeconds => IsTemporaryExpansionActive
+      ? Mathf.Max(0f, _freshFocusUntil - Time.unscaledTime)
+      : 0f;
     public float DrynessAmount => CalculateDrynessAmount(_secondsSinceLastBlink);
     public float PurificationSeconds => Mathf.Max(0.2f, _purificationSeconds);
     public float PurificationSpeedMultiplier => _secondsSinceLastBlink < _drynessMediumSeconds
@@ -87,16 +105,25 @@ namespace KeepBlinking.Gameplay
     {
       get
       {
-        var capacity = Mathf.Max(1, _baseConcurrentCapacity);
-        if (_gameplay != null && _gameplay.HasFirstLevelModule(FirstLevelModuleId.ChainBlink)) capacity++;
-        if (_gameplay != null && _gameplay.HasFirstLevelModule(FirstLevelModuleId.WideChain)) capacity++;
-        return capacity;
+        return _gameplay != null && _gameplay.HasFirstLevelModule(FirstLevelModuleId.MoreTargets)
+          ? 4
+          : Mathf.Max(1, _baseConcurrentCapacity);
       }
     }
 
     public int BaseConcurrentCapacity => Mathf.Max(1, _baseConcurrentCapacity);
     public Vector2 CenterViewport => new Vector2(0.5f, 0.5f + _verticalOffsetNormalized);
-    public Vector2 SizeViewport => new Vector2(_baseWidthNormalized, _baseHeightNormalized) * _currentScale;
+    public bool PreservePeripheralProgress => GazeState != SoftFocusGazeState.Peripheral || Time.unscaledTime <= _comfortHoldUntil;
+    public Vector2 SizeViewport
+    {
+      get
+      {
+        var widthScale = _gameplay != null && _gameplay.HasFirstLevelModule(FirstLevelModuleId.WiderField)
+          ? _wideFocusWidthScale
+          : 1f;
+        return new Vector2(_baseWidthNormalized * widthScale, _baseHeightNormalized) * _currentScale;
+      }
+    }
 
     public static SoftFocusFieldController EnsureExists(EdgeOrbitHarvestMvp gameplay)
     {
@@ -136,9 +163,28 @@ namespace KeepBlinking.Gameplay
       }
     }
 
+    public void SetCareInteractionPaused(bool paused)
+    {
+      SetEyeBreakPaused(paused);
+    }
+
     public void GrantFreshFocus()
     {
       _freshFocusUntil = Time.unscaledTime + Mathf.Max(0.1f, _freshFocusSeconds);
+      _temporaryExpansionScale = Mathf.Max(_temporaryExpansionScale, _freshFocusScale);
+      _recoveryRipple = 1f;
+    }
+
+    public void GrantTemporaryExpansion(float scale, float seconds)
+    {
+      _temporaryExpansionScale = Mathf.Max(1f, scale);
+      _freshFocusUntil = Mathf.Max(_freshFocusUntil, Time.unscaledTime + Mathf.Max(0.1f, seconds));
+      _recoveryRipple = 1f;
+    }
+
+    public void ClearCurrentDryness()
+    {
+      _secondsSinceLastBlink = 0f;
       _recoveryRipple = 1f;
     }
 
@@ -193,12 +239,17 @@ namespace KeepBlinking.Gameplay
       }
 
       var deltaTime = Time.unscaledDeltaTime;
+      if (Time.unscaledTime >= _freshFocusUntil)
+      {
+        _temporaryExpansionScale = 1f;
+      }
       UpdateBlinkHealth(deltaTime);
       UpdateGazeState();
 
       var visible = _gameplay.ShouldShowSoftFocusField;
+      var expansionActive = IsTemporaryExpansionActive;
       var targetAlpha = visible && !_eyeBreakPaused && !_gameplay.IsExperienceCollectionInProgress
-        ? _fieldVisualAlpha
+        ? (expansionActive ? Mathf.Max(_fieldVisualAlpha, _expandedFieldVisualAlpha) : _fieldVisualAlpha)
         : 0f;
       var targetScale = CalculateTargetScale();
       var response = 1f - Mathf.Exp(-deltaTime / Mathf.Max(0.05f, _fieldResponseSeconds));
@@ -233,6 +284,12 @@ namespace KeepBlinking.Gameplay
         return;
       }
 
+      if (_useFaceCenterDuringCareRounds && _gameplay.IsCareRoundFlowEnabled)
+      {
+        UpdateCareFlowComfortState();
+        return;
+      }
+
       if (!_gameplay.IsTrackingAvailable || !_gameplay.HasCurrentGazeInput || _gameplay.AreEyesClosed)
       {
         _comfortGaze = false;
@@ -250,10 +307,13 @@ namespace KeepBlinking.Gameplay
         if (Mathf.Abs(offset.x) > _comfortExitHalfWidth || Mathf.Abs(offset.y) > _comfortExitHalfHeight)
         {
           _comfortGaze = false;
-          if (_gameplay.HasFirstLevelModule(FirstLevelModuleId.LockHold))
+          var holdSeconds = _gameplay.HasFirstLevelModule(FirstLevelModuleId.LookAwayHold)
+            ? _upgradedFocusHoldSeconds
+            : _focusHoldSeconds;
+          _comfortHoldUntil = Time.unscaledTime + Mathf.Max(0f, holdSeconds);
+          if (_gameplay.HasFirstLevelModule(FirstLevelModuleId.LookAwayHold))
           {
-            _comfortHoldUntil = Time.unscaledTime + Mathf.Max(0f, _focusHoldSeconds);
-            _gameplay.NotifySoftFocusModuleActivated(FirstLevelModuleId.LockHold);
+            _gameplay.NotifySoftFocusModuleActivated(FirstLevelModuleId.LookAwayHold);
           }
         }
       }
@@ -262,9 +322,43 @@ namespace KeepBlinking.Gameplay
         _comfortGaze = true;
       }
 
-      GazeState = _comfortGaze || Time.unscaledTime < _comfortHoldUntil
-        ? SoftFocusGazeState.Comfort
-        : SoftFocusGazeState.Peripheral;
+      GazeState = _comfortGaze ? SoftFocusGazeState.Comfort : SoftFocusGazeState.Peripheral;
+    }
+
+    private void UpdateCareFlowComfortState()
+    {
+      var snapshot = EyeInputDebugState.Latest;
+      if (!snapshot.FaceDetected || !snapshot.HasFaceCenter || _gameplay.AreEyesClosed)
+      {
+        _comfortGaze = false;
+        GazeState = SoftFocusGazeState.TrackingLost;
+        return;
+      }
+
+      // The care rounds intentionally use the face as a coarse screen-presence
+      // sensor. Directional phone movement is measured by its own controller and
+      // Soft Focus is paused before that movement begins.
+      var careFlow = FirstLevelCareFlowController.Instance;
+      var neutralFaceCenter = careFlow != null && careFlow.HasSessionFaceCenterBaseline
+        ? new Vector2(careFlow.SessionBaselineFaceX, careFlow.SessionBaselineFaceY)
+        : new Vector2(0.5f, 0.5f);
+      var offset = snapshot.FaceCenterNormalized - neutralFaceCenter;
+      if (_comfortGaze)
+      {
+        if (Mathf.Abs(offset.x) > _careFaceExitHalfWidth ||
+            Mathf.Abs(offset.y) > _careFaceExitHalfHeight)
+        {
+          _comfortGaze = false;
+          _comfortHoldUntil = Time.unscaledTime + Mathf.Max(0f, _focusHoldSeconds);
+        }
+      }
+      else if (Mathf.Abs(offset.x) <= _careFaceEnterHalfWidth &&
+               Mathf.Abs(offset.y) <= _careFaceEnterHalfHeight)
+      {
+        _comfortGaze = true;
+      }
+
+      GazeState = _comfortGaze ? SoftFocusGazeState.Comfort : SoftFocusGazeState.Peripheral;
     }
 
     private float CalculateTargetScale()
@@ -302,11 +396,10 @@ namespace KeepBlinking.Gameplay
           _gameplay.DistanceRatio))
         : 0f;
       var distanceScale = Mathf.Lerp(1f, _maximumTooCloseFieldScale, distanceAmount);
-      var moduleScale = _gameplay.HasFirstLevelModule(FirstLevelModuleId.WideBlink) ? _wideFocusScale : 1f;
       var temporaryScale = Time.unscaledTime < _freshFocusUntil || Time.unscaledTime < _quietFieldUntil
-        ? _freshFocusScale
+        ? Mathf.Max(_freshFocusScale, _temporaryExpansionScale)
         : 1f;
-      return Mathf.Clamp(drynessScale * distanceScale * moduleScale * temporaryScale, 0.12f, 1.55f);
+      return Mathf.Clamp(drynessScale * distanceScale * temporaryScale, 0.12f, 1.65f);
     }
 
     private float CalculateDrynessAmount(float seconds)
@@ -316,7 +409,10 @@ namespace KeepBlinking.Gameplay
 
     private void CreateVisual()
     {
-      var safe = FirstLevelUiFactory.CreateCanvas(transform, "Soft Focus Field Canvas", -100, out _, out _canvasGroup);
+      // Keep the field above the opaque gameplay background. Its own fill is
+      // deliberately translucent, so targets remain readable while the 35%
+      // Blink Bloom expansion is unmistakable.
+      var safe = FirstLevelUiFactory.CreateCanvas(transform, "Soft Focus Field Canvas", 60, out _, out _canvasGroup);
       var fieldObject = FirstLevelUiFactory.CreateObject("Soft Focus Field", safe);
       _fieldRect = fieldObject.GetComponent<RectTransform>();
       _fieldRect.anchorMin = _fieldRect.anchorMax = new Vector2(0.5f, 0.5f + _verticalOffsetNormalized);
@@ -339,14 +435,20 @@ namespace KeepBlinking.Gameplay
       var parent = _fieldRect.parent as RectTransform;
       if (parent != null)
       {
+        var widthScale = _gameplay != null && _gameplay.HasFirstLevelModule(FirstLevelModuleId.WiderField)
+          ? _wideFocusWidthScale
+          : 1f;
         _fieldRect.sizeDelta = new Vector2(
-          parent.rect.width * _baseWidthNormalized,
+          parent.rect.width * _baseWidthNormalized * widthScale,
           parent.rect.height * _baseHeightNormalized);
       }
       _fieldRect.localScale = Vector3.one * _currentScale;
       _canvasGroup.alpha = _currentAlpha;
       _graphic.DrynessAmount = DrynessAmount;
       _graphic.RecoveryRipple = _recoveryRipple;
+      _graphic.ExpansionAmount = IsTemporaryExpansionActive
+        ? Mathf.InverseLerp(1f, 1.35f, _temporaryExpansionScale)
+        : 0f;
       _graphic.ComfortActive = GazeState == SoftFocusGazeState.Comfort;
       _graphic.SetVerticesDirty();
     }
@@ -365,6 +467,7 @@ namespace KeepBlinking.Gameplay
   {
     private float _drynessAmount;
     private float _recoveryRipple;
+    private float _expansionAmount;
     private bool _comfortActive;
 
     internal float DrynessAmount
@@ -400,6 +503,18 @@ namespace KeepBlinking.Gameplay
       }
     }
 
+    internal float ExpansionAmount
+    {
+      get => _expansionAmount;
+      set
+      {
+        var clamped = Mathf.Clamp01(value);
+        if (Mathf.Approximately(_expansionAmount, clamped)) return;
+        _expansionAmount = clamped;
+        SetVerticesDirty();
+      }
+    }
+
     protected override void OnPopulateMesh(VertexHelper vh)
     {
       vh.Clear();
@@ -416,6 +531,14 @@ namespace KeepBlinking.Gameplay
         var end = quadrant * 90f + 72f;
         AddEllipseArc(vh, center, radii * breath, start, end, 10, 3f,
           new Color(baseColor.r, baseColor.g, baseColor.b, _comfortActive ? 0.27f : 0.12f));
+      }
+
+      if (_expansionAmount > 0.01f)
+      {
+        var bloom = 0.82f + (Mathf.Sin(Time.unscaledTime * 2.2f) * 0.5f + 0.5f) * 0.18f;
+        var bloomColor = Color.Lerp(baseColor, new Color(0.86f, 0.70f, 0.39f, 1f), 0.18f);
+        bloomColor.a = (0.32f + _expansionAmount * 0.30f) * bloom;
+        AddEllipseArc(vh, center, radii * 0.965f, 0f, 360f, 64, 5f, bloomColor);
       }
 
       if (_drynessAmount > 0.01f)

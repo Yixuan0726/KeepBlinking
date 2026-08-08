@@ -9,11 +9,16 @@ namespace KeepBlinking.Input
   public struct EyeInputDebugSnapshot
   {
     public bool FaceDetected;
+    public long SampleSequence;
     public int FaceCount;
     public int LandmarkCount;
 
     public UnityEngine.Rect FaceRect;
+    public bool HasFaceCenter;
+    public Vector2 FaceCenterNormalized;
+    public float FaceCenterConfidence;
     public float FaceArea;
+    public float RobustFaceScale;
     public float SmoothedFaceArea;
     public float FaceAreaDelta;
     public bool FaceMovingAway;
@@ -37,6 +42,9 @@ namespace KeepBlinking.Input
     public float HeadYawDegrees;
     public float HeadPitchDegrees;
     public float LastUpdateSeconds;
+    public bool CameraMirrored;
+    public int CameraRotationDegrees;
+    public ScreenOrientation ScreenOrientation;
   }
 
   public static class EyeInputDebugState
@@ -56,6 +64,10 @@ namespace KeepBlinking.Input
     private static float _lastBlinkStartedSeconds = -1f;
     private static bool _hasSmoothedFaceArea;
     private static float _smoothedFaceArea;
+    private static long _sampleSequence;
+    private static bool _cameraMirrored;
+    private static int _cameraRotationDegrees;
+    private static ScreenOrientation _screenOrientation;
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
     private static float _nextDiagnosticLogSeconds;
 #endif
@@ -76,11 +88,16 @@ namespace KeepBlinking.Input
       var now = SecondsSinceStart();
       lock (_lock)
       {
+        _sampleSequence++;
         _latest = new EyeInputDebugSnapshot
         {
+          SampleSequence = _sampleSequence,
           BlinkCount = _blinkCount,
           LastBlinkStartedSeconds = _lastBlinkStartedSeconds,
           LastUpdateSeconds = now,
+          CameraMirrored = _cameraMirrored,
+          CameraRotationDegrees = _cameraRotationDegrees,
+          ScreenOrientation = _screenOrientation,
         };
         _lastBlinking = false;
         _hasSmoothedFaceArea = false;
@@ -96,6 +113,20 @@ namespace KeepBlinking.Input
 #endif
     }
 
+    /// <summary>
+    /// Records how the camera frame was normalized before MediaPipe received it.
+    /// Gameplay consumes the resulting landmarks as-is and must not mirror X again.
+    /// </summary>
+    public static void SetFrameTransformMetadata(bool cameraMirrored, int rotationDegrees, ScreenOrientation orientation)
+    {
+      lock (_lock)
+      {
+        _cameraMirrored = cameraMirrored;
+        _cameraRotationDegrees = ((rotationDegrees % 360) + 360) % 360;
+        _screenOrientation = orientation;
+      }
+    }
+
     public static void UpdateFrom(FaceLandmarkerResult result)
     {
       var faceLandmarks = result.faceLandmarks;
@@ -107,7 +138,8 @@ namespace KeepBlinking.Input
 
       var landmarks = faceLandmarks[0].landmarks;
       var faceRect = CalculateFaceRect(landmarks);
-      var faceArea = faceRect.width * faceRect.height;
+      var faceCenter = CalculateStableFaceCenter(landmarks, faceRect, out var faceCenterConfidence);
+      var faceArea = CalculateRobustFaceScale(landmarks, faceRect);
 
       var leftEar = CalculateEyeAspectRatio(landmarks, 33, 133, 159, 145, 158, 153);
       var rightEar = CalculateEyeAspectRatio(landmarks, 362, 263, 386, 374, 385, 380);
@@ -140,6 +172,18 @@ namespace KeepBlinking.Input
       lock (_lock)
       {
         var now = SecondsSinceStart();
+        _sampleSequence++;
+        if (_latest.FaceDetected && _latest.HasFaceCenter)
+        {
+          var jump = Vector2.Distance(_latest.FaceCenterNormalized, faceCenter);
+          if (jump > 0.12f)
+          {
+            // Reject a one-frame landmark jump without freezing the input. The
+            // directional One Euro filter receives this bounded recovery point.
+            faceCenter = Vector2.Lerp(_latest.FaceCenterNormalized, faceCenter, 0.15f);
+            faceCenterConfidence *= 0.35f;
+          }
+        }
         var blinkStarted = isBlinking && !_lastBlinking;
         if (blinkStarted)
         {
@@ -163,10 +207,15 @@ namespace KeepBlinking.Input
         _latest = new EyeInputDebugSnapshot
         {
           FaceDetected = true,
+          SampleSequence = _sampleSequence,
           FaceCount = faceLandmarks.Count,
           LandmarkCount = landmarks.Count,
           FaceRect = faceRect,
+          HasFaceCenter = true,
+          FaceCenterNormalized = faceCenter,
+          FaceCenterConfidence = faceCenterConfidence,
           FaceArea = faceArea,
+          RobustFaceScale = faceArea,
           SmoothedFaceArea = _smoothedFaceArea,
           FaceAreaDelta = areaDelta,
           FaceMovingAway = areaDelta <= MovingAwayDeltaThreshold,
@@ -187,6 +236,9 @@ namespace KeepBlinking.Input
           HeadYawDegrees = headYawDegrees,
           HeadPitchDegrees = headPitchDegrees,
           LastUpdateSeconds = now,
+          CameraMirrored = _cameraMirrored,
+          CameraRotationDegrees = _cameraRotationDegrees,
+          ScreenOrientation = _screenOrientation,
         };
         _lastBlinking = isBlinking;
         blinkStartedForDiagnostics = blinkStarted;
@@ -231,6 +283,143 @@ namespace KeepBlinking.Input
       }
 
       return new UnityEngine.Rect(minX, minY, maxX - minX, maxY - minY);
+    }
+
+    private static Vector2 CalculateStableFaceCenter(
+      IReadOnlyList<NormalizedLandmark> landmarks,
+      UnityEngine.Rect faceRect,
+      out float confidence)
+    {
+      // All points are already in the rotation/mirror-normalized MediaPipe
+      // coordinate system. Combine several symmetric, expression-resistant
+      // centers here and never mirror X again in gameplay code.
+      var weighted = Vector2.zero;
+      var totalWeight = 0f;
+      AddSymmetricCenter(landmarks, 33, 263, 0.24f, faceRect, ref weighted, ref totalWeight);   // outer eyes
+      AddSymmetricCenter(landmarks, 133, 362, 0.24f, faceRect, ref weighted, ref totalWeight); // inner eyes
+      AddSymmetricCenter(landmarks, 159, 386, 0.18f, faceRect, ref weighted, ref totalWeight); // upper eye centers
+      AddSingleCenter(landmarks, 168, 0.22f, faceRect, ref weighted, ref totalWeight);          // upper nose bridge
+      AddSymmetricCenter(landmarks, 234, 454, 0.12f, faceRect, ref weighted, ref totalWeight); // cheeks
+      confidence = Mathf.Clamp01(totalWeight);
+      if (totalWeight > 0.35f)
+      {
+        return weighted / totalWeight;
+      }
+
+      if (landmarks.Count > 168)
+      {
+        confidence = 0.25f;
+        return new Vector2(landmarks[168].x, landmarks[168].y);
+      }
+
+      confidence = 0.1f;
+      return faceRect.center;
+    }
+
+    private static void AddSymmetricCenter(
+      IReadOnlyList<NormalizedLandmark> landmarks,
+      int leftIndex,
+      int rightIndex,
+      float weight,
+      UnityEngine.Rect faceRect,
+      ref Vector2 weighted,
+      ref float totalWeight)
+    {
+      if (!TryGetLandmark(landmarks, leftIndex, out var left) ||
+          !TryGetLandmark(landmarks, rightIndex, out var right)) return;
+      AddCandidate((left + right) * 0.5f, weight, faceRect, ref weighted, ref totalWeight);
+    }
+
+    private static void AddSingleCenter(
+      IReadOnlyList<NormalizedLandmark> landmarks,
+      int index,
+      float weight,
+      UnityEngine.Rect faceRect,
+      ref Vector2 weighted,
+      ref float totalWeight)
+    {
+      if (!TryGetLandmark(landmarks, index, out var point)) return;
+      AddCandidate(point, weight, faceRect, ref weighted, ref totalWeight);
+    }
+
+    private static void AddCandidate(
+      Vector2 point,
+      float weight,
+      UnityEngine.Rect faceRect,
+      ref Vector2 weighted,
+      ref float totalWeight)
+    {
+      if (!IsFinite(point.x) || !IsFinite(point.y) ||
+          point.x < faceRect.xMin - faceRect.width * 0.15f ||
+          point.x > faceRect.xMax + faceRect.width * 0.15f ||
+          point.y < faceRect.yMin - faceRect.height * 0.15f ||
+          point.y > faceRect.yMax + faceRect.height * 0.15f) return;
+      weighted += point * weight;
+      totalWeight += weight;
+    }
+
+    private static bool TryGetLandmark(
+      IReadOnlyList<NormalizedLandmark> landmarks,
+      int index,
+      out Vector2 point)
+    {
+      point = default;
+      if (landmarks == null || index < 0 || index >= landmarks.Count) return false;
+      var landmark = landmarks[index];
+      if (!IsFinite(landmark.x) || !IsFinite(landmark.y) ||
+          landmark.x < -0.15f || landmark.x > 1.15f ||
+          landmark.y < -0.15f || landmark.y > 1.15f) return false;
+      point = new Vector2(landmark.x, landmark.y);
+      return true;
+    }
+
+    private static float CalculateRobustFaceScale(
+      IReadOnlyList<NormalizedLandmark> landmarks,
+      UnityEngine.Rect faceRect)
+    {
+      var eyeWidth = NormalizedSpan(landmarks, 33, 263, 0.48f);
+      var cheekWidth = NormalizedSpan(landmarks, 234, 454, 0.90f);
+      var ovalWidth = NormalizedSpan(landmarks, 127, 356, 0.82f);
+      var width = MedianPositive(eyeWidth, cheekWidth, ovalWidth, Mathf.Max(0.0001f, faceRect.width));
+      // Squaring a stable linear span preserves the existing face-area ratio
+      // semantics used by fixed distance, Too Close and Push Away thresholds.
+      return Mathf.Max(0.000001f, width * width);
+    }
+
+    private static float NormalizedSpan(
+      IReadOnlyList<NormalizedLandmark> landmarks,
+      int first,
+      int second,
+      float expectedFraction)
+    {
+      if (!TryGetLandmark(landmarks, first, out var a) ||
+          !TryGetLandmark(landmarks, second, out var b)) return -1f;
+      return Vector2.Distance(a, b) / Mathf.Max(0.01f, expectedFraction);
+    }
+
+    private static float MedianPositive(float a, float b, float c, float fallback)
+    {
+      var count = 0;
+      var first = 0f;
+      var second = 0f;
+      var third = 0f;
+      if (a > 0f) { first = a; count++; }
+      if (b > 0f) { if (count == 0) first = b; else second = b; count++; }
+      if (c > 0f) { if (count == 0) first = c; else if (count == 1) second = c; else third = c; count++; }
+      if (count == 0) return fallback;
+      if (count == 1) return first;
+      if (count == 2) return (first + second) * 0.5f;
+      if (first > second) Swap(ref first, ref second);
+      if (second > third) Swap(ref second, ref third);
+      if (first > second) Swap(ref first, ref second);
+      return second;
+    }
+
+    private static void Swap(ref float a, ref float b)
+    {
+      var temporary = a;
+      a = b;
+      b = temporary;
     }
 
     private static float CalculateEyeAspectRatio(
