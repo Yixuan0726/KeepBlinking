@@ -41,6 +41,25 @@ namespace KeepBlinking.Gameplay
     DoublePulse,
     FieldPulse,
     FullRecovery,
+
+    // CARE CIRCUIT. Values above are retained for serialized compatibility and
+    // are treated as Legacy by the first-level catalog.
+    MoveTwinTrail,
+    MoveTripleTrail,
+    MoveGoldenStreak,
+    FocusMintShift,
+    FocusFarWave,
+    FocusFullRefine,
+    RestGoldenRest,
+    RestCircuitQuietReturn,
+    RestFullRest,
+    ReleaseTwinPulse,
+    ReleaseChainPulse,
+    ReleaseFullRelease,
+    BossShardRain,
+    BossMintCore,
+    BossCoreEcho,
+    BossGoldRelease,
   }
 
   public enum FirstLevelModuleCategory
@@ -51,6 +70,8 @@ namespace KeepBlinking.Gameplay
     Distance,
     Rhythm,
     Combo,
+    Move,
+    Release,
   }
 
   [Flags]

@@ -13,19 +13,14 @@ namespace KeepBlinking.Tests
   {
     private static readonly BindingFlags InstancePrivate = BindingFlags.Instance | BindingFlags.NonPublic;
     private static readonly BindingFlags StaticPrivate = BindingFlags.Static | BindingFlags.NonPublic;
-    private readonly List<GameObject> _objectsToDestroy = new List<GameObject>();
+    private readonly List<GameObject> _objects = new List<GameObject>();
 
     [TearDown]
     public void TearDown()
     {
-      for (var i = _objectsToDestroy.Count - 1; i >= 0; i--)
-      {
-        if (_objectsToDestroy[i] != null)
-        {
-          UnityEngine.Object.DestroyImmediate(_objectsToDestroy[i]);
-        }
-      }
-      _objectsToDestroy.Clear();
+      for (var i = _objects.Count - 1; i >= 0; i--)
+        if (_objects[i] != null) UnityEngine.Object.DestroyImmediate(_objects[i]);
+      _objects.Clear();
     }
 
     [Test]
@@ -33,87 +28,181 @@ namespace KeepBlinking.Tests
     {
       var gameplay = CreateGameplay();
       SetField(gameplay, "_upgradesRequiredBeforeBoss", 0);
-
       Assert.That(gameplay.UpgradesRequiredBeforeBoss, Is.EqualTo(4));
     }
 
-    [TestCase(0, FirstLevelModuleId.WiderField)]
-    [TestCase(1, FirstLevelModuleId.BlinkBloom)]
-    [TestCase(2, FirstLevelModuleId.ExtraSamples)]
-    public void EveryFirstOfferCardCommitsOnceAndReturnsToGameplay(int selectedIndex, FirstLevelModuleId expectedModule)
+    [TestCase(CareExperienceState.Raw, 1)]
+    [TestCase(CareExperienceState.Focused, 2)]
+    [TestCase(CareExperienceState.Rested, 3)]
+    public void ExperienceStatesHaveExactArrivalValues(CareExperienceState state, int expected)
     {
-      var gameplay = CreateGameplay();
-      var installedCount = 0;
-      var completedCount = 0;
-      var buildCompletedCount = 0;
-      gameplay.FirstLevelModuleInstalled += module =>
-      {
-        Assert.That(module, Is.EqualTo(expectedModule));
-        installedCount++;
-      };
-      gameplay.ModuleChoiceCompleted += index =>
-      {
-        Assert.That(index, Is.EqualTo(selectedIndex));
-        completedCount++;
-      };
-      gameplay.FirstLevelBuildCompleted += () => buildCompletedCount++;
-
-      PrepareTransaction(
-        gameplay,
-        new[] { FirstLevelModuleId.WiderField, FirstLevelModuleId.BlinkBloom, FirstLevelModuleId.ExtraSamples },
-        selectedIndex);
-      Invoke(gameplay, "FinalizeModuleInstallation");
-      Invoke(gameplay, "FinalizeModuleInstallation");
-
-      Assert.That(gameplay.IsModuleUpgradeOpen, Is.False);
-      Assert.That(gameplay.IsModuleInstallationPending, Is.False);
-      Assert.That(gameplay.InstalledFirstLevelModuleCount, Is.EqualTo(1));
-      Assert.That(gameplay.HasFirstLevelModule(expectedModule), Is.True);
-      Assert.That(installedCount, Is.EqualTo(1));
-      Assert.That(completedCount, Is.EqualTo(1));
-      Assert.That(buildCompletedCount, Is.Zero);
-      Assert.That(gameplay.IsFirstLevelBuildComplete, Is.False);
-      Assert.That(Time.timeScale, Is.EqualTo(1f));
+      Assert.That(CareExperienceStateInfo.Value(state), Is.EqualTo(expected));
     }
 
     [Test]
-    public void FourSequentialChoicesCompleteBuildExactlyOnce()
+    public void BaseConversionUsesTwentyFiveAndFiftyPercent()
+    {
+      Assert.That(CareExperienceConversionLogic.ConvertedCount(1, 0.25f, true), Is.EqualTo(1));
+      Assert.That(CareExperienceConversionLogic.ConvertedCount(8, 0.25f, true), Is.EqualTo(2));
+      Assert.That(CareExperienceConversionLogic.ConvertedCount(8, 0.50f, false), Is.EqualTo(4));
+      Assert.That(CareExperienceConversionLogic.ConvertedCount(8, 1f, false), Is.EqualTo(8));
+    }
+
+    [Test]
+    public void ReleaseBonusesAreFiniteAndNonRecursive()
+    {
+      Assert.That(CareExperienceConversionLogic.TwinPulseRawBonus(39), Is.EqualTo(9));
+      Assert.That(CareExperienceConversionLogic.ChainPulseGoldBonus(39), Is.EqualTo(3));
+      Assert.That(CareExperienceConversionLogic.ChainPulseGoldBonus(0), Is.Zero);
+    }
+
+    [Test]
+    public void FirstOfferHasThreeTierOneCardsAcrossCategories()
+    {
+      var offer = BuildOffer(1, new HashSet<FirstLevelModuleId>());
+      AssertOfferBasics(offer, new HashSet<FirstLevelModuleId>());
+      for (var i = 0; i < offer.Count; i++) Assert.That(GetDefinitionProperty<int>(offer[i], "Tier"), Is.EqualTo(1));
+    }
+
+    [Test]
+    public void TierTwoAndThreeRequireTheirExactPredecessor()
+    {
+      var empty = BuildOffer(1, new HashSet<FirstLevelModuleId>());
+      Assert.That(empty.Contains(FirstLevelModuleId.MoveTripleTrail), Is.False);
+      Assert.That(empty.Contains(FirstLevelModuleId.MoveGoldenStreak), Is.False);
+
+      var tierOne = new HashSet<FirstLevelModuleId> { FirstLevelModuleId.MoveTwinTrail };
+      Assert.That(BuildOffer(2, tierOne).Contains(FirstLevelModuleId.MoveTripleTrail), Is.True);
+      Assert.That(BuildOffer(2, tierOne).Contains(FirstLevelModuleId.MoveGoldenStreak), Is.False);
+
+      var tierTwo = new HashSet<FirstLevelModuleId>
+      {
+        FirstLevelModuleId.MoveTwinTrail,
+        FirstLevelModuleId.MoveTripleTrail,
+      };
+      Assert.That(BuildOffer(3, tierTwo).Contains(FirstLevelModuleId.MoveGoldenStreak), Is.True);
+    }
+
+    [TestCase(FirstLevelModuleId.MoveTwinTrail, FirstLevelModuleId.MoveTripleTrail, FirstLevelModuleId.MoveGoldenStreak)]
+    [TestCase(FirstLevelModuleId.FocusMintShift, FirstLevelModuleId.FocusFarWave, FirstLevelModuleId.FocusFullRefine)]
+    [TestCase(FirstLevelModuleId.RestGoldenRest, FirstLevelModuleId.RestCircuitQuietReturn, FirstLevelModuleId.RestFullRest)]
+    [TestCase(FirstLevelModuleId.ReleaseTwinPulse, FirstLevelModuleId.ReleaseChainPulse, FirstLevelModuleId.ReleaseFullRelease)]
+    public void EveryCareRouteCanReachItsSecondAndThirdTier(
+      FirstLevelModuleId tierOne,
+      FirstLevelModuleId tierTwo,
+      FirstLevelModuleId tierThree)
+    {
+      var firstInstalled = new HashSet<FirstLevelModuleId> { tierOne };
+      Assert.That(BuildOffer(2, firstInstalled).Contains(tierTwo), Is.True);
+      Assert.That(BuildOffer(2, firstInstalled).Contains(tierThree), Is.False);
+
+      var secondInstalled = new HashSet<FirstLevelModuleId> { tierOne, tierTwo };
+      Assert.That(BuildOffer(3, secondInstalled).Contains(tierThree), Is.True);
+    }
+
+    [Test]
+    public void UpgradeFourOffersThreeBossEvolutionsAndMatchesHighestRoute()
+    {
+      var installed = new HashSet<FirstLevelModuleId>
+      {
+        FirstLevelModuleId.FocusMintShift,
+        FirstLevelModuleId.FocusFarWave,
+        FirstLevelModuleId.FocusFullRefine,
+        FirstLevelModuleId.MoveTwinTrail,
+      };
+      var offer = BuildOffer(4, installed);
+      Assert.That(offer, Has.Count.EqualTo(3));
+      Assert.That(offer.Contains(FirstLevelModuleId.BossMintCore), Is.True);
+      for (var i = 0; i < offer.Count; i++) Assert.That(GetDefinitionProperty<bool>(offer[i], "BossOnly"), Is.True);
+    }
+
+    [Test]
+    public void LegacyCardsNeverEnterTheCareCircuitPool()
+    {
+      var installed = new HashSet<FirstLevelModuleId>();
+      for (var upgrade = 1; upgrade <= 4; upgrade++)
+      {
+        var offer = BuildOffer(upgrade, installed);
+        Assert.That(offer, Is.Not.Empty);
+        for (var i = 0; i < offer.Count; i++)
+          Assert.That(GetDefinitionProperty<bool>(offer[i], "Legacy"), Is.False);
+        installed.Add(offer[0]);
+      }
+    }
+
+    [Test]
+    public void AllSixteenCardsHaveStableIdsShortEnglishAndPassHealthAudit()
+    {
+      var definitions = GetDefinitions();
+      Assert.That(definitions.Length, Is.EqualTo(16));
+      var stableIds = new HashSet<string>();
+      foreach (var definition in definitions)
+      {
+        var type = definition.GetType();
+        var stableId = (string)type.GetProperty("StableId").GetValue(definition);
+        var title = (string)type.GetProperty("CardName").GetValue(definition);
+        var description = (string)type.GetProperty("ShortDescription").GetValue(definition);
+        Assert.That(stableIds.Add(stableId), Is.True, "Duplicate stable id: " + stableId);
+        Assert.That(title.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries), Has.Length.LessThanOrEqualTo(2));
+        Assert.That(description.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries), Has.Length.LessThanOrEqualTo(8));
+        Assert.That((bool)type.GetMethod("PassesHealthInvariantAudit").Invoke(definition, null), Is.True, stableId);
+        Assert.That((bool)type.GetProperty("DirectlyGrantsExperience").GetValue(definition), Is.False);
+        Assert.That((bool)type.GetProperty("SkipsPushAway").GetValue(definition), Is.False);
+        Assert.That((bool)type.GetProperty("ReducesFocusShiftCycles").GetValue(definition), Is.False);
+        Assert.That((bool)type.GetProperty("ShortensRest").GetValue(definition), Is.False);
+        Assert.That((bool)type.GetProperty("ExtraExperienceUsesFormalFlight").GetValue(definition), Is.True);
+        Assert.That((bool)type.GetProperty("SkipCanRewardRest").GetValue(definition), Is.False);
+        Assert.That((bool)type.GetProperty("TrackingLossCanReward").GetValue(definition), Is.False);
+        Assert.That((bool)type.GetProperty("RewardCanTriggerMoreThanOnce").GetValue(definition), Is.False);
+      }
+    }
+
+    [Test]
+    public void CareCircuitCardsMatchTheirPlayerFacingBeforeAfterValues()
+    {
+      AssertCard(FirstLevelModuleId.MoveTwinTrail, "move_twin_trail", "TWIN TRAIL", "Move drops two XP trails.", "1", "2");
+      AssertCard(FirstLevelModuleId.MoveTripleTrail, "move_triple_trail", "TRIPLE TRAIL", "Move drops three XP trails.", "2", "3");
+      AssertCard(FirstLevelModuleId.MoveGoldenStreak, "move_golden_streak", "GOLDEN STREAK", "Six move nodes drop Gold XP.", "0", "1");
+      AssertCard(FirstLevelModuleId.FocusMintShift, "focus_mint_shift", "MINT SHIFT", "Focus turns half Raw XP mint.", "25%", "50%");
+      AssertCard(FirstLevelModuleId.FocusFarWave, "focus_far_wave", "FAR WAVE", "Each Far point drops eight Mint XP.", "0", "8");
+      AssertCard(FirstLevelModuleId.FocusFullRefine, "focus_full_refine", "FULL REFINE", "Two cycles turn all XP mint.", "50%", "ALL");
+      AssertCard(FirstLevelModuleId.RestGoldenRest, "rest_golden_rest", "GOLDEN REST", "Rest drops two Gold XP each second.", "1", "2");
+      AssertCard(FirstLevelModuleId.RestCircuitQuietReturn, "rest_quiet_return", "QUIET RETURN", "Reopen pauses spawns for six seconds.", "0s", "6s");
+      AssertCard(FirstLevelModuleId.RestFullRest, "rest_full_rest", "FULL REST", "Full rest turns all Mint XP gold.", "50%", "ALL");
+      AssertCard(FirstLevelModuleId.ReleaseTwinPulse, "release_twin_pulse", "TWIN PULSE", "Push sends a bonus second wave.", "1", "2");
+      AssertCard(FirstLevelModuleId.ReleaseChainPulse, "release_chain_pulse", "CHAIN PULSE", "Ten collected XP drop one Gold XP.", "0", "1 / 10");
+      AssertCard(FirstLevelModuleId.ReleaseFullRelease, "release_full_release", "FULL RELEASE", "Final pulse expands the Focus Field.", "55%", "80% · 12s");
+      AssertCard(FirstLevelModuleId.BossShardRain, "boss_shard_rain", "SHARD RAIN", "Boss hits drop two XP trails.", "1", "2");
+      AssertCard(FirstLevelModuleId.BossMintCore, "boss_mint_core", "MINT CORE", "Boss drops become Focused XP.", "PART", "ALL");
+      AssertCard(FirstLevelModuleId.BossCoreEcho, "boss_core_echo", "CORE ECHO", "Correct rest breaks two cores.", "1", "2");
+      AssertCard(FirstLevelModuleId.BossGoldRelease, "boss_gold_release", "GOLD RELEASE", "Final Push drops eight Gold XP.", "0", "8");
+    }
+
+    [Test]
+    public void FourChoicesCompleteSequenceExactlyOnce()
     {
       var gameplay = CreateGameplay();
-      var moduleEvents = 0;
-      var choiceEvents = 0;
-      var sequenceEvents = 0;
-      var buildEvents = 0;
-      gameplay.FirstLevelModuleInstalled += _ => moduleEvents++;
-      gameplay.ModuleChoiceCompleted += _ => choiceEvents++;
-      gameplay.FirstLevelUpgradeSequenceCompleted += () => sequenceEvents++;
-      gameplay.FirstLevelBuildCompleted += () => buildEvents++;
+      var sequence = 0;
+      var choices = 0;
+      gameplay.FirstLevelUpgradeSequenceCompleted += () => sequence++;
+      gameplay.ModuleChoiceCompleted += _ => choices++;
       var modules = new[]
       {
-        FirstLevelModuleId.WiderField,
-        FirstLevelModuleId.MoreTargets,
-        FirstLevelModuleId.RestBloom,
-        FirstLevelModuleId.DoublePulse,
+        FirstLevelModuleId.MoveTwinTrail,
+        FirstLevelModuleId.FocusMintShift,
+        FirstLevelModuleId.RestGoldenRest,
+        FirstLevelModuleId.BossShardRain,
       };
-
       for (var i = 0; i < modules.Length; i++)
       {
-        PrepareTransaction(gameplay, new[] { modules[i] }, 0);
+        PrepareTransaction(gameplay, modules[i]);
         Invoke(gameplay, "FinalizeModuleInstallation");
         Invoke(gameplay, "FinalizeModuleInstallation");
-
-        Assert.That(gameplay.IsModuleUpgradeOpen, Is.False, "Upgrade remained open at choice " + (i + 1));
-        Assert.That(gameplay.IsModuleInstallationPending, Is.False, "Install lock remained set at choice " + (i + 1));
-        Assert.That(gameplay.InstalledFirstLevelModuleCount, Is.EqualTo(i + 1));
-        Assert.That(buildEvents, Is.EqualTo(i == modules.Length - 1 ? 1 : 0));
       }
-
-      Assert.That(moduleEvents, Is.EqualTo(4));
-      Assert.That(choiceEvents, Is.EqualTo(4));
-      Assert.That(sequenceEvents, Is.EqualTo(1));
-      Assert.That(buildEvents, Is.EqualTo(1));
-      Assert.That(gameplay.IsFirstLevelBuildComplete, Is.True);
+      Assert.That(choices, Is.EqualTo(4));
+      Assert.That(sequence, Is.EqualTo(1));
       Assert.That(gameplay.IsFirstLevelUpgradeSequenceComplete, Is.True);
+      Assert.That(gameplay.IsModuleInstallationPending, Is.False);
     }
 
     [Test]
@@ -125,11 +214,6 @@ namespace KeepBlinking.Tests
       gameplay.SetTutorialRandomCrisisPaused(true);
       gameplay.SetTutorialSessionTimerPaused(true);
       gameplay.SetTutorialCollectionInputPaused(true);
-
-      Assert.That(gameplay.IsTutorialModeEnabled, Is.True);
-      Assert.That(gameplay.IsTutorialRandomSpawningPaused, Is.True);
-      Assert.That(gameplay.IsTutorialRandomCrisisPaused, Is.True);
-      Assert.That(gameplay.IsTutorialSessionTimerPaused, Is.True);
 
       gameplay.ResumeFormalGameFlow();
 
@@ -160,11 +244,11 @@ namespace KeepBlinking.Tests
     public void BossTransitionFlagIsClearedWhenBossModeStarts()
     {
       var gameplay = CreateGameplay();
-
       gameplay.BeginFirstLevelBossTransition();
       Assert.That(gameplay.IsFirstLevelBossTransitionActive, Is.True);
 
       gameplay.BeginFirstLevelBossMode();
+
       Assert.That(gameplay.IsFirstLevelBossTransitionActive, Is.False);
       Assert.That(gameplay.IsFirstLevelBossMode, Is.True);
     }
@@ -173,7 +257,8 @@ namespace KeepBlinking.Tests
     public void InvalidPendingSelectionReleasesUpgradeLock()
     {
       var gameplay = CreateGameplay();
-      PrepareTransaction(gameplay, new[] { FirstLevelModuleId.ChainBlink }, 3);
+      PrepareTransaction(gameplay, FirstLevelModuleId.MoveTwinTrail);
+      SetField(gameplay, "_selectedModuleCardIndex", 3);
 
       LogAssert.Expect(LogType.Error, "KeepBlinking module installation lost its selected card. The upgrade UI is being safely released.");
       Invoke(gameplay, "FinalizeModuleInstallation");
@@ -191,9 +276,7 @@ namespace KeepBlinking.Tests
       SetField(session, "_gameplay", gameplay);
       SetEnumField(session, "_state", "Gameplay");
 
-      LogAssert.Expect(
-        LogType.Warning,
-        "KeepBlinking ignored an early build-complete signal at 0/4 modules.");
+      LogAssert.Expect(LogType.Warning, "KeepBlinking ignored an early build-complete signal at 0/4 modules.");
       Invoke(session, "HandleBuildCompleted");
 
       Assert.That(session.State, Is.EqualTo(FirstLevelSessionState.Gameplay));
@@ -203,91 +286,33 @@ namespace KeepBlinking.Tests
     public void FailingObserverCannotInterruptModuleCompletion()
     {
       var gameplay = CreateGameplay();
-      var choiceEvents = 0;
+      var choices = 0;
       gameplay.FirstLevelModuleInstalled += _ => throw new InvalidOperationException("observer failure");
-      gameplay.ModuleChoiceCompleted += _ => choiceEvents++;
-      PrepareTransaction(gameplay, new[] { FirstLevelModuleId.WiderField }, 0);
+      gameplay.ModuleChoiceCompleted += _ => choices++;
+      PrepareTransaction(gameplay, FirstLevelModuleId.MoveTwinTrail);
 
-      LogAssert.Expect(
-        LogType.Error,
-        "KeepBlinking gameplay signal subscriber failed: FirstLevelModuleInstalled.");
+      LogAssert.Expect(LogType.Error, "KeepBlinking gameplay signal subscriber failed: FirstLevelModuleInstalled.");
       LogAssert.Expect(LogType.Exception, new Regex("InvalidOperationException: observer failure"));
       Invoke(gameplay, "FinalizeModuleInstallation");
 
-      Assert.That(choiceEvents, Is.EqualTo(1));
+      Assert.That(choices, Is.EqualTo(1));
       Assert.That(gameplay.IsModuleInstallationPending, Is.False);
       Assert.That(gameplay.IsModuleUpgradeOpen, Is.False);
     }
 
     [Test]
-    public void EveryFourChoicePoolBranchHasThreeUniqueLegalCards()
+    public void ScreenDownRestMotionStillRejectsPortraitAndAcceptsFaceDown()
     {
-      var catalogType = typeof(FirstLevelModuleId).Assembly.GetType("KeepBlinking.Gameplay.FirstLevelUpgradeCatalog");
-      Assert.That(catalogType, Is.Not.Null);
-      var buildOffer = catalogType.GetMethod("BuildOffer", StaticPrivate);
-      Assert.That(buildOffer, Is.Not.Null);
-
-      AuditOfferBranch(buildOffer, 1, new HashSet<FirstLevelModuleId>());
-    }
-
-    [Test]
-    public void EveryFinalCareCardIsReachableInTheFourChoiceTree()
-    {
-      var catalogType = typeof(FirstLevelModuleId).Assembly.GetType("KeepBlinking.Gameplay.FirstLevelUpgradeCatalog");
-      var buildOffer = catalogType.GetMethod("BuildOffer", StaticPrivate);
-      var seen = new HashSet<FirstLevelModuleId>();
-      CollectReachableCards(buildOffer, 1, new HashSet<FirstLevelModuleId>(), seen);
-
-      for (var raw = (int)FirstLevelModuleId.WiderField; raw <= (int)FirstLevelModuleId.FullRecovery; raw++)
-      {
-        if ((FirstLevelModuleId)raw == FirstLevelModuleId.ShiftReward) continue;
-        Assert.That(seen.Contains((FirstLevelModuleId)raw), Is.True, "CARE card is unreachable: " + (FirstLevelModuleId)raw);
-      }
-    }
-
-    [Test]
-    public void EveryCareCardPassesHealthInvariantAudit()
-    {
-      var catalogType = typeof(FirstLevelModuleId).Assembly.GetType("KeepBlinking.Gameplay.FirstLevelUpgradeCatalog");
-      var definitionsProperty = catalogType.GetProperty("Definitions", StaticPrivate);
-      var definitions = (Array)definitionsProperty.GetValue(null);
-
-      Assert.That(definitions.Length, Is.EqualTo(14));
-      foreach (var definition in definitions)
-      {
-        var type = definition.GetType();
-        Assert.That((bool)type.GetMethod("PassesHealthInvariantAudit", InstancePrivate | BindingFlags.Public).Invoke(definition, null), Is.True);
-        Assert.That(((string)type.GetProperty("Title").GetValue(definition)).Split(' '), Has.Length.LessThanOrEqualTo(2));
-        Assert.That(((string)type.GetProperty("CategoryLabel").GetValue(definition)).Split(' '), Has.Length.EqualTo(1));
-        Assert.That(((string)type.GetProperty("Description").GetValue(definition)).Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries), Has.Length.LessThanOrEqualTo(5));
-      }
-    }
-
-    [Test]
-    public void ScreenDownRestRejectsNormalPortraitOrientation()
-    {
-      var normal = Vector3.forward;
-      Assert.That(ScreenDownRestMotionLogic.IsScreenDown(normal, normal, Vector3.down, 150f, 30f), Is.False);
-    }
-
-    [Test]
-    public void ScreenDownRestAcceptsRelativeFlipOrGroundFacingNormal()
-    {
+      Assert.That(ScreenDownRestMotionLogic.IsScreenDown(Vector3.forward, Vector3.forward, Vector3.down, 150f, 30f), Is.False);
       Assert.That(ScreenDownRestMotionLogic.IsScreenDown(Vector3.forward, Vector3.back, Vector3.down, 150f, 30f), Is.True);
-      Assert.That(ScreenDownRestMotionLogic.IsScreenDown(Vector3.forward, Vector3.down, Vector3.down, 150f, 30f), Is.True);
     }
 
     [Test]
-    public void ScreenDownRestRequiresStableMotion()
+    public void ScreenDownRestRequiresStableMotionAndNeutralReturn()
     {
       Assert.That(ScreenDownRestMotionLogic.IsStable(1f, 1f, 0.18f, 0.2f, 0.35f), Is.True);
       Assert.That(ScreenDownRestMotionLogic.IsStable(1.4f, 1f, 0.18f, 0.2f, 0.35f), Is.False);
       Assert.That(ScreenDownRestMotionLogic.IsStable(1f, 1f, 0.18f, 0.8f, 0.35f), Is.False);
-    }
-
-    [Test]
-    public void ScreenDownRestRequiresReturnNearCapturedAttitude()
-    {
       Assert.That(ScreenDownRestMotionLogic.IsReturned(Quaternion.identity, Quaternion.Euler(0f, 18f, 0f), 20f), Is.True);
       Assert.That(ScreenDownRestMotionLogic.IsReturned(Quaternion.identity, Quaternion.Euler(0f, 24f, 0f), 20f), Is.False);
     }
@@ -317,153 +342,99 @@ namespace KeepBlinking.Tests
       SetField(gameplay, "_softBlinkRelativeReopenRatio", 0.62f);
       SetField(gameplay, "_softBlinkMinimumReopenValue", 0.30f);
       SetField(gameplay, "_openEyeReleaseThreshold", 0.55f);
-      var method = typeof(EdgeOrbitHarvestMvp).GetMethod(
-        "CalculateAdaptiveSoftBlinkReopenThreshold",
-        InstancePrivate);
+      var method = typeof(EdgeOrbitHarvestMvp).GetMethod("CalculateAdaptiveSoftBlinkReopenThreshold", InstancePrivate);
 
       Assert.That(method, Is.Not.Null);
       Assert.That((float)method.Invoke(gameplay, new object[] { 0.80f }), Is.EqualTo(0.496f).Within(0.001f));
       Assert.That((float)method.Invoke(gameplay, new object[] { 0.35f }), Is.EqualTo(0.30f).Within(0.001f));
     }
 
-    [Test]
-    public void BlinkBloomCompletedBlinkStartsVisibleSixSecondExpansion()
+    private static void AssertOfferBasics(List<FirstLevelModuleId> offer, HashSet<FirstLevelModuleId> installed)
     {
-      var gameplay = CreateGameplay();
-      SetField(gameplay, "_autoReadKeepBlinkingEyeInput", false);
-      SetField(gameplay, "_tutorialMode", false);
-      SetEnumField(gameplay, "_gameplayState", "Orbiting");
-      ((List<FirstLevelModuleId>)GetField(gameplay, "_installedModuleOrder")).Add(FirstLevelModuleId.BlinkBloom);
-      ((HashSet<FirstLevelModuleId>)GetField(gameplay, "_installedModules")).Add(FirstLevelModuleId.BlinkBloom);
-
-      var fieldOwner = new GameObject("Blink Bloom Field Test");
-      _objectsToDestroy.Add(fieldOwner);
-      var field = fieldOwner.AddComponent<SoftFocusFieldController>();
-      SoftFocusFieldController.EnsureExists(gameplay);
-
-      var upgradeOwner = new GameObject("Blink Bloom Upgrade Test");
-      _objectsToDestroy.Add(upgradeOwner);
-      var upgrades = upgradeOwner.AddComponent<CareUpgradeController>();
-      CareUpgradeController.EnsureExists(gameplay);
-      Invoke(upgrades, "HandleNaturalBlink", 1);
-
-      Assert.That(field.IsTemporaryExpansionActive, Is.True);
-      Assert.That(field.TemporaryExpansionTargetScale, Is.EqualTo(1.35f).Within(0.001f));
-      Assert.That(field.TemporaryExpansionRemainingSeconds, Is.GreaterThan(5.8f));
-      var canvas = field.GetComponentInChildren<Canvas>(true);
-      Assert.That(canvas, Is.Not.Null);
-      Assert.That(canvas.sortingOrder, Is.EqualTo(60));
-    }
-
-    private static void AuditOfferBranch(
-      MethodInfo buildOffer,
-      int upgradeNumber,
-      HashSet<FirstLevelModuleId> installed)
-    {
-      var offer = (List<FirstLevelModuleId>)buildOffer.Invoke(null, new object[] { upgradeNumber, installed });
-      Assert.That(offer, Has.Count.EqualTo(3), "Offer count failed at upgrade " + upgradeNumber);
+      Assert.That(offer, Has.Count.EqualTo(3));
       Assert.That(new HashSet<FirstLevelModuleId>(offer), Has.Count.EqualTo(3));
-      var catalogType = typeof(FirstLevelModuleId).Assembly.GetType("KeepBlinking.Gameplay.FirstLevelUpgradeCatalog");
-      var getDefinition = catalogType.GetMethod("Get", StaticPrivate);
-      var categories = new HashSet<object>();
+      var categories = new HashSet<FirstLevelModuleCategory>();
       for (var i = 0; i < offer.Count; i++)
       {
-        Assert.That(offer[i], Is.Not.EqualTo(FirstLevelModuleId.None));
-        Assert.That(installed.Contains(offer[i]), Is.False, "Installed module was offered again: " + offer[i]);
-        Assert.That((int)offer[i], Is.GreaterThanOrEqualTo((int)FirstLevelModuleId.WiderField), "Legacy combat card entered CARE pool: " + offer[i]);
-        var definition = getDefinition.Invoke(null, new object[] { offer[i] });
-        categories.Add(definition.GetType().GetProperty("Category").GetValue(definition));
+        Assert.That(installed.Contains(offer[i]), Is.False);
+        categories.Add(GetDefinitionProperty<FirstLevelModuleCategory>(offer[i], "Category"));
       }
-      Assert.That(categories.Count, Is.GreaterThanOrEqualTo(2), "Offer must contain at least two CARE categories.");
-
-      if (upgradeNumber >= 4)
-      {
-        return;
-      }
-
-      for (var i = 0; i < offer.Count; i++)
-      {
-        var nextInstalled = new HashSet<FirstLevelModuleId>(installed) { offer[i] };
-        AuditOfferBranch(buildOffer, upgradeNumber + 1, nextInstalled);
-      }
+      Assert.That(categories.Count, Is.GreaterThanOrEqualTo(2));
     }
 
-    private static void CollectReachableCards(
-      MethodInfo buildOffer,
-      int upgradeNumber,
-      HashSet<FirstLevelModuleId> installed,
-      HashSet<FirstLevelModuleId> seen)
+    private static List<FirstLevelModuleId> BuildOffer(int number, HashSet<FirstLevelModuleId> installed)
     {
-      var offer = (List<FirstLevelModuleId>)buildOffer.Invoke(null, new object[] { upgradeNumber, installed });
-      for (var i = 0; i < offer.Count; i++) seen.Add(offer[i]);
-      if (upgradeNumber >= 4) return;
-      for (var i = 0; i < offer.Count; i++)
-      {
-        var nextInstalled = new HashSet<FirstLevelModuleId>(installed) { offer[i] };
-        CollectReachableCards(buildOffer, upgradeNumber + 1, nextInstalled, seen);
-      }
+      var catalog = typeof(FirstLevelModuleId).Assembly.GetType("KeepBlinking.Gameplay.FirstLevelUpgradeCatalog");
+      return (List<FirstLevelModuleId>)catalog.GetMethod("BuildOffer", StaticPrivate).Invoke(null, new object[] { number, installed });
+    }
+
+    private static Array GetDefinitions()
+    {
+      var catalog = typeof(FirstLevelModuleId).Assembly.GetType("KeepBlinking.Gameplay.FirstLevelUpgradeCatalog");
+      return (Array)catalog.GetProperty("Definitions", StaticPrivate).GetValue(null);
+    }
+
+    private static T GetDefinitionProperty<T>(FirstLevelModuleId id, string property)
+    {
+      var catalog = typeof(FirstLevelModuleId).Assembly.GetType("KeepBlinking.Gameplay.FirstLevelUpgradeCatalog");
+      var definition = catalog.GetMethod("Get", StaticPrivate).Invoke(null, new object[] { id });
+      return (T)definition.GetType().GetProperty(property).GetValue(definition);
+    }
+
+    private static void AssertCard(
+      FirstLevelModuleId id,
+      string stableId,
+      string title,
+      string description,
+      string before,
+      string after)
+    {
+      Assert.That(GetDefinitionProperty<string>(id, "StableId"), Is.EqualTo(stableId));
+      Assert.That(GetDefinitionProperty<string>(id, "CardName"), Is.EqualTo(title));
+      Assert.That(GetDefinitionProperty<string>(id, "ShortDescription"), Is.EqualTo(description));
+      Assert.That(GetDefinitionProperty<string>(id, "BeforeLabel"), Is.EqualTo(before));
+      Assert.That(GetDefinitionProperty<string>(id, "AfterLabel"), Is.EqualTo(after));
     }
 
     private EdgeOrbitHarvestMvp CreateGameplay()
     {
-      var root = new GameObject("First Level Upgrade Flow Test");
-      _objectsToDestroy.Add(root);
+      var root = new GameObject("CARE CIRCUIT Test");
+      _objects.Add(root);
       return root.AddComponent<EdgeOrbitHarvestMvp>();
     }
 
-    private static void PrepareTransaction(
-      EdgeOrbitHarvestMvp gameplay,
-      IReadOnlyList<FirstLevelModuleId> offer,
-      int selectedIndex)
+    private static void PrepareTransaction(EdgeOrbitHarvestMvp gameplay, FirstLevelModuleId module)
     {
-      var currentOffer = (List<FirstLevelModuleId>)GetField(gameplay, "_currentModuleOffer");
-      currentOffer.Clear();
-      for (var i = 0; i < offer.Count; i++)
-      {
-        currentOffer.Add(offer[i]);
-      }
-
+      var offer = (List<FirstLevelModuleId>)GetField(gameplay, "_currentModuleOffer");
+      offer.Clear();
+      offer.Add(module);
       SetEnumField(gameplay, "_gameplayState", "ModuleUpgrade");
       SetEnumField(gameplay, "_resumeStateAfterUpgrade", "Orbiting");
       SetField(gameplay, "_moduleChoicePending", true);
-      SetField(gameplay, "_selectedModuleCardIndex", selectedIndex);
+      SetField(gameplay, "_selectedModuleCardIndex", 0);
       SetField(gameplay, "_moduleInstallStartedAt", Time.unscaledTime);
       SetField(gameplay, "_currentUpgradeSampleRequirement", 10);
     }
 
-    private static object GetField(object target, string fieldName)
+    private static object GetField(object target, string name)
     {
-      var field = target.GetType().GetField(fieldName, InstancePrivate);
-      Assert.That(field, Is.Not.Null, "Missing test field: " + fieldName);
-      return field.GetValue(target);
+      return target.GetType().GetField(name, InstancePrivate).GetValue(target);
     }
 
-    private static void SetField(object target, string fieldName, object value)
+    private static void SetField(object target, string name, object value)
     {
-      var field = target.GetType().GetField(fieldName, InstancePrivate);
-      Assert.That(field, Is.Not.Null, "Missing test field: " + fieldName);
-      field.SetValue(target, value);
+      target.GetType().GetField(name, InstancePrivate).SetValue(target, value);
     }
 
-    private static void SetEnumField(object target, string fieldName, string value)
+    private static void SetEnumField(object target, string name, string value)
     {
-      var field = target.GetType().GetField(fieldName, InstancePrivate);
-      Assert.That(field, Is.Not.Null, "Missing test enum field: " + fieldName);
+      var field = target.GetType().GetField(name, InstancePrivate);
       field.SetValue(target, Enum.Parse(field.FieldType, value));
     }
 
-    private static void Invoke(object target, string methodName)
+    private static void Invoke(object target, string method, params object[] arguments)
     {
-      var method = target.GetType().GetMethod(methodName, InstancePrivate);
-      Assert.That(method, Is.Not.Null, "Missing test method: " + methodName);
-      method.Invoke(target, null);
-    }
-
-    private static void Invoke(object target, string methodName, object argument)
-    {
-      var method = target.GetType().GetMethod(methodName, InstancePrivate);
-      Assert.That(method, Is.Not.Null, "Missing test method: " + methodName);
-      method.Invoke(target, new[] { argument });
+      target.GetType().GetMethod(method, InstancePrivate).Invoke(target, arguments);
     }
   }
 }

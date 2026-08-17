@@ -49,6 +49,61 @@ namespace KeepBlinking.Gameplay
 
       switch (_definition.Id)
       {
+        case FirstLevelModuleId.MoveTwinTrail:
+          DrawTrails(vh, center, pulse < 0.5f ? 1 : 2, warm, mint);
+          break;
+        case FirstLevelModuleId.MoveTripleTrail:
+          DrawTrails(vh, center, pulse < 0.5f ? 2 : 3, warm, mint);
+          break;
+        case FirstLevelModuleId.MoveGoldenStreak:
+          DrawStreak(vh, center, pulse, warm, gold);
+          break;
+        case FirstLevelModuleId.FocusMintShift:
+          DrawStateSamples(vh, center, 4, pulse < 0.5f ? 1 : 2, mint, warm);
+          break;
+        case FirstLevelModuleId.FocusFarWave:
+          DrawNearFar(vh, center + new Vector2(0f, 22f), pulse, warm, mint);
+          if (pulse > 0.55f) DrawStateSamples(vh, center + new Vector2(0f, -48f), 8, 8, mint, muted);
+          break;
+        case FirstLevelModuleId.FocusFullRefine:
+          DrawStateSamples(vh, center, 6, pulse < 0.5f ? 3 : 6, mint, warm);
+          break;
+        case FirstLevelModuleId.RestGoldenRest:
+          DrawEye(vh, center + new Vector2(0f, 28f), warm, mint, 0.18f);
+          DrawSamples(vh, center + new Vector2(0f, -36f), pulse < 0.5f ? 1 : 2, gold);
+          break;
+        case FirstLevelModuleId.RestCircuitQuietReturn:
+          DrawSpawnPause(vh, center, pulse, warm, gold);
+          break;
+        case FirstLevelModuleId.RestFullRest:
+          DrawEye(vh, center + new Vector2(0f, 30f), warm, mint, 0.18f);
+          DrawStateSamples(vh, center + new Vector2(0f, -38f), 5, pulse < 0.5f ? 0 : 5, gold, mint);
+          break;
+        case FirstLevelModuleId.ReleaseTwinPulse:
+          UpgradeUiMeshUtility.AddArc(vh, center, Mathf.Lerp(28f, 68f, pulse), 0f, 360f, 30, 4f, mint);
+          UpgradeUiMeshUtility.AddArc(vh, center, Mathf.Lerp(15f, 52f, pulse), 0f, 360f, 30, 3f, warm);
+          break;
+        case FirstLevelModuleId.ReleaseChainPulse:
+          DrawStateSamples(vh, center + new Vector2(0f, 20f), 10, 0, warm, warm);
+          if (pulse > 0.5f) UpgradeUiMeshUtility.AddCircle(vh, center + new Vector2(0f, -45f), 11f, 18, gold);
+          break;
+        case FirstLevelModuleId.ReleaseFullRelease:
+          DrawField(vh, center, Mathf.Lerp(48f, 84f, pulse), Mathf.Lerp(28f, 48f, pulse), mint);
+          break;
+        case FirstLevelModuleId.BossShardRain:
+          DrawTrails(vh, center, pulse < 0.5f ? 1 : 2, warm, mint);
+          UpgradeUiMeshUtility.AddCircle(vh, center + new Vector2(0f, 45f), 16f, 20, gold);
+          break;
+        case FirstLevelModuleId.BossMintCore:
+          UpgradeUiMeshUtility.AddCircle(vh, center, 30f, 24, Color.Lerp(warm, mint, pulse));
+          break;
+        case FirstLevelModuleId.BossCoreEcho:
+          UpgradeUiMeshUtility.AddCircle(vh, center + new Vector2(-22f, 0f), 18f, 20, gold);
+          if (pulse > 0.45f) UpgradeUiMeshUtility.AddCircle(vh, center + new Vector2(22f, 0f), 18f, 20, gold);
+          break;
+        case FirstLevelModuleId.BossGoldRelease:
+          DrawStateSamples(vh, center, 8, pulse < 0.5f ? 0 : 8, gold, muted);
+          break;
         case FirstLevelModuleId.WiderField:
           DrawField(vh, center, Mathf.Lerp(44f, 78f, pulse), Mathf.Lerp(27f, 44f, pulse), mint);
           break;
@@ -155,6 +210,44 @@ namespace KeepBlinking.Gameplay
         var point = center + new Vector2(start + i * spacing, 0f);
         UpgradeUiMeshUtility.AddCircle(vh, point, 11f, 18, gold);
         UpgradeUiMeshUtility.AddArc(vh, point, 16f, 20f, 300f, 16, 2f, KeepBlinkingTheme.WithAlpha(gold, 0.6f));
+      }
+    }
+
+    private static void DrawTrails(VertexHelper vh, Vector2 center, int rows, Color warm, Color mint)
+    {
+      rows = Mathf.Clamp(rows, 1, 3);
+      for (var row = 0; row < rows; row++)
+      {
+        var y = (row - (rows - 1) * 0.5f) * 25f;
+        for (var i = 0; i < 6; i++)
+        {
+          var color = row == 0 ? warm : KeepBlinkingTheme.WithAlpha(mint, 0.72f);
+          UpgradeUiMeshUtility.AddCircle(vh, center + new Vector2(-65f + i * 26f, y), 6f, 12, color);
+        }
+      }
+    }
+
+    private static void DrawStreak(VertexHelper vh, Vector2 center, float pulse, Color warm, Color gold)
+    {
+      for (var i = 0; i < 6; i++)
+      {
+        var color = i == 5 && pulse > 0.45f ? gold : warm;
+        UpgradeUiMeshUtility.AddCircle(vh, center + new Vector2(-65f + i * 26f, 0f), i == 5 ? 9f : 6f, 14, color);
+      }
+    }
+
+    private static void DrawStateSamples(VertexHelper vh, Vector2 center, int count, int changed, Color changedColor, Color baseColor)
+    {
+      if (count <= 0) return;
+      var columns = Mathf.Min(count, 5);
+      for (var i = 0; i < count; i++)
+      {
+        var row = i / columns;
+        var column = i % columns;
+        var rowCount = Mathf.Min(columns, count - row * columns);
+        var x = (column - (rowCount - 1) * 0.5f) * 25f;
+        var y = (0.5f - row) * 25f;
+        UpgradeUiMeshUtility.AddCircle(vh, center + new Vector2(x, y), 7f, 12, i < changed ? changedColor : baseColor);
       }
     }
 

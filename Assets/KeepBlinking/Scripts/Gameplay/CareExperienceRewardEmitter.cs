@@ -10,13 +10,13 @@ namespace KeepBlinking.Gameplay
   {
     private readonly struct Emission
     {
-      public Emission(bool gold, CareMovementDirection direction, float progress)
+      public Emission(CareExperienceState experienceState, CareMovementDirection direction, float progress)
       {
-        Gold = gold;
+        ExperienceState = experienceState;
         Direction = direction;
         Progress = progress;
       }
-      public bool Gold { get; }
+      public CareExperienceState ExperienceState { get; }
       public CareMovementDirection Direction { get; }
       public float Progress { get; }
     }
@@ -42,11 +42,34 @@ namespace KeepBlinking.Gameplay
     private int _emissionSerial;
     private int _waitingPlacementSerial;
     private bool _emissionPaused;
+    private int _moveNodeSerial;
 
     public static CareExperienceRewardEmitter Instance { get; private set; }
     public event Action<int, bool> FragmentEmitted;
+    public event Action<int, CareExperienceState> TypedFragmentEmitted;
     public event Action<CareMovementDirection, float> FragmentTrackFeedbackShown;
     public int QueuedCount => _queue.Count;
+    public int QueuedValue
+    {
+      get
+      {
+        var value = 0;
+        foreach (var emission in _queue) value += CareExperienceStateInfo.Value(emission.ExperienceState);
+        return value;
+      }
+    }
+
+    public int QueuedCountForState(CareExperienceState state)
+    {
+      var count = 0;
+      foreach (var emission in _queue) if (emission.ExperienceState == state) count++;
+      return count;
+    }
+
+    public void BeginCareRound()
+    {
+      _moveNodeSerial = 0;
+    }
 
     public void SetEmissionPaused(bool paused)
     {
@@ -79,15 +102,37 @@ namespace KeepBlinking.Gameplay
 
     public void EnqueueFragments(int count, bool gold, CareMovementDirection direction, float progress)
     {
-      count = Mathf.Clamp(count, 0, 128 - _queue.Count);
-      for (var i = 0; i < count; i++) _queue.Enqueue(new Emission(gold, direction, progress));
-      if (_queue.Count == count) _nextEmissionAt = Time.unscaledTime;
+      EnqueueFragments(count, gold ? CareExperienceState.Rested : CareExperienceState.Raw, direction, progress);
+    }
+
+    public void EnqueueFragments(int count, CareExperienceState experienceState, CareMovementDirection direction, float progress)
+    {
+      count = Mathf.Max(0, count);
+      var directionalRaw = experienceState == CareExperienceState.Raw &&
+                           (direction == CareMovementDirection.Left || direction == CareMovementDirection.Right ||
+                            direction == CareMovementDirection.Up || direction == CareMovementDirection.Down);
+      var upgrades = CareUpgradeController.Instance;
+      var trails = directionalRaw && upgrades != null ? upgrades.MoveTrailCount : 1;
+      var wasEmpty = _queue.Count == 0;
+      for (var node = 0; node < count; node++)
+      {
+        for (var trail = 0; trail < trails && _queue.Count < 256; trail++)
+          _queue.Enqueue(new Emission(experienceState, direction, progress));
+        if (!directionalRaw) continue;
+        _moveNodeSerial++;
+        if (upgrades != null && upgrades.MoveGoldenStreakEnabled && _moveNodeSerial % 6 == 0 && _queue.Count < 256)
+        {
+          _queue.Enqueue(new Emission(CareExperienceState.Rested, direction, progress));
+          CareAudioFeedbackController.EnsureExists().PlaySweepEnd();
+        }
+      }
+      if (wasEmpty && _queue.Count > 0) _nextEmissionAt = Time.unscaledTime;
     }
 
     public void EnqueueRestGold(int count)
     {
       count = Mathf.Clamp(count, 0, 128 - _queue.Count);
-      for (var i = 0; i < count; i++) _queue.Enqueue(new Emission(true, CareMovementDirection.Center, i / Mathf.Max(1f, count - 1f)));
+      for (var i = 0; i < count; i++) _queue.Enqueue(new Emission(CareExperienceState.Rested, CareMovementDirection.Center, i / Mathf.Max(1f, count - 1f)));
       if (_queue.Count == count) _nextEmissionAt = Time.unscaledTime;
     }
 
@@ -109,21 +154,22 @@ namespace KeepBlinking.Gameplay
 
       var emission = _queue.Dequeue();
       Emit(emission);
-      _nextEmissionAt = Time.unscaledTime + (emission.Gold ? _restEmissionInterval : _emissionInterval);
+      _nextEmissionAt = Time.unscaledTime + (emission.ExperienceState == CareExperienceState.Rested ? _restEmissionInterval : _emissionInterval);
     }
 
     private void Emit(Emission emission)
     {
       var waitingViewport = GetWaitingViewport();
-      var id = _gameplay.SpawnPendingCareExperienceFragment(emission.Gold, waitingViewport);
+      var id = _gameplay.SpawnPendingCareExperienceFragment(emission.ExperienceState, waitingViewport);
       if (id != EdgeOrbitHarvestMvp.NoTargetId)
       {
         _emissionSerial++;
         var trackViewport = GetTrackFeedbackViewport(emission.Direction, emission.Progress);
-        ShowFloatingFeedback(trackViewport, emission.Gold);
+        ShowFloatingFeedback(trackViewport, emission.ExperienceState);
         CareAudioFeedbackController.EnsureExists().PlayFragment(emission.Progress);
         FragmentTrackFeedbackShown?.Invoke(emission.Direction, Mathf.Clamp01(emission.Progress));
-        FragmentEmitted?.Invoke(id, emission.Gold);
+        FragmentEmitted?.Invoke(id, emission.ExperienceState == CareExperienceState.Rested);
+        TypedFragmentEmitted?.Invoke(id, emission.ExperienceState);
       }
     }
 
@@ -181,7 +227,7 @@ namespace KeepBlinking.Gameplay
         new Vector2(1f, 1f),
         Vector2.one,
         new Vector2(-32f, -104f),
-        new Vector2(310f, 54f));
+        new Vector2(390f, 92f));
 
       var count = Mathf.Clamp(_floatingTextPoolCapacity, 3, 4);
       for (var i = 0; i < count; i++)
@@ -200,12 +246,28 @@ namespace KeepBlinking.Gameplay
     private void UpdatePendingLabel()
     {
       if (_pendingLabel == null || _gameplay == null) return;
-      var count = _gameplay.PendingUnsettledExperienceCount + _queue.Count;
-      _pendingLabel.text = count > 0 ? $"XP READY {count}" : string.Empty;
+      if (_gameplay.IsCareStationMode)
+      {
+        _pendingLabel.text = string.Empty;
+        _canvasGroup.alpha = 0f;
+        return;
+      }
+      var value = _gameplay.PendingUnsettledExperienceValue + QueuedValue;
+      if (value <= 0)
+      {
+        _pendingLabel.text = string.Empty;
+      }
+      else
+      {
+        var raw = _gameplay.CountPendingCareExperience(CareExperienceState.Raw, true) + QueuedCountForState(CareExperienceState.Raw);
+        var focused = _gameplay.CountPendingCareExperience(CareExperienceState.Focused, true) + QueuedCountForState(CareExperienceState.Focused);
+        var rested = _gameplay.CountPendingCareExperience(CareExperienceState.Rested, true) + QueuedCountForState(CareExperienceState.Rested);
+        _pendingLabel.text = $"XP READY {value}\n<size=65%>RAW XP {raw}  FOCUSED XP {focused}  RESTED XP {rested}</size>";
+      }
       _canvasGroup.alpha = _gameplay.IsFirstLevelBossMode ? 0f : 1f;
     }
 
-    private void ShowFloatingFeedback(Vector2 viewport, bool gold)
+    private void ShowFloatingFeedback(Vector2 viewport, CareExperienceState experienceState)
     {
       FloatingFeedback item = null;
       for (var i = 0; i < _feedback.Count; i++)
@@ -221,7 +283,8 @@ namespace KeepBlinking.Gameplay
       item.Root.anchorMax = viewport;
       item.Root.anchoredPosition = Vector2.zero;
       item.Root.localScale = Vector3.one * 0.8f;
-      item.Label.color = gold ? KeepBlinkingTheme.AccentWarm : KeepBlinkingTheme.AccentPrimary;
+      item.Label.text = $"+{CareExperienceStateInfo.Value(experienceState)}";
+      item.Label.color = CareExperienceStateInfo.Color(experienceState);
       item.Ripple.color = KeepBlinkingTheme.WithAlpha(item.Label.color, 0.45f);
       item.StartedAt = Time.unscaledTime;
       item.Root.gameObject.SetActive(true);

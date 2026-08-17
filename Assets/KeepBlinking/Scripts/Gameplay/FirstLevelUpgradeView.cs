@@ -353,23 +353,23 @@ namespace KeepBlinking.Gameplay
       accent.color = KeepBlinkingTheme.WithAlpha(definition.AccentColor, 0.9f);
       accent.raycastTarget = false;
 
-      var title = CreateText("Title", root, definition.Title, 46f, 34f, 47f, FontStyles.Bold, TextAlignmentOptions.Left, false);
-      SetRect(title.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(62f, -32f), new Vector2(600f, 54f));
+      var category = CreateText("Category", root, definition.CategoryLabel, 22f, 19f, 23f, FontStyles.Bold, TextAlignmentOptions.Left, false);
+      SetRect(category.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(62f, -24f), new Vector2(520f, 30f));
+      category.characterSpacing = 2f;
+      category.color = KeepBlinkingTheme.WithAlpha(definition.AccentColor, 0.96f);
+
+      var title = CreateText("Title", root, definition.Title, 42f, 32f, 44f, FontStyles.Bold, TextAlignmentOptions.Left, false);
+      SetRect(title.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(62f, -57f), new Vector2(600f, 52f));
       title.color = KeepBlinkingTheme.TextPrimary;
 
-      var delta = CreateText("Value", root, definition.Delta, 32f, 27f, 34f, FontStyles.Bold, TextAlignmentOptions.Left, false);
-      SetRect(delta.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(62f, -88f), new Vector2(580f, 42f));
-      delta.color = KeepBlinkingTheme.TextPrimary;
-
       var description = CreateText("Effect", root, definition.Description, 28f, 23f, 29f, FontStyles.Normal, TextAlignmentOptions.TopLeft, true);
-      SetRect(description.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(62f, -142f), new Vector2(600f, 54f));
+      SetRect(description.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(62f, -112f), new Vector2(600f, 58f));
       description.color = KeepBlinkingTheme.TextSecondary;
       description.maxVisibleLines = 2;
 
-      var category = CreateText("Category", root, definition.CategoryLabel, 24f, 20f, 25f, FontStyles.Bold, TextAlignmentOptions.Left, false);
-      SetRect(category.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(62f, 20f), new Vector2(520f, 34f));
-      category.characterSpacing = 2f;
-      category.color = KeepBlinkingTheme.WithAlpha(definition.AccentColor, 0.96f);
+      var delta = CreateText("Value", root, definition.Delta, 32f, 27f, 34f, FontStyles.Bold, TextAlignmentOptions.Left, false);
+      SetRect(delta.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(62f, 24f), new Vector2(600f, 42f));
+      delta.color = KeepBlinkingTheme.TextPrimary;
 
       var iconObject = CreateUiObject("Module Icon", root);
       var iconRect = iconObject.GetComponent<RectTransform>();
@@ -588,7 +588,7 @@ namespace KeepBlinking.Gameplay
       }
 
       _instructionText.text = _installing
-        ? "INSTALLED"
+        ? "MODULE INSTALLED"
         : "TAP TO INSTALL";
       _instructionText.color = _focusedCardIndex >= 0 || _selectedCardIndex >= 0
         ? KeepBlinkingTheme.TextPrimary
@@ -638,6 +638,10 @@ namespace KeepBlinking.Gameplay
           return 2.6f;
         case FirstLevelModuleCategory.Distance:
           return 2.2f;
+        case FirstLevelModuleCategory.Move:
+          return 1.9f;
+        case FirstLevelModuleCategory.Release:
+          return 2.1f;
         default:
           return 2.4f;
       }
@@ -935,7 +939,7 @@ namespace KeepBlinking.Gameplay
       Stretch(_lineArt.rectTransform, 0.08f);
       _lineArt.raycastTarget = false;
 
-      if (Category == FirstLevelModuleCategory.Distance)
+      if (Category == FirstLevelModuleCategory.Distance || Category == FirstLevelModuleCategory.Release)
       {
         var sampleObject = new GameObject("Travelling Sample", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
         sampleObject.transform.SetParent(transform, false);
@@ -980,6 +984,18 @@ namespace KeepBlinking.Gameplay
           if (_sample != null)
           {
             _sample.rectTransform.anchoredPosition = new Vector2(-46f, Mathf.Lerp(-42f, 52f, Mathf.SmoothStep(0f, 1f, phase)));
+            _sample.color = new Color(AccentColor.r, AccentColor.g, AccentColor.b, Mathf.Sin(phase * Mathf.PI));
+          }
+          break;
+        case FirstLevelModuleCategory.Move:
+          _lineArt.rectTransform.anchoredPosition = new Vector2(Mathf.Lerp(-8f, 8f, breathe), 0f);
+          _lineArt.color = new Color(1f, 1f, 1f, 0.84f + breathe * 0.14f);
+          break;
+        case FirstLevelModuleCategory.Release:
+          _lineArt.rectTransform.localScale = Vector3.one * (0.96f + breathe * 0.08f);
+          if (_sample != null)
+          {
+            _sample.rectTransform.anchoredPosition = new Vector2(0f, Mathf.Lerp(22f, 56f, phase));
             _sample.color = new Color(AccentColor.r, AccentColor.g, AccentColor.b, Mathf.Sin(phase * Mathf.PI));
           }
           break;
@@ -1045,6 +1061,15 @@ namespace KeepBlinking.Gameplay
           break;
         case FirstLevelModuleCategory.Distance:
           painter.DrawDistance();
+          break;
+        case FirstLevelModuleCategory.Move:
+          painter.DrawMove();
+          break;
+        case FirstLevelModuleCategory.Focus:
+          painter.DrawFocus();
+          break;
+        case FirstLevelModuleCategory.Release:
+          painter.DrawRelease();
           break;
         default:
           painter.DrawCombo(level);
@@ -1152,6 +1177,28 @@ namespace KeepBlinking.Gameplay
         DrawArc(new Vector2(67f, 64f), 38f, 142f, 84f, 2.2f, 0.58f);
         DrawLine(new Vector2(34f, 43f), new Vector2(26f, 51f), 2.2f, 0.58f);
         DrawLine(new Vector2(34f, 43f), new Vector2(40f, 53f), 2.2f, 0.58f);
+      }
+
+      internal void DrawMove()
+      {
+        DrawLine(new Vector2(24f, 64f), new Vector2(104f, 64f), 4f, 0.92f);
+        for (var i = 0; i < 5; i++) DrawCircle(new Vector2(28f + i * 18f, 64f), 5f, 3f, 0.95f);
+        DrawLine(new Vector2(92f, 52f), new Vector2(104f, 64f), 4f, 0.9f);
+        DrawLine(new Vector2(92f, 76f), new Vector2(104f, 64f), 4f, 0.9f);
+      }
+
+      internal void DrawFocus()
+      {
+        DrawArc(new Vector2(64f, 64f), 34f, 0f, 360f, 4f, 0.92f);
+        DrawCircle(new Vector2(64f, 64f), 9f, 4f, 0.96f);
+      }
+
+      internal void DrawRelease()
+      {
+        DrawArc(new Vector2(64f, 64f), 22f, 0f, 360f, 4f, 0.9f);
+        DrawArc(new Vector2(64f, 64f), 40f, 205f, 130f, 4f, 0.78f);
+        DrawLine(new Vector2(26f, 64f), new Vector2(44f, 64f), 4f, 0.9f);
+        DrawLine(new Vector2(84f, 64f), new Vector2(102f, 64f), 4f, 0.9f);
       }
 
       internal void DrawCombo(int level)

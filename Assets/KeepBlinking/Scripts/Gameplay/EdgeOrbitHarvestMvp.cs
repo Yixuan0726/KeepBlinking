@@ -6,7 +6,9 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using KeepBlinking.CareStation;
 using KeepBlinking.Input;
+using KeepBlinking.Tutorial;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
@@ -43,6 +45,7 @@ namespace KeepBlinking.Gameplay
     }
   }
 
+  [DefaultExecutionOrder(-800)]
   public class EdgeOrbitHarvestMvp : MonoBehaviour
   {
     public const int NoTargetId = -1;
@@ -55,6 +58,7 @@ namespace KeepBlinking.Gameplay
     public event Action<int> SoftFocusBatchCompleted;
     public event Action<int> ConvertedCollectionStarted;
     public event Action<int> ExperienceReachedBar;
+    public event Action<int, CareExperienceState, int> CareExperienceReachedBar;
     public event Action<ExperienceProgressSignal> ExperienceProgressChanged;
     public event Action UpgradeOpened;
     public event Action<int> ModuleChoiceCompleted;
@@ -189,25 +193,25 @@ namespace KeepBlinking.Gameplay
     [SerializeField] private bool _showDebugHud;
 
     [Header("Session Face Distance")]
-    [SerializeField, Min(0.5f)] private float _distanceBaselineCaptureSeconds = 1.5f;
+    [SerializeField, Min(0.5f)] private float _distanceBaselineCaptureSeconds = 1f;
     [SerializeField, Min(5)] private int _distanceBaselineMinimumSamples = 20;
     [SerializeField, Range(0.01f, 0.5f)] private float _distanceBaselineMaximumRelativeSpread = 0.18f;
     [SerializeField, Min(0.1f)] private float _faceDistanceSmoothSpeed = 8f;
-    [SerializeField, Range(0.5f, 1f)] private float _distanceNormalMinimumRatio = 0.92f;
-    [SerializeField, Range(1f, 1.5f)] private float _distanceNormalMaximumRatio = 1.10f;
-    [SerializeField, Range(0.4f, 1f)] private float _pushAwayTriggerRatio = 0.82f;
-    [SerializeField, Min(0f)] private float _pushAwayHoldSeconds = 0.3f;
-    [SerializeField, Range(0.5f, 1.2f)] private float _pushAwayRearmRatio = 0.92f;
-    [SerializeField, Min(0f)] private float _pushAwayRearmHoldSeconds = 0.3f;
+    [SerializeField, Range(0.5f, 1f)] private float _distanceNormalMinimumRatio = 0.95f;
+    [SerializeField, Range(1f, 1.5f)] private float _distanceNormalMaximumRatio = 1.05f;
+    [SerializeField, Range(0.4f, 1f)] private float _pushAwayTriggerRatio = 0.88f;
+    [SerializeField, Min(0f)] private float _pushAwayHoldSeconds = 0.5f;
+    [SerializeField, Range(0.5f, 1.2f)] private float _pushAwayRearmRatio = 0.95f;
+    [SerializeField, Min(0f)] private float _pushAwayRearmHoldSeconds = 1f;
     [SerializeField, Range(1f, 1.6f)] private float _tooCloseEnterRatio = 1.18f;
-    [SerializeField, Min(0f)] private float _tooCloseHoldSeconds = 0.5f;
+    [SerializeField, Min(0f)] private float _tooCloseHoldSeconds = 2f;
     [SerializeField, Range(1f, 1.5f)] private float _tooCloseExitRatio = 1.10f;
 
     [Header("Sampling & Module Upgrade")]
     [SerializeField] private float _sampleCollectSpeed = 9f;
     [SerializeField] private float _sampleCollectDistance = 0.18f;
     [SerializeField, Range(0.01f, 0.12f)] private float _careSampleReleaseInterval = 0.04f;
-    [SerializeField, Range(32, 128)] private int _experienceSamplePoolCapacity = 96;
+    [SerializeField, Range(32, 128)] private int _experienceSamplePoolCapacity = 128;
     [SerializeField, Range(8, 24)] private int _careWaitingVisibleCapacity = 20;
     [SerializeField, Range(0.06f, 0.25f)] private float _careWaitingLeftViewport = 0.12f;
     [SerializeField, Range(0.75f, 0.94f)] private float _careWaitingRightViewport = 0.88f;
@@ -221,7 +225,7 @@ namespace KeepBlinking.Gameplay
     [SerializeField] private float _progressBarBottomViewport = 0.02f;
     [SerializeField] private Vector2 _moduleCardSize = new Vector2(2.25f, 3.0f);
     [SerializeField] private float _moduleCardSpacing = 0.38f;
-    [SerializeField] private float _moduleInstallPresentationSeconds = 0.42f;
+    [SerializeField] private float _moduleInstallPresentationSeconds = 0.8f;
     [SerializeField] private float _chainConversionRadiusWorld = 3.1f;
     [SerializeField] private int _minimumUpgradeSampleRequirement = 3;
     [SerializeField] private bool _logUpgradeFlowTransitions;
@@ -342,6 +346,9 @@ namespace KeepBlinking.Gameplay
     private bool _careCollectionArmed;
     private bool _careRoundFlowEnabled;
     private bool _careRoundPresentationActive;
+    private bool _careStationMode;
+    private bool _careStationAbsoluteTooClose;
+    private float _careStationAbsoluteNearAmount;
     private readonly Stack<OrbitBlock> _experienceSamplePool = new Stack<OrbitBlock>(96);
     private bool _tutorialMode;
     private bool _tutorialRandomSpawningPaused;
@@ -508,11 +515,14 @@ namespace KeepBlinking.Gameplay
       : _distanceTracker.IsTooClose;
     public SessionDistanceState DistanceState => _distanceTracker.State;
     public int PendingConvertedExperienceCount => CountState(BlockState.Converted);
+    public int PendingCollectingExperienceCount => CountState(BlockState.Collecting);
     public int PendingUnsettledExperienceCount => CountState(BlockState.Converted) + CountState(BlockState.Collecting);
+    public int PendingUnsettledExperienceValue => GetPendingCareExperienceValue(true);
     public bool IsCareCollectionArmed => _careCollectionArmed;
     public bool IsCareActionActive => _careActionActive;
     public bool IsCareRoundFlowEnabled => _careRoundFlowEnabled;
     public bool IsCareRoundPresentationActive => _careRoundPresentationActive;
+    public bool IsCareStationMode => _careStationMode;
     public bool IsFaceInputAvailable => !_autoReadKeepBlinkingEyeInput || EyeInputDebugState.Latest.FaceDetected;
     public int CrisisSpawnCount => Mathf.Max(1, _crisisSpawnCount);
     public bool IsCalibrationInputReady
@@ -681,6 +691,58 @@ namespace KeepBlinking.Gameplay
       }
     }
 
+    public void SetCareStationMode(bool enabled)
+    {
+      _careStationMode = enabled;
+      if (!enabled) return;
+
+      _tutorialMode = false;
+      _tutorialRandomSpawningPaused = true;
+      _tutorialRandomCrisisPaused = true;
+      _careRoundFlowEnabled = true;
+      _firstLevelRandomFlowPaused = true;
+      _firstLevelBossTransitionActive = false;
+      _firstLevelBossMode = false;
+      _careCollectionArmed = false;
+      _careActionActive = true;
+      _nextSpawnAt = float.PositiveInfinity;
+      _nextCrisisAt = float.PositiveInfinity;
+      DisableNormalTargetLock();
+      SetCareRoundPresentationActive(true);
+
+      var legacyCareFlow = FindFirstObjectByType<FirstLevelCareFlowController>();
+      if (legacyCareFlow != null) legacyCareFlow.enabled = false;
+      var legacySession = FindFirstObjectByType<FirstLevelSessionController>();
+      if (legacySession != null) legacySession.enabled = false;
+      var legacyCircuit = FindFirstObjectByType<CareCircuitController>();
+      if (legacyCircuit != null) legacyCircuit.enabled = false;
+      var legacyUpgrades = FindFirstObjectByType<CareUpgradeController>();
+      if (legacyUpgrades != null) legacyUpgrades.enabled = false;
+      var gazeComparison = FindFirstObjectByType<GazeProviderComparisonController>();
+      if (gazeComparison != null) gazeComparison.SetCareStationSuppressed(true);
+      var legacyTutorial = FindFirstObjectByType<KeepBlinkingTutorialController>();
+      if (legacyTutorial != null) legacyTutorial.enabled = false;
+      if (_softFocusField != null) _softFocusField.enabled = false;
+      _distanceCameraFeedback?.SetTooCloseStatusVisible(false);
+    }
+
+    public void SetCareStationAbsoluteDistanceSafety(bool active, float amount)
+    {
+      _careStationAbsoluteTooClose = active;
+      _careStationAbsoluteNearAmount = active ? Mathf.Clamp01(amount) : 0f;
+    }
+
+    public void ResetCareStationDistanceSession()
+    {
+      if (!_careStationMode) return;
+      _distanceTracker.ResetSession();
+      _pushAwayReady = false;
+      _softFocusHiddenByPushAway = false;
+      _formalFlowInitialized = false;
+      _nextDistanceBaselineWarningAt = -1f;
+      ResetPushAwayInputState();
+    }
+
     public void SetCareRoundSpawningPaused(bool paused)
     {
       if (!_careRoundFlowEnabled) return;
@@ -723,6 +785,13 @@ namespace KeepBlinking.Gameplay
 
     public int SpawnPendingCareExperienceFragment(bool gold, Vector2 viewportPosition)
     {
+      return SpawnPendingCareExperienceFragment(
+        gold ? CareExperienceState.Rested : CareExperienceState.Raw,
+        viewportPosition);
+    }
+
+    public int SpawnPendingCareExperienceFragment(CareExperienceState experienceState, Vector2 viewportPosition)
+    {
       if (_camera == null) return NoTargetId;
       var safe = GetGameplayViewportRect(0.08f, 0.14f);
       viewportPosition = new Vector2(
@@ -731,9 +800,72 @@ namespace KeepBlinking.Gameplay
       var world = _camera.ViewportToWorldPoint(new Vector3(viewportPosition.x, viewportPosition.y, _blockDepthFromCamera));
       return SpawnConvertedModuleSample(
         world,
-        gold ? KeepBlinkingTheme.AccentWarm : KeepBlinkingTheme.AccentPrimary,
+        CareExperienceStateInfo.Color(experienceState),
         0,
-        gold).Serial;
+        experienceState).Serial;
+    }
+
+    public int SpawnPendingCareExperienceBundle(int experienceValue, Vector2 viewportPosition)
+    {
+      return SpawnPendingCareExperienceBundle(experienceValue, CareExperienceState.Raw, viewportPosition);
+    }
+
+    public int SpawnPendingCareExperienceBundle(int experienceValue, CareExperienceState experienceState, Vector2 viewportPosition)
+    {
+      if (_camera == null || experienceValue <= 0) return NoTargetId;
+      var safe = GetGameplayViewportRect(0.08f, 0.14f);
+      viewportPosition = new Vector2(
+        Mathf.Clamp(viewportPosition.x, safe.xMin, safe.xMax),
+        Mathf.Clamp(viewportPosition.y, safe.yMin, safe.yMax));
+      var world = _camera.ViewportToWorldPoint(new Vector3(viewportPosition.x, viewportPosition.y, _blockDepthFromCamera));
+      var sample = SpawnConvertedModuleSample(world, CareExperienceStateInfo.Color(experienceState), 0, experienceState);
+      sample.CareExperienceValueOverride = Mathf.Max(1, experienceValue);
+      sample.GameObject.name = $"XP Bundle {sample.Serial + 1} ({sample.CareExperienceValueOverride})";
+      var visualScale = Mathf.Lerp(0.58f, 0.88f, Mathf.InverseLerp(1f, 12f, sample.CareExperienceValueOverride));
+      sample.BaseScale = new Vector3(visualScale, visualScale, 1f);
+      sample.Transform.localScale = sample.BaseScale * _harvestScaleRatio;
+      return sample.Serial;
+    }
+
+    public int CountPendingCareExperience(CareExperienceState state, bool includeCollecting = false)
+    {
+      var count = 0;
+      for (var i = 0; i < _blocks.Count; i++)
+      {
+        var block = _blocks[i];
+        if (block == null || block.CareExperienceState != state) continue;
+        if (block.State == BlockState.Converted || (includeCollecting && block.State == BlockState.Collecting)) count++;
+      }
+      return count;
+    }
+
+    public int GetPendingCareExperienceValue(bool includeCollecting = false)
+    {
+      var value = 0;
+      for (var i = 0; i < _blocks.Count; i++)
+      {
+        var block = _blocks[i];
+        if (block == null) continue;
+        if (block.State != BlockState.Converted && (!includeCollecting || block.State != BlockState.Collecting)) continue;
+        value += GetCareExperienceValue(block);
+      }
+      return value;
+    }
+
+    public int ConvertPendingCareExperience(CareExperienceState from, CareExperienceState to, int requestedCount)
+    {
+      if (from == to || requestedCount <= 0) return 0;
+      var candidates = new List<OrbitBlock>();
+      for (var i = 0; i < _blocks.Count; i++)
+      {
+        var block = _blocks[i];
+        if (block != null && block.State == BlockState.Converted && block.CareExperienceState == from)
+          candidates.Add(block);
+      }
+      candidates.Sort((a, b) => a.Serial.CompareTo(b.Serial));
+      var converted = Mathf.Min(requestedCount, candidates.Count);
+      for (var i = 0; i < converted; i++) SetCareExperienceState(candidates[i], to, true);
+      return converted;
     }
 
     public void NotifySoftFocusModuleActivated(FirstLevelModuleId moduleId)
@@ -749,6 +881,20 @@ namespace KeepBlinking.Gameplay
     public void PauseNormalSpawns(float seconds)
     {
       _normalSpawnPausedUntil = Mathf.Max(_normalSpawnPausedUntil, Time.time + Mathf.Max(0f, seconds));
+    }
+
+    public void BeginQuietReturnVisual(float seconds)
+    {
+      seconds = Mathf.Max(0f, seconds);
+      _normalSpawnPausedUntil = Mathf.Max(_normalSpawnPausedUntil, Time.time + seconds);
+      _quietFieldVisualUntil = Mathf.Max(_quietFieldVisualUntil, Time.time + seconds);
+    }
+
+    public void SetCareExperienceCollectionWave(int targetId, int wave)
+    {
+      var block = FindBlockById(targetId);
+      if (block != null && block.State == BlockState.Converted)
+        block.CareCollectionWave = Mathf.Clamp(wave, 0, 2);
     }
 
     public void AdvanceActiveSoftFocusTargets(float normalizedAmount)
@@ -769,6 +915,11 @@ namespace KeepBlinking.Gameplay
 
     public int SpawnCareRewardSamples(int count, bool gold)
     {
+      return SpawnCareRewardSamples(count, gold ? CareExperienceState.Rested : CareExperienceState.Raw);
+    }
+
+    public int SpawnCareRewardSamples(int count, CareExperienceState experienceState)
+    {
       count = Mathf.Max(0, count);
       if (count == 0 || _camera == null) return 0;
       var anchor = GetProgressBarFillWorldPosition() + Vector3.up * 1.35f;
@@ -779,9 +930,9 @@ namespace KeepBlinking.Gameplay
         var offset = new Vector3(Mathf.Cos(angle), Mathf.Sin(angle), 0f) * (count == 1 ? 0f : 0.34f);
         var sample = SpawnConvertedModuleSample(
           anchor + offset,
-          gold ? KeepBlinkingTheme.AccentWarm : KeepBlinkingTheme.AccentPrimary,
+          CareExperienceStateInfo.Color(experienceState),
           0,
-          gold);
+          experienceState);
         sample.State = BlockState.Collecting;
         sample.Renderer.sortingOrder = 70;
         if (sample.GlowRenderer != null) sample.GlowRenderer.sortingOrder = 69;
@@ -792,6 +943,53 @@ namespace KeepBlinking.Gameplay
         InvokeSignalSafely(ConvertedCollectionStarted, started, nameof(ConvertedCollectionStarted));
       }
       return started;
+    }
+
+    public bool StartCareCollectionFromSkip()
+    {
+      return StartCareCollectionFromExternalGate();
+    }
+
+    /// <summary>
+    /// Starts the existing bottle flight after Care Station's per-gesture
+    /// relative-distance gate succeeds. It intentionally does not read or
+    /// update the legacy session distance baseline.
+    /// </summary>
+    public bool StartCareCollectionFromGestureReference()
+    {
+      return StartCareCollectionFromExternalGate();
+    }
+
+    private bool StartCareCollectionFromExternalGate()
+    {
+      if (!_careRoundFlowEnabled || _firstLevelBossMode || !_careCollectionArmed || !HasCollectableSamples())
+      {
+        return false;
+      }
+
+      CareExperienceRewardEmitter.Instance?.FlushQueuedImmediately();
+      _careCollectionArmed = false;
+      _softFocusHiddenByPushAway = true;
+      var startedCollecting = StartCollectingConvertedSamples();
+      if (startedCollecting <= 0) return false;
+      ConfigureCareRoundExperienceRequirement(GetPendingCareExperienceValue(true));
+      _pushAwayReady = false;
+      ResetPushAwayInputState();
+      return true;
+    }
+
+    public void ClearPendingCareExperienceForDevelopment()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      for (var i = _blocks.Count - 1; i >= 0; i--)
+      {
+        var block = _blocks[i];
+        if (block == null || (block.State != BlockState.Converted && block.State != BlockState.Collecting)) continue;
+        if (block.GameObject != null) Destroy(block.GameObject);
+        _blocks.RemoveAt(i);
+      }
+      ConfigureCareRoundExperienceRequirement(1);
+#endif
     }
 
     public void SetFirstLevelModalPaused(bool paused, bool hidePresentation)
@@ -964,14 +1162,54 @@ namespace KeepBlinking.Gameplay
         return Array.Empty<int>();
       }
 
+      var upgrades = CareUpgradeController.Instance;
+      var twinTrails = false;
+      if (upgrades != null && upgrades.BossShardRainEnabled)
+      {
+        count *= 2;
+        twinTrails = true;
+        NotifyCareUpgradeActivated(FirstLevelModuleId.BossShardRain);
+      }
+      var state = upgrades != null && upgrades.BossMintCoreEnabled
+        ? CareExperienceState.Focused
+        : CareExperienceState.Raw;
+      if (state == CareExperienceState.Focused) NotifyCareUpgradeActivated(FirstLevelModuleId.BossMintCore);
+      return SpawnBossExperienceSamplesInternal(bossRoundId, count, anchorViewport, state, twinTrails);
+    }
+
+    public int[] SpawnBossBonusExperienceSamples(int bossRoundId, int count, Vector2 anchorViewport, CareExperienceState state)
+    {
+      return SpawnBossExperienceSamplesInternal(bossRoundId, count, anchorViewport, state);
+    }
+
+    private int[] SpawnBossExperienceSamplesInternal(
+      int bossRoundId,
+      int count,
+      Vector2 anchorViewport,
+      CareExperienceState state,
+      bool twinTrails = false)
+    {
+      if (!_firstLevelBossMode || bossRoundId <= 0 || count <= 0 || _camera == null) return Array.Empty<int>();
       var ids = new int[count];
       var anchor = _camera.ViewportToWorldPoint(
         new Vector3(Mathf.Clamp01(anchorViewport.x), Mathf.Clamp01(anchorViewport.y), _blockDepthFromCamera));
       for (var i = 0; i < count; i++)
       {
-        var angle = i * Mathf.PI * 2f / Mathf.Max(1, count);
-        var offset = new Vector3(Mathf.Cos(angle), Mathf.Sin(angle), 0f) * (0.24f + i * 0.035f);
-        ids[i] = SpawnConvertedModuleSample(anchor + offset, color, 0, false, bossRoundId).Serial;
+        Vector3 offset;
+        if (twinTrails)
+        {
+          var trail = i & 1;
+          var index = i / 2;
+          var trailCount = Mathf.CeilToInt(count * 0.5f);
+          var t = (index + 1f) / (trailCount + 1f);
+          offset = new Vector3(trail == 0 ? -0.24f : 0.24f, Mathf.Lerp(-0.42f, 0.42f, t), 0f);
+        }
+        else
+        {
+          var angle = i * Mathf.PI * 2f / Mathf.Max(1, count);
+          offset = new Vector3(Mathf.Cos(angle), Mathf.Sin(angle), 0f) * (0.24f + i * 0.035f);
+        }
+        ids[i] = SpawnConvertedModuleSample(anchor + offset, CareExperienceStateInfo.Color(state), 0, state, bossRoundId).Serial;
       }
 
       return ids;
@@ -1356,7 +1594,7 @@ namespace KeepBlinking.Gameplay
 
     private bool CanScheduleFormalFlow()
     {
-      return _gameFlowStarted &&
+      return !_careStationMode && _gameFlowStarted &&
              !_calibrationActive &&
              _distanceTracker.HasBaseline &&
              !_distanceTracker.IsTooClose &&
@@ -1407,9 +1645,6 @@ namespace KeepBlinking.Gameplay
       WarmExperienceSamplePool();
       CreateBackgroundVisual();
       EnsureDistanceCameraFeedback();
-      _softFocusField = SoftFocusFieldController.EnsureExists(this);
-      CareRhythmController.EnsureExists(this);
-      CareUpgradeController.EnsureExists(this);
       CreateGazeIndicator();
       CreatePlayerMarker();
       CreateCalibrationTarget();
@@ -1418,8 +1653,15 @@ namespace KeepBlinking.Gameplay
       CreateProgressBar();
       _distanceCameraFeedback?.RegisterHudRoot(_progressBarRoot);
       CreateFreezeFeedbackAudio();
-      EnsureModuleUpgradeView();
-      ScreenDownRestController.EnsureExists(this);
+      var careStation = CareStationController.EnsureExists(this);
+      if (careStation == null)
+      {
+        _softFocusField = SoftFocusFieldController.EnsureExists(this);
+        CareCircuitController.EnsureExists(this);
+        CareUpgradeController.EnsureExists(this);
+        EnsureModuleUpgradeView();
+        ScreenDownRestController.EnsureExists(this);
+      }
       realGazeScreenPosition = GetSafeInitialGazePosition();
       _rawGazeScreenPosition = realGazeScreenPosition;
       WarnIfEyeHardwareMissing();
@@ -1437,6 +1679,21 @@ namespace KeepBlinking.Gameplay
       UpdateFaceDistanceFromPlugin();
       UpdateDistanceSessionState();
       UpdateDistanceCameraFeedback();
+
+      // Care Station bottle flights are a settlement animation, not active
+      // gameplay input. They must keep advancing through reload recovery,
+      // Time.timeScale pauses and any stale legacy care/calibration flags.
+      if (_careStationMode && IsExperienceCollectionInProgress)
+      {
+        RemoveDeadBlocks();
+        UpdateProgressBarVisual();
+        UpdateCollectingBlocks();
+        UpdatePlayerMarker();
+        UpdateGazeIndicator();
+        UpdateBlackoutOverlay();
+        UpdateObservationMetrics();
+        return;
+      }
 
       if (_gameplayState == GameplayState.SessionReport)
       {
@@ -2564,11 +2821,12 @@ namespace KeepBlinking.Gameplay
              !_focusShiftActive &&
              !_guidedEyeMovementActive &&
              !_screenDownRestActive &&
-             !_careActionActive &&
+             (!_careActionActive || (_careStationMode && !_distanceTracker.HasBaseline)) &&
              !_calibrationActive &&
              !_sessionEnded &&
              !_firstLevelModalPaused &&
-             (!_firstLevelRandomFlowPaused ||
+             (_careStationMode ||
+              !_firstLevelRandomFlowPaused ||
               (_careRoundFlowEnabled && _careCollectionArmed) ||
               _firstLevelBossMode) &&
              !_firstLevelBossTransitionActive &&
@@ -2586,6 +2844,13 @@ namespace KeepBlinking.Gameplay
 
       _formalFlowInitialized = true;
       _sessionStartedAt = Time.time;
+      if (_careStationMode)
+      {
+        BlinkBootSequence.BeginPassiveCalibration();
+        CareStationController.Instance?.NotifyDistanceBaselineReady();
+        RefreshTutorialReadiness();
+        return;
+      }
       ScheduleNextSpawn(0.35f);
       ScheduleNextCrisis();
       BlinkBootSequence.BeginPassiveCalibration();
@@ -2611,6 +2876,18 @@ namespace KeepBlinking.Gameplay
     {
       if (_distanceCameraFeedback == null)
       {
+        return;
+      }
+
+      if (_careStationMode)
+      {
+        var safetyRatio = Mathf.Lerp(1.03f, 1.30f, _careStationAbsoluteNearAmount);
+        _distanceCameraFeedback.SetInput(
+          safetyRatio,
+          _careStationAbsoluteTooClose,
+          _careStationAbsoluteTooClose,
+          _careStationAbsoluteTooClose);
+        _distanceCameraFeedback.Tick(Time.unscaledDeltaTime);
         return;
       }
 
@@ -4453,7 +4730,7 @@ namespace KeepBlinking.Gameplay
       var startedCollecting = StartCollectingConvertedSamples();
       if (_careRoundFlowEnabled && !_firstLevelBossMode && !_tutorialMode && startedCollecting > 0)
       {
-        ConfigureCareRoundExperienceRequirement(startedCollecting);
+        ConfigureCareRoundExperienceRequirement(GetPendingCareExperienceValue(true));
       }
       _pushAwayReady = false;
     }
@@ -4496,7 +4773,9 @@ namespace KeepBlinking.Gameplay
         }
 
         block.State = BlockState.Collecting;
-        block.CollectionReleaseAt = Time.time + startedCollectingCount * Mathf.Max(0.01f, _careSampleReleaseInterval);
+        block.CollectionReleaseAt = Time.unscaledTime +
+                                    block.CareCollectionWave * 0.35f +
+                                    startedCollectingCount * Mathf.Max(0.01f, _careSampleReleaseInterval);
         block.IsHovered = false;
         block.Renderer.sortingOrder = 70;
         if (block.GlowRenderer != null)
@@ -4527,7 +4806,7 @@ namespace KeepBlinking.Gameplay
           continue;
         }
 
-        if (Time.time < block.CollectionReleaseAt) continue;
+        if (Time.unscaledTime < block.CollectionReleaseAt) continue;
 
         if (block.CareWaitingOverflowHidden)
         {
@@ -4538,21 +4817,25 @@ namespace KeepBlinking.Gameplay
         block.Transform.position = Vector3.Lerp(
           block.Transform.position,
           target,
-          1f - Mathf.Exp(-_sampleCollectSpeed * Time.deltaTime));
+          1f - Mathf.Exp(-_sampleCollectSpeed * Time.unscaledDeltaTime));
         block.Transform.localScale = Vector3.Lerp(
           block.Transform.localScale,
           block.BaseScale * 0.08f,
-          Time.deltaTime * _sampleCollectSpeed);
+          Time.unscaledDeltaTime * _sampleCollectSpeed);
+        var experienceFlightColor = block.CareCollectionWave > 0 &&
+                                    block.CareExperienceState == CareExperienceState.Raw
+          ? KeepBlinkingTheme.AccentPrimary
+          : CareExperienceStateInfo.Color(block.CareExperienceState);
         block.Renderer.color = Color.Lerp(
           block.Renderer.color,
-          ProgressFillColor,
-          Time.deltaTime * _sampleCollectSpeed);
+          experienceFlightColor,
+          Time.unscaledDeltaTime * _sampleCollectSpeed);
         if (block.GlowRenderer != null)
         {
           block.GlowRenderer.color = Color.Lerp(
             block.GlowRenderer.color,
-            KeepBlinkingTheme.WithAlpha(ProgressFillColor, 0.16f),
-            Time.deltaTime * _sampleCollectSpeed);
+            KeepBlinkingTheme.WithAlpha(experienceFlightColor, 0.2f),
+            Time.unscaledDeltaTime * _sampleCollectSpeed);
         }
 
         if (Vector2.Distance(block.Transform.position, target) <= _sampleCollectDistance)
@@ -4583,10 +4866,15 @@ namespace KeepBlinking.Gameplay
         }
       }
 
-      _collectedSampleCount++;
+      var experienceState = block.CareExperienceState;
+      var experienceValue = GetCareExperienceValue(block);
+      _collectedSampleCount += experienceValue;
       _totalSamplesCollected++;
       _sampleProgress = Mathf.Clamp01(_collectedSampleCount / (float)GetCurrentUpgradeSampleRequirement());
       UpdateProgressBarVisual();
+      InvokeSignalSafely(CareExperienceReachedBar, targetId, experienceState, experienceValue, nameof(CareExperienceReachedBar));
+      // Typed care XP must arrive first so the circuit includes the final sample's
+      // value before the legacy arrival signal advances the round.
       InvokeSignalSafely(ExperienceReachedBar, targetId, nameof(ExperienceReachedBar));
       InvokeSignalSafely(ExperienceProgressChanged, new ExperienceProgressSignal(
         _collectedSampleCount,
@@ -4601,10 +4889,18 @@ namespace KeepBlinking.Gameplay
         ActivateModuleEffect(FirstLevelModuleId.XpDiscount);
       }
 
-      if (_sampleProgress >= 1f)
+      if (_sampleProgress >= 1f && !_careStationMode)
       {
         BeginModuleUpgrade();
       }
+    }
+
+    private static int GetCareExperienceValue(OrbitBlock block)
+    {
+      if (block == null) return 0;
+      return block.CareExperienceValueOverride > 0
+        ? block.CareExperienceValueOverride
+        : CareExperienceStateInfo.Value(block.CareExperienceState);
     }
 
     private void TrackCrisisExperienceCollected(int crisisWaveId)
@@ -4814,11 +5110,24 @@ namespace KeepBlinking.Gameplay
       bool isGold,
       int bossRoundId = 0)
     {
+      return SpawnConvertedModuleSample(
+        worldPosition,
+        color,
+        crisisWaveId,
+        isGold ? CareExperienceState.Rested : CareExperienceState.Raw,
+        bossRoundId);
+    }
+
+    private OrbitBlock SpawnConvertedModuleSample(
+      Vector3 worldPosition,
+      Color color,
+      int crisisWaveId,
+      CareExperienceState experienceState,
+      int bossRoundId = 0)
+    {
       var sample = AcquireExperienceSample();
       var sampleObject = sample.GameObject;
-      sampleObject.name = isGold
-        ? $"Gold Care Sample {_spawnSerial + 1}"
-        : $"Care Experience Sample {_spawnSerial + 1}";
+      sampleObject.name = $"{CareExperienceStateInfo.Label(experienceState)} Sample {_spawnSerial + 1}";
       sampleObject.SetActive(true);
       var renderer = sample.Renderer;
       renderer.sprite = _dataSeedSprite;
@@ -4828,12 +5137,12 @@ namespace KeepBlinking.Gameplay
       var glowRenderer = sample.GlowRenderer;
       if (glowRenderer != null)
       {
-        glowRenderer.color = KeepBlinkingTheme.WithAlpha(color, isGold ? 0.2f : 0.13f);
+        glowRenderer.color = KeepBlinkingTheme.WithAlpha(color, experienceState == CareExperienceState.Rested ? 0.2f : 0.13f);
         glowRenderer.sortingOrder = 13;
         glowRenderer.transform.localScale = new Vector3(1.55f, 1.55f, 1f);
         glowRenderer.enabled = true;
       }
-      var size = isGold ? 0.7f : 0.58f;
+      var size = experienceState == CareExperienceState.Rested ? 0.7f : experienceState == CareExperienceState.Focused ? 0.64f : 0.58f;
       var baseScale = new Vector3(size, size, 1f);
       sampleObject.transform.position = worldPosition;
       sampleObject.transform.localScale = baseScale * _harvestScaleRatio;
@@ -4853,10 +5162,51 @@ namespace KeepBlinking.Gameplay
       sample.IsSoftFocused = false;
       sample.SoftFocusProgress = 0f;
       sample.CareWaitingOverflowHidden = false;
+      sample.CareExperienceState = experienceState;
+      sample.CareExperienceValueOverride = 0;
+      sample.CareCollectionWave = 0;
+      sample.ExperienceVisualRevision++;
 
       _blocks.Add(sample);
       _spawnSerial++;
       return sample;
+    }
+
+    private void SetCareExperienceState(OrbitBlock block, CareExperienceState state, bool animate)
+    {
+      if (block == null) return;
+      block.CareExperienceState = state;
+      block.ExperienceVisualRevision++;
+      var revision = block.ExperienceVisualRevision;
+      var target = CareExperienceStateInfo.Color(state);
+      var targetSize = state == CareExperienceState.Rested ? 0.7f : state == CareExperienceState.Focused ? 0.64f : 0.58f;
+      block.BaseScale = new Vector3(targetSize, targetSize, 1f);
+      block.GameObject.name = $"{CareExperienceStateInfo.Label(state)} Sample {block.Serial + 1}";
+      if (animate && block.GameObject.activeInHierarchy)
+        StartCoroutine(AnimateCareExperienceConversion(block, revision, target));
+      else
+      {
+        block.Renderer.color = target;
+        if (block.GlowRenderer != null) block.GlowRenderer.color = KeepBlinkingTheme.WithAlpha(target, state == CareExperienceState.Rested ? 0.2f : 0.13f);
+      }
+    }
+
+    private IEnumerator AnimateCareExperienceConversion(OrbitBlock block, int revision, Color target)
+    {
+      var startedAt = Time.unscaledTime;
+      var start = block.Renderer != null ? block.Renderer.color : target;
+      var startGlow = block.GlowRenderer != null ? block.GlowRenderer.color : Color.clear;
+      const float duration = 0.55f;
+      while (block != null && block.ExperienceVisualRevision == revision && Time.unscaledTime - startedAt < duration)
+      {
+        var t = Mathf.SmoothStep(0f, 1f, (Time.unscaledTime - startedAt) / duration);
+        if (block.Renderer != null) block.Renderer.color = Color.Lerp(start, target, t);
+        if (block.GlowRenderer != null) block.GlowRenderer.color = Color.Lerp(startGlow, KeepBlinkingTheme.WithAlpha(target, 0.2f), t);
+        yield return null;
+      }
+      if (block == null || block.ExperienceVisualRevision != revision) yield break;
+      if (block.Renderer != null) block.Renderer.color = target;
+      if (block.GlowRenderer != null) block.GlowRenderer.color = KeepBlinkingTheme.WithAlpha(target, 0.2f);
     }
 
     private void WarmExperienceSamplePool()
@@ -5417,6 +5767,29 @@ namespace KeepBlinking.Gameplay
         try
         {
           ((Action<TFirst, TSecond>)handlers[i]).Invoke(first, second);
+        }
+        catch (Exception exception)
+        {
+          Debug.LogError($"KeepBlinking gameplay signal subscriber failed: {signalName}.", this);
+          Debug.LogException(exception, this);
+        }
+      }
+    }
+
+    private void InvokeSignalSafely<TFirst, TSecond, TThird>(
+      Action<TFirst, TSecond, TThird> signal,
+      TFirst first,
+      TSecond second,
+      TThird third,
+      string signalName)
+    {
+      if (signal == null) return;
+      var handlers = signal.GetInvocationList();
+      for (var i = 0; i < handlers.Length; i++)
+      {
+        try
+        {
+          ((Action<TFirst, TSecond, TThird>)handlers[i]).Invoke(first, second, third);
         }
         catch (Exception exception)
         {
@@ -6847,6 +7220,10 @@ namespace KeepBlinking.Gameplay
       public bool IsPooledExperienceSample;
       public bool CareWaitingOverflowHidden;
       public float CollectionReleaseAt = -1f;
+      public CareExperienceState CareExperienceState = CareExperienceState.Raw;
+      public int CareExperienceValueOverride;
+      public int ExperienceVisualRevision;
+      public int CareCollectionWave;
 
       public OrbitBlock(
         GameObject gameObject,

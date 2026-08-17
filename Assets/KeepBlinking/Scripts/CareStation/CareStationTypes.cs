@@ -1,0 +1,1324 @@
+using System;
+
+namespace KeepBlinking.CareStation
+{
+  public interface ICareActionExecution
+  {
+    CareActionType ActionType { get; }
+    CareActionStage Stage { get; }
+    string DisplayName { get; }
+    float Progress { get; }
+    float RemainingSeconds { get; }
+    int RemainingSteps { get; }
+    bool RequiresCamera { get; }
+    bool RequiresDevicePose { get; }
+    CareActionPauseReason PauseReason { get; }
+    event Action<CareActionType> CareActionCompleted;
+  }
+
+  public enum CareActionType
+  {
+    None,
+    ScreenDown,
+    ClosedEyeRest,
+    FocusShift,
+    GuidedEyeCircles,
+  }
+
+  public enum CareRecipeType
+  {
+    Training,
+    Single,
+    Double,
+    Triple,
+    Inspection,
+  }
+
+  [Serializable]
+  public sealed class CareRecipeSaveData
+  {
+    public string recipeId;
+    public int recipeSeed;
+    public CareRecipeType recipeType;
+    public CareActionType[] actionList = Array.Empty<CareActionType>();
+    // The immutable authored/generated steps. actionList may be safely changed
+    // by CHANGE STEP, while this list preserves what was replaced.
+    public CareActionType[] originalActionList = Array.Empty<CareActionType>();
+    public int currentActionIndex;
+    public int completedActionMask;
+    public int developerSkippedActionMask;
+    public int replacedActionMask;
+    public int createdShiftId;
+    public bool recipeCompleted;
+    public bool completionSignalSent;
+    public bool completionConsumed;
+
+    public int ActionCount => actionList?.Length ?? 0;
+    public CareActionType CurrentAction => !recipeCompleted && actionList != null &&
+      currentActionIndex >= 0 && currentActionIndex < actionList.Length
+        ? actionList[currentActionIndex]
+        : CareActionType.None;
+
+    public bool IsStepCompleted(int index)
+    {
+      return index >= 0 && index < 31 && (completedActionMask & (1 << index)) != 0;
+    }
+
+    public bool IsStepDeveloperSkipped(int index)
+    {
+      return index >= 0 && index < 31 && (developerSkippedActionMask & (1 << index)) != 0;
+    }
+
+    public bool IsStepReplaced(int index)
+    {
+      return index >= 0 && index < 31 && (replacedActionMask & (1 << index)) != 0;
+    }
+
+    public CareActionType OriginalActionAt(int index)
+    {
+      return originalActionList != null && index >= 0 && index < originalActionList.Length
+        ? originalActionList[index]
+        : actionList != null && index >= 0 && index < actionList.Length
+          ? actionList[index]
+          : CareActionType.None;
+    }
+
+    public void Reset()
+    {
+      recipeId = string.Empty;
+      recipeSeed = 0;
+      recipeType = CareRecipeType.Training;
+      actionList = Array.Empty<CareActionType>();
+      originalActionList = Array.Empty<CareActionType>();
+      currentActionIndex = 0;
+      completedActionMask = 0;
+      developerSkippedActionMask = 0;
+      replacedActionMask = 0;
+      createdShiftId = 0;
+      recipeCompleted = false;
+      completionSignalSent = false;
+      completionConsumed = false;
+    }
+  }
+
+  public enum CareActionStage
+  {
+    Preparing,
+    Demonstrating,
+    WaitingForStart,
+    Active,
+    Paused,
+    Completed,
+    Cancelled,
+  }
+
+  public enum CareActionPauseReason
+  {
+    None,
+    ApplicationBackground,
+    ApplicationFocusLost,
+    TrackingLost,
+    SensorUnavailable,
+    DistanceUnavailable,
+    EyesOpen,
+    ScreenReturned,
+    TooClose,
+    Manual,
+  }
+
+  public enum CareActionCompletionSource
+  {
+    None,
+    SensorCompleted,
+    DeveloperSkipped,
+  }
+
+  public enum CareDistanceDirection
+  {
+    None,
+    Closer,
+    Away,
+  }
+
+  public enum CareDistanceFallbackReason
+  {
+    None,
+    ChangedBelowThreshold,
+    SensorUnavailable,
+  }
+
+  public enum CareActionInternalPhase
+  {
+    None,
+    ScreenDownDemo,
+    ScreenDownWait,
+    ScreenDownRest,
+    ScreenDownReturn,
+    ClosedEyePrompt,
+    ClosedEyeActive,
+    ClosedEyeWaitReopen,
+    FocusReference,
+    FocusNeutralStart,
+    FocusNearOne,
+    FocusFarOne,
+    FocusNearTwo,
+    FocusFarTwo,
+    FocusNeutralFinish,
+    GuidedPreviewClockwise,
+    GuidedPreviewCounterClockwise,
+    GuidedPromptClose,
+    GuidedClockwise,
+    GuidedPause,
+    GuidedCounterClockwise,
+    GuidedRelax,
+    GuidedWaitReopen,
+  }
+
+  [Serializable]
+  public sealed class CareActionSaveData
+  {
+    public CareActionType actionType;
+    public CareActionStage stage = CareActionStage.Preparing;
+    public CareActionInternalPhase internalPhase;
+    public CareActionPauseReason pauseReason;
+    public float elapsedSeconds;
+    public float phaseElapsedSeconds;
+    public float holdElapsedSeconds;
+    public int focusTargetStep;
+    public int guidedStage;
+    public float gestureReferenceScale;
+    public bool gestureReferenceValid;
+    public float distanceDirectionProgress;
+    public CareDistanceFallbackReason distanceFallbackReason;
+    public bool closeRequestCuePlayed;
+    public bool completionSignalEmitted;
+    public CareActionCompletionSource completionSource;
+
+    public bool CountsAsVerifiedCareAction => completionSource == CareActionCompletionSource.SensorCompleted;
+
+    public void Reset()
+    {
+      actionType = CareActionType.None;
+      stage = CareActionStage.Preparing;
+      internalPhase = CareActionInternalPhase.None;
+      pauseReason = CareActionPauseReason.None;
+      elapsedSeconds = 0f;
+      phaseElapsedSeconds = 0f;
+      holdElapsedSeconds = 0f;
+      focusTargetStep = 0;
+      guidedStage = 0;
+      gestureReferenceScale = 0f;
+      gestureReferenceValid = false;
+      distanceDirectionProgress = 0f;
+      distanceFallbackReason = CareDistanceFallbackReason.None;
+      closeRequestCuePlayed = false;
+      completionSignalEmitted = false;
+      completionSource = CareActionCompletionSource.None;
+    }
+  }
+
+  public readonly struct CareActionInputFrame
+  {
+    public readonly bool ApplicationActive;
+    public readonly bool TrackingValid;
+    public readonly bool EyesClosed;
+    public readonly bool DeviceSensorAvailable;
+    public readonly bool ScreenDown;
+    public readonly bool ScreenReturned;
+    public readonly bool DistanceReferenceValid;
+    public readonly float DistanceRatio;
+    public readonly bool DistanceSampleFresh;
+    public readonly float DistanceSampleDeltaSeconds;
+
+    public CareActionInputFrame(
+      bool applicationActive,
+      bool trackingValid,
+      bool eyesClosed,
+      bool deviceSensorAvailable,
+      bool screenDown,
+      bool screenReturned,
+      bool distanceReferenceValid,
+      float distanceRatio)
+      : this(
+        applicationActive,
+        trackingValid,
+        eyesClosed,
+        deviceSensorAvailable,
+        screenDown,
+        screenReturned,
+        distanceReferenceValid,
+        distanceRatio,
+        true,
+        -1f)
+    {
+    }
+
+    public CareActionInputFrame(
+      bool applicationActive,
+      bool trackingValid,
+      bool eyesClosed,
+      bool deviceSensorAvailable,
+      bool screenDown,
+      bool screenReturned,
+      bool distanceReferenceValid,
+      float distanceRatio,
+      bool distanceSampleFresh)
+      : this(
+        applicationActive,
+        trackingValid,
+        eyesClosed,
+        deviceSensorAvailable,
+        screenDown,
+        screenReturned,
+        distanceReferenceValid,
+        distanceRatio,
+        distanceSampleFresh,
+        -1f)
+    {
+    }
+
+    public CareActionInputFrame(
+      bool applicationActive,
+      bool trackingValid,
+      bool eyesClosed,
+      bool deviceSensorAvailable,
+      bool screenDown,
+      bool screenReturned,
+      bool distanceReferenceValid,
+      float distanceRatio,
+      bool distanceSampleFresh,
+      float distanceSampleDeltaSeconds)
+    {
+      ApplicationActive = applicationActive;
+      TrackingValid = trackingValid;
+      EyesClosed = eyesClosed;
+      DeviceSensorAvailable = deviceSensorAvailable;
+      ScreenDown = screenDown;
+      ScreenReturned = screenReturned;
+      DistanceReferenceValid = distanceReferenceValid;
+      DistanceRatio = distanceRatio;
+      DistanceSampleFresh = distanceSampleFresh;
+      DistanceSampleDeltaSeconds = distanceSampleDeltaSeconds;
+    }
+  }
+
+  public enum CareStationState
+  {
+    Dormant,
+    LoadingSave,
+    WelcomeBack,
+    PresentIncident,
+    WaitIncidentSelection,
+    PromptCareAction,
+    WaitCareActionStart,
+    CareActionInProgress,
+    CareActionPaused,
+    CareActionCompleted,
+    RepairReveal,
+    WaitPushAwayReady,
+    WaitPushAway,
+    CollectingExperience,
+    WaitExperienceCollected,
+    UpgradeSelection,
+    ShiftComplete,
+    AutoShift,
+    StationWorking,
+    ProduceBottles,
+    PresentOfflineBottles,
+    WaitOfflinePushAway,
+    CollectingOfflineBottles,
+    WaitOfflineBottlesStored,
+    WaitReturnToNeutral,
+    PresentCareBottles,
+    WaitCarePushAway,
+    CollectingCareBottles,
+    WaitCareBottlesStored,
+    WaitStorageSpace,
+    UpgradeCheck,
+    InspectionPreparing,
+    InspectionPassed,
+    PreCareCheck,
+    PostCareCheck,
+    CareReport,
+    OfflineProductionSummary,
+    WaitDistanceResetMoveAway,
+    WaitDistanceResetReturn,
+  }
+
+  public enum CareStationIncidentType
+  {
+    None,
+    Dust,
+    DrySpot,
+    EyeGunk,
+  }
+
+  public enum CareStationUpgradeId
+  {
+    None,
+    MoreWorkers,
+    LargerStorage,
+    BiggerCart,
+  }
+
+  [Serializable]
+  public struct CareStationUpgradeCost
+  {
+    public int fullBottles;
+    public int goldBottles;
+
+    public CareStationUpgradeCost(int full, int gold)
+    {
+      fullBottles = Math.Max(0, full);
+      goldBottles = Math.Max(0, gold);
+    }
+  }
+
+  public enum CareStationUpgradeAvailabilityReason
+  {
+    Available,
+    MaximumLevel,
+    MissingResources,
+    StorageCapacityTooSmall,
+  }
+
+  public readonly struct CareStationUpgradeAvailability
+  {
+    public readonly CareStationUpgradeAvailabilityReason Reason;
+    public readonly CareStationUpgradeCost Cost;
+    public readonly int MissingFull;
+    public readonly int MissingGold;
+
+    public bool CanPurchase => Reason == CareStationUpgradeAvailabilityReason.Available;
+    public bool IsMaximum => Reason == CareStationUpgradeAvailabilityReason.MaximumLevel;
+
+    public CareStationUpgradeAvailability(
+      CareStationUpgradeAvailabilityReason reason,
+      CareStationUpgradeCost cost,
+      int missingFull,
+      int missingGold)
+    {
+      Reason = reason;
+      Cost = cost;
+      MissingFull = Math.Max(0, missingFull);
+      MissingGold = Math.Max(0, missingGold);
+    }
+
+    public string PlayerReason
+    {
+      get
+      {
+        if (Reason == CareStationUpgradeAvailabilityReason.MaximumLevel) return "MAX";
+        if (Reason == CareStationUpgradeAvailabilityReason.StorageCapacityTooSmall)
+          return "UPGRADE STORAGE FIRST";
+        if (Reason != CareStationUpgradeAvailabilityReason.MissingResources) return string.Empty;
+        if (MissingFull > 0 && MissingGold > 0) return $"NEED {MissingFull} FULL + {MissingGold} GOLD";
+        if (MissingFull > 0) return $"NEED {MissingFull} FULL";
+        return MissingGold > 0 ? $"NEED {MissingGold} GOLD" : string.Empty;
+      }
+    }
+  }
+
+  /// <summary>
+  /// One serialized source of truth for all station upgrade values and costs.
+  /// Array element zero is Level 1; cost element zero purchases Level 2.
+  /// </summary>
+  [Serializable]
+  public sealed class CareStationUpgradeConfiguration
+  {
+    public int[] workerValues = { 2, 3, 4, 5 };
+    public int[] storageValues = { 24, 36, 48, 72 };
+    public int[] cartValues = { 4, 6, 8, 12 };
+    public CareStationUpgradeCost[] workerCosts =
+    {
+      new CareStationUpgradeCost(12, 0),
+      new CareStationUpgradeCost(24, 1),
+      new CareStationUpgradeCost(40, 2),
+    };
+    public CareStationUpgradeCost[] storageCosts =
+    {
+      new CareStationUpgradeCost(10, 0),
+      new CareStationUpgradeCost(20, 1),
+      new CareStationUpgradeCost(36, 2),
+    };
+    public CareStationUpgradeCost[] cartCosts =
+    {
+      new CareStationUpgradeCost(10, 0),
+      new CareStationUpgradeCost(22, 1),
+      new CareStationUpgradeCost(36, 2),
+    };
+
+    public const int MaximumLevel = 4;
+
+    public int Value(CareStationUpgradeId upgrade, int level)
+    {
+      level = Math.Max(1, Math.Min(MaximumLevel, level));
+      var values = upgrade == CareStationUpgradeId.MoreWorkers
+        ? workerValues
+        : upgrade == CareStationUpgradeId.LargerStorage ? storageValues : cartValues;
+      var fallback = upgrade == CareStationUpgradeId.MoreWorkers
+        ? new[] { 2, 3, 4, 5 }
+        : upgrade == CareStationUpgradeId.LargerStorage
+          ? new[] { 24, 36, 48, 72 }
+          : new[] { 4, 6, 8, 12 };
+      return values != null && values.Length >= MaximumLevel
+        ? Math.Max(1, values[level - 1])
+        : fallback[level - 1];
+    }
+
+    public CareStationUpgradeCost Cost(CareStationUpgradeId upgrade, int currentLevel)
+    {
+      currentLevel = Math.Max(1, Math.Min(MaximumLevel, currentLevel));
+      if (currentLevel >= MaximumLevel) return new CareStationUpgradeCost(0, 0);
+      var costs = upgrade == CareStationUpgradeId.MoreWorkers
+        ? workerCosts
+        : upgrade == CareStationUpgradeId.LargerStorage ? storageCosts : cartCosts;
+      if (costs != null && costs.Length >= MaximumLevel - 1) return costs[currentLevel - 1];
+      var defaults = upgrade == CareStationUpgradeId.MoreWorkers
+        ? new[] { new CareStationUpgradeCost(12, 0), new CareStationUpgradeCost(24, 1), new CareStationUpgradeCost(40, 2) }
+        : upgrade == CareStationUpgradeId.LargerStorage
+          ? new[] { new CareStationUpgradeCost(10, 0), new CareStationUpgradeCost(20, 1), new CareStationUpgradeCost(36, 2) }
+          : new[] { new CareStationUpgradeCost(10, 0), new CareStationUpgradeCost(22, 1), new CareStationUpgradeCost(36, 2) };
+      return defaults[currentLevel - 1];
+    }
+  }
+
+  public enum CareStationPushAwayCompletion
+  {
+    None,
+    SensorCompleted,
+    FallbackCompleted,
+    NoOfflineReward,
+  }
+
+  public enum CareStationReturnCompletion
+  {
+    None,
+    SensorCompleted,
+    ReturnFallbackCompleted,
+  }
+
+  public enum CareStationEventType
+  {
+    ShiftCompleted,
+    ShiftEnded,
+    CareStepChangeRequested,
+    CareStepReplaced,
+  }
+
+  [Serializable]
+  public sealed class CareStationEventRecord
+  {
+    public CareStationEventType eventType;
+    public int shiftId;
+    public string recordedUtc;
+    public CareActionType originalAction;
+    public CareActionType replacementAction;
+    public CareActionPauseReason pauseReason;
+  }
+
+  [Serializable]
+  public sealed class CareSubjectiveScores
+  {
+    public int comfort = -1;
+    public int dryness = -1;
+    public int eyeStrain = -1;
+    public int focusDifficulty = -1;
+    public bool submitted;
+    public bool skipped;
+
+    public bool HasAllResponses => comfort >= 0 && comfort <= 10 &&
+      dryness >= 0 && dryness <= 4 && eyeStrain >= 0 && eyeStrain <= 4 &&
+      focusDifficulty >= 0 && focusDifficulty <= 4;
+    public bool IsResolved => submitted || skipped;
+
+    public CareSubjectiveScores Clone()
+    {
+      return new CareSubjectiveScores
+      {
+        comfort = comfort,
+        dryness = dryness,
+        eyeStrain = eyeStrain,
+        focusDifficulty = focusDifficulty,
+        submitted = submitted,
+        skipped = skipped,
+      };
+    }
+
+    public void Sanitize()
+    {
+      comfort = comfort < 0 ? -1 : Math.Min(10, comfort);
+      dryness = dryness < 0 ? -1 : Math.Min(4, dryness);
+      eyeStrain = eyeStrain < 0 ? -1 : Math.Min(4, eyeStrain);
+      focusDifficulty = focusDifficulty < 0 ? -1 : Math.Min(4, focusDifficulty);
+      if (skipped)
+      {
+        comfort = -1;
+        dryness = -1;
+        eyeStrain = -1;
+        focusDifficulty = -1;
+        submitted = false;
+      }
+      else if (submitted && !HasAllResponses)
+      {
+        submitted = false;
+      }
+    }
+  }
+
+  public enum CareStationCollectionPhase
+  {
+    None,
+    Offline,
+    Care,
+  }
+
+  public enum CareCrewState
+  {
+    Idle,
+    Walk,
+    Work,
+    Carry,
+    Rest,
+    Cheer,
+  }
+
+  [Serializable]
+  public sealed class CareStationSaveData
+  {
+    public int saveVersion = 15;
+    public int currentShift = 1;
+    public int careShiftId = 1;
+    public CareStationState currentState = CareStationState.Dormant;
+    public string lastActiveUtc;
+    public string lastClaimedUtc;
+    public int pendingOfflineXP;
+    public int queuedOfflineXP;
+    public int pendingIncidentXP;
+    public CareStationIncidentType selectedIncident;
+    public float careActionElapsed;
+    public bool careActionCompleted;
+    public bool pushAwayCompleted;
+    public CareStationPushAwayCompletion pushAwayCompletion;
+    public int collectedExperienceCount;
+    public CareStationUpgradeId selectedUpgrade;
+    public int stationConstructionState;
+    public int crewCount = 2;
+    public int storageHours = 24;
+    public int cartCapacity = 4;
+    public int workerLevel = 1;
+    public int storageLevel = 1;
+    public int cartLevel = 1;
+    public int storedFullBottles;
+    public int storedGoldBottles;
+    public bool offlineProductionPausedByFullStorage;
+    public int discardedOfflineBottleCount;
+    public bool careCollectionReleased;
+    public bool inspectionTriggered;
+    public bool inspectionActive;
+    public int inspectionCurrentCheck;
+    public int inspectionCompletedMask;
+    public bool inspectionRewardProduced;
+    public bool inspectionRewardStored;
+    public bool inspectionCompleted;
+    public bool inspectionCompletionSignalSent;
+    public int stationLevel = 1;
+    public bool upgradeOffered;
+    public bool shiftIncidentGenerated;
+    public int completedShifts;
+    public int unlockedUpgradeMask;
+    public int pendingGoldBottleCount;
+    public int collectedOfflineBottleValue;
+    public int collectedCareBottleValue;
+    public CareStationPushAwayCompletion offlinePushAwayCompletion;
+    public CareStationPushAwayCompletion carePushAwayCompletion;
+    public CareStationReturnCompletion offlineReturnCompletion;
+    public CareStationReturnCompletion careReturnCompletion;
+    public CareStationCollectionPhase activeCollectionPhase;
+    public CareStationCollectionPhase pendingReturnPhase;
+    public bool offlineCollectionResolved;
+    public bool returnedNeutralAfterOffline;
+    public int shiftSupplyGeneratedForShiftId;
+    public CareStationPushAwayCompletion offlineRewardReason;
+    public float careActionGestureReferenceScale;
+    public bool careActionReferenceValid;
+    public float offlinePushReferenceScale;
+    public bool offlinePushReferenceValid;
+    public float carePushReferenceScale;
+    public bool carePushReferenceValid;
+    public CareDistanceFallbackReason offlineAwayFallbackReason;
+    public CareDistanceFallbackReason offlineCloserFallbackReason;
+    public CareDistanceFallbackReason careAwayFallbackReason;
+    public CareDistanceFallbackReason careCloserFallbackReason;
+    public CareActionSaveData careAction = new CareActionSaveData();
+    public int trainingProgress;
+    public int formalRecipesCreated;
+    public CareRecipeSaveData currentRecipe = new CareRecipeSaveData();
+    public string[] recentRecipeHistory = Array.Empty<string>();
+    public int focusShiftCooldownUntilShiftId;
+    public int guidedEyeCirclesCooldownUntilShiftId;
+    public bool careShiftCompleted;
+    public bool autoShiftEntered;
+    public bool shiftCompleteRewardsShown;
+    public bool endShiftConsumed;
+    // v9 AutoShift advanced the ID before showing the idle station. This marker
+    // lets migrated saves reuse that reserved identity instead of skipping one.
+    public bool nextShiftPrepared;
+    public int shiftStoredFullBottles;
+    public int shiftStoredGoldBottles;
+    public bool careStepChangePending;
+    public bool careStepWasReplaced;
+    public CareActionType replacedOriginalAction;
+    public CareActionType replacedWithAction;
+    public CareActionPauseReason replacementPauseReason;
+    public CareStationEventRecord[] eventHistory = Array.Empty<CareStationEventRecord>();
+    public string currentResearchSessionId;
+    public string anonymousParticipantId;
+    public string researchSessionStartedUtc;
+    public string currentSessionEventRecordReference;
+    public CareSubjectiveScores preCareScores = new CareSubjectiveScores();
+    public CareSubjectiveScores postCareScores = new CareSubjectiveScores();
+    public bool careReportShown;
+    public bool careReportConsumed;
+    public bool researchSessionExported;
+    public float sessionActiveCareSeconds;
+    public float sessionClosedEyeSeconds;
+    public int sessionFocusShiftCompletions;
+    public int sessionTrackingLostCount;
+    public float sessionTrackingLostSeconds;
+    public int lastOfflineStoredFullBottles;
+    public int lastOfflineStoredGoldBottles;
+    public float lastOfflineWorkedSeconds;
+    public bool offlineSummaryConsumed;
+    public float distanceResetReferenceScale;
+    public bool distanceResetReferenceValid;
+    public float distanceResetAwayScale;
+    public bool distanceResetAwayCompleted;
+    public bool distanceResetCompleted;
+
+    public DateTime ReadLastActiveUtc(DateTime fallback)
+    {
+      return ParseUtc(lastActiveUtc, fallback);
+    }
+
+    public DateTime ReadLastClaimedUtc(DateTime fallback)
+    {
+      return ParseUtc(lastClaimedUtc, fallback);
+    }
+
+    public void StampActive(DateTime utcNow)
+    {
+      lastActiveUtc = utcNow.ToUniversalTime().ToString("O");
+    }
+
+    public void StampClaimed(DateTime utcNow)
+    {
+      lastClaimedUtc = utcNow.ToUniversalTime().ToString("O");
+    }
+
+    private static DateTime ParseUtc(string value, DateTime fallback)
+    {
+      return DateTime.TryParse(value, null, System.Globalization.DateTimeStyles.RoundtripKind, out var parsed)
+        ? parsed.ToUniversalTime()
+        : fallback.ToUniversalTime();
+    }
+  }
+
+  public readonly struct CareStationOfflineResult
+  {
+    public readonly TimeSpan CreditedDuration;
+    public readonly int ExperienceMade;
+    public readonly int BuildCompleteCount;
+    public readonly int HelpNeededCount;
+
+    public CareStationOfflineResult(TimeSpan duration, int xp, int builds, int help)
+    {
+      CreditedDuration = duration;
+      ExperienceMade = Math.Max(0, xp);
+      BuildCompleteCount = Math.Max(0, builds);
+      HelpNeededCount = Math.Max(0, help);
+    }
+
+    public bool HasAnything => ExperienceMade > 0 || BuildCompleteCount > 0 || HelpNeededCount > 0;
+  }
+
+  public static class CareStationOfflineCalculator
+  {
+    public static CareStationOfflineResult Calculate(
+      DateTime lastClaimedUtc,
+      DateTime nowUtc,
+      float minimumMinutes,
+      float maximumHours,
+      float xpPerHour,
+      bool incidentAlreadyGenerated)
+    {
+      var elapsed = nowUtc.ToUniversalTime() - lastClaimedUtc.ToUniversalTime();
+      if (elapsed <= TimeSpan.Zero || elapsed.TotalMinutes < Math.Max(1f, minimumMinutes))
+        return new CareStationOfflineResult(TimeSpan.Zero, 0, 0, 0);
+
+      var creditedHours = Math.Min(elapsed.TotalHours, Math.Max(0.5, maximumHours));
+      var credited = TimeSpan.FromHours(creditedHours);
+      var xp = (int)Math.Floor(creditedHours * Math.Max(0f, xpPerHour));
+      var builds = creditedHours >= 4d ? 1 : 0;
+      var help = incidentAlreadyGenerated ? 0 : 1;
+      return new CareStationOfflineResult(credited, xp, builds, help);
+    }
+  }
+
+  public readonly struct CareStationOfflineStorageResult
+  {
+    public readonly int Accepted;
+    public readonly int Discarded;
+    public readonly bool StorageFull;
+
+    public CareStationOfflineStorageResult(int accepted, int discarded, bool storageFull)
+    {
+      Accepted = Math.Max(0, accepted);
+      Discarded = Math.Max(0, discarded);
+      StorageFull = storageFull;
+    }
+  }
+
+  /// <summary>
+  /// Offline production is capacity-limited. Verified care rewards deliberately
+  /// stay outside this limiter so they can remain pending until space exists.
+  /// </summary>
+  public static class CareStationStorageRules
+  {
+    public static int Capacity(CareStationSaveData save)
+    {
+      return save == null ? 24 : Math.Max(1, save.storageHours);
+    }
+
+    public static int Stored(CareStationSaveData save)
+    {
+      return save == null ? 0 : Math.Max(0, save.storedFullBottles) + Math.Max(0, save.storedGoldBottles);
+    }
+
+    public static int Remaining(CareStationSaveData save)
+    {
+      return Math.Max(0, Capacity(save) - Stored(save));
+    }
+
+    public static int RemainingForOfflineProduction(CareStationSaveData save)
+    {
+      if (save == null) return 0;
+      var reserved = Math.Max(0, save.pendingOfflineXP) + Math.Max(0, save.queuedOfflineXP);
+      return Math.Max(0, Capacity(save) - Stored(save) - reserved);
+    }
+
+    public static int RemainingForAutomaticOfflineSettlement(CareStationSaveData save)
+    {
+      if (save == null) return 0;
+      // A completed care routine is a verified player reward and must not be
+      // displaced by legacy/offline output during migration or foreground
+      // settlement. The offline queue may wait; the care flight may not vanish.
+      var pendingCare = save.careActionCompleted
+        ? Math.Max(0, save.pendingIncidentXP - save.collectedCareBottleValue)
+        : 0;
+      return Math.Max(0, Remaining(save) - pendingCare);
+    }
+
+    public static CareStationOfflineStorageResult LimitOfflineProduction(CareStationSaveData save, int produced)
+    {
+      produced = Math.Max(0, produced);
+      var available = RemainingForOfflineProduction(save);
+      var accepted = Math.Min(produced, available);
+      return new CareStationOfflineStorageResult(
+        accepted,
+        produced - accepted,
+        accepted >= available || produced > accepted || Remaining(save) <= 0);
+    }
+
+    public static int CollectibleNow(CareStationSaveData save, int pending)
+    {
+      return Math.Min(Math.Max(0, pending), Remaining(save));
+    }
+  }
+
+  /// <summary>
+  /// Describes the runtime work needed to resume an interrupted bottle flight.
+  /// Persisted arrival values remain the source of truth; scene objects only
+  /// represent the still-unsettled portion and may safely be rebuilt.
+  /// </summary>
+  public readonly struct CareStationCollectionRecoveryPlan
+  {
+    public readonly int RemainingValue;
+    public readonly int AvailableStorage;
+    public readonly int CollectibleValue;
+    public readonly int ExistingRuntimeValue;
+    public readonly int MissingRuntimeValue;
+
+    public bool StorageBlocked => RemainingValue > 0 && AvailableStorage <= 0;
+    public bool RequiresRuntimeRebuild => MissingRuntimeValue > 0 && !StorageBlocked;
+
+    public CareStationCollectionRecoveryPlan(
+      int remainingValue,
+      int availableStorage,
+      int collectibleValue,
+      int existingRuntimeValue,
+      int missingRuntimeValue)
+    {
+      RemainingValue = Math.Max(0, remainingValue);
+      AvailableStorage = Math.Max(0, availableStorage);
+      CollectibleValue = Math.Max(0, collectibleValue);
+      ExistingRuntimeValue = Math.Max(0, existingRuntimeValue);
+      MissingRuntimeValue = Math.Max(0, missingRuntimeValue);
+    }
+  }
+
+  public static class CareStationCollectionRecoveryRules
+  {
+    public static CareStationCollectionRecoveryPlan Plan(
+      CareStationSaveData save,
+      int remainingValue,
+      int runtimeUnsettledValue)
+    {
+      var remaining = Math.Max(0, remainingValue);
+      var available = CareStationStorageRules.Remaining(save);
+      var collectible = Math.Min(remaining, available);
+      var existing = Math.Min(collectible, Math.Max(0, runtimeUnsettledValue));
+      return new CareStationCollectionRecoveryPlan(
+        remaining,
+        available,
+        collectible,
+        existing,
+        Math.Max(0, collectible - existing));
+    }
+  }
+
+  public static class CareStationInspectionRules
+  {
+    public const int FilterCheck = 1;
+    public const int FlowCheck = 2;
+    public const int CoreCheck = 4;
+    public const int AllChecks = FilterCheck | FlowCheck | CoreCheck;
+
+    public static bool CanSchedule(CareStationSaveData save)
+    {
+      return save != null && !save.inspectionTriggered && !save.inspectionCompleted &&
+             save.trainingProgress >= 4 && save.workerLevel >= 2 &&
+             save.storageLevel >= 2 && save.cartLevel >= 2 &&
+             save.pendingOfflineXP <= 0 && save.queuedOfflineXP <= 0 &&
+             save.pendingIncidentXP <= 0 && save.pendingGoldBottleCount <= 0 &&
+             save.currentState == CareStationState.AutoShift &&
+             save.careShiftCompleted && save.endShiftConsumed;
+    }
+
+    public static CareRecipeSaveData CreateRecipe(int shiftId)
+    {
+      var actions = new[]
+      {
+        CareActionType.ScreenDown,
+        CareActionType.FocusShift,
+        CareActionType.GuidedEyeCircles,
+        CareActionType.ClosedEyeRest,
+      };
+      return new CareRecipeSaveData
+      {
+        recipeId = $"station_inspection_{Math.Max(1, shiftId)}",
+        recipeSeed = unchecked(Math.Max(1, shiftId) * 486187739),
+        recipeType = CareRecipeType.Inspection,
+        actionList = actions,
+        originalActionList = (CareActionType[])actions.Clone(),
+        createdShiftId = Math.Max(1, shiftId),
+      };
+    }
+
+    public static int CompletedCheckMask(int completedActionIndex, bool recipeCompleted)
+    {
+      if (completedActionIndex <= 0) return FilterCheck;
+      if (completedActionIndex == 1) return FilterCheck | FlowCheck;
+      return recipeCompleted ? AllChecks : FilterCheck | FlowCheck;
+    }
+  }
+
+  public readonly struct CareStationActionStep
+  {
+    public readonly float Elapsed;
+    public readonly bool PausedForTracking;
+    public readonly bool PausedForOpenEyes;
+    public readonly bool Completed;
+
+    public CareStationActionStep(float elapsed, bool trackingPause, bool openPause, bool completed)
+    {
+      Elapsed = Math.Max(0f, elapsed);
+      PausedForTracking = trackingPause;
+      PausedForOpenEyes = openPause;
+      Completed = completed;
+    }
+  }
+
+  public static class CareStationActionLogic
+  {
+    public static CareStationActionStep AdvanceClosedEyeRest(
+      float elapsed,
+      float delta,
+      float requiredSeconds,
+      bool trackingValid,
+      bool eyesClosed)
+    {
+      if (!trackingValid) return new CareStationActionStep(elapsed, true, false, false);
+      if (!eyesClosed) return new CareStationActionStep(elapsed, false, true, false);
+      var next = Math.Min(Math.Max(0.1f, requiredSeconds), Math.Max(0f, elapsed) + Math.Max(0f, delta));
+      return new CareStationActionStep(next, false, false, next >= Math.Max(0.1f, requiredSeconds));
+    }
+  }
+
+  public sealed class CareStationExperienceLedger
+  {
+    public int ExpectedValue { get; private set; }
+    public int CollectedValue { get; private set; }
+    public int Arrivals { get; private set; }
+    public bool IsComplete => ExpectedValue > 0 && CollectedValue >= ExpectedValue;
+
+    public void Begin(int expectedValue)
+    {
+      ExpectedValue = Math.Max(0, expectedValue);
+      CollectedValue = 0;
+      Arrivals = 0;
+    }
+
+    public void RecordArrival(int value)
+    {
+      if (value <= 0 || IsComplete) return;
+      CollectedValue = Math.Min(ExpectedValue, CollectedValue + value);
+      Arrivals++;
+    }
+  }
+
+  public static class CareStationShiftRules
+  {
+    public const int AllUpgradeMask = 0b111;
+
+    public static CareStationIncidentType IncidentForShift(int shift)
+    {
+      shift = Math.Max(1, shift);
+      switch (shift)
+      {
+        case 1: return CareStationIncidentType.Dust;
+        case 2: return CareStationIncidentType.DrySpot;
+        case 3: return CareStationIncidentType.EyeGunk;
+      }
+
+      // A stable shift-seeded choice gives a varied endless loop without changing
+      // the incident when a saved game is opened again.
+      var seededIndex = Math.Abs(unchecked(shift * 1103515245 + 12345)) % 3;
+      return seededIndex == 0
+        ? CareStationIncidentType.Dust
+        : seededIndex == 1 ? CareStationIncidentType.DrySpot : CareStationIncidentType.EyeGunk;
+    }
+
+    public static int IncidentExperience(int shift)
+    {
+      return IncidentExperience(IncidentForShift(shift));
+    }
+
+    public static int IncidentExperience(CareStationIncidentType incident)
+    {
+      switch (incident)
+      {
+        case CareStationIncidentType.Dust: return 12;
+        case CareStationIncidentType.DrySpot: return 24;
+        case CareStationIncidentType.EyeGunk: return 36;
+        default: return 0;
+      }
+    }
+
+    public static int UpgradeBit(CareStationUpgradeId upgrade)
+    {
+      return upgrade == CareStationUpgradeId.None ? 0 : 1 << ((int)upgrade - 1);
+    }
+
+    public static bool HasUpgrade(CareStationSaveData save, CareStationUpgradeId upgrade)
+    {
+      return GetUpgradeLevel(save, upgrade) > 1;
+    }
+
+    public static bool HasAvailableUpgrade(CareStationSaveData save)
+    {
+      return save != null &&
+             (save.workerLevel < CareStationUpgradeConfiguration.MaximumLevel ||
+              save.storageLevel < CareStationUpgradeConfiguration.MaximumLevel ||
+              save.cartLevel < CareStationUpgradeConfiguration.MaximumLevel);
+    }
+
+    public static void ApplyUpgrade(CareStationSaveData save, CareStationUpgradeId upgrade)
+    {
+      ApplyUpgradeWithoutCost(save, upgrade, new CareStationUpgradeConfiguration());
+    }
+
+    public static int GetUpgradeLevel(CareStationSaveData save, CareStationUpgradeId upgrade)
+    {
+      if (save == null) return 1;
+      switch (upgrade)
+      {
+        case CareStationUpgradeId.MoreWorkers: return Math.Max(1, Math.Min(4, save.workerLevel));
+        case CareStationUpgradeId.LargerStorage: return Math.Max(1, Math.Min(4, save.storageLevel));
+        case CareStationUpgradeId.BiggerCart: return Math.Max(1, Math.Min(4, save.cartLevel));
+        default: return 1;
+      }
+    }
+
+    public static bool CanPurchaseUpgrade(
+      CareStationSaveData save,
+      CareStationUpgradeId upgrade,
+      CareStationUpgradeConfiguration configuration)
+    {
+      return EvaluateUpgrade(save, upgrade, configuration).CanPurchase;
+    }
+
+    public static CareStationUpgradeAvailability EvaluateUpgrade(
+      CareStationSaveData save,
+      CareStationUpgradeId upgrade,
+      CareStationUpgradeConfiguration configuration)
+    {
+      if (save == null || upgrade == CareStationUpgradeId.None)
+        return new CareStationUpgradeAvailability(
+          CareStationUpgradeAvailabilityReason.MissingResources,
+          default,
+          0,
+          0);
+      configuration = configuration ?? new CareStationUpgradeConfiguration();
+      var level = GetUpgradeLevel(save, upgrade);
+      if (level >= CareStationUpgradeConfiguration.MaximumLevel)
+        return new CareStationUpgradeAvailability(
+          CareStationUpgradeAvailabilityReason.MaximumLevel,
+          default,
+          0,
+          0);
+      var cost = configuration.Cost(upgrade, level);
+      if (cost.fullBottles + cost.goldBottles > CareStationStorageRules.Capacity(save))
+        return new CareStationUpgradeAvailability(
+          CareStationUpgradeAvailabilityReason.StorageCapacityTooSmall,
+          cost,
+          Math.Max(0, cost.fullBottles - save.storedFullBottles),
+          Math.Max(0, cost.goldBottles - save.storedGoldBottles));
+      var missingFull = Math.Max(0, cost.fullBottles - save.storedFullBottles);
+      var missingGold = Math.Max(0, cost.goldBottles - save.storedGoldBottles);
+      return new CareStationUpgradeAvailability(
+        missingFull <= 0 && missingGold <= 0
+          ? CareStationUpgradeAvailabilityReason.Available
+          : CareStationUpgradeAvailabilityReason.MissingResources,
+        cost,
+        missingFull,
+        missingGold);
+    }
+
+    public static bool TryPurchaseUpgrade(
+      CareStationSaveData save,
+      CareStationUpgradeId upgrade,
+      CareStationUpgradeConfiguration configuration)
+    {
+      configuration = configuration ?? new CareStationUpgradeConfiguration();
+      var availability = EvaluateUpgrade(save, upgrade, configuration);
+      if (!availability.CanPurchase) return false;
+      var level = GetUpgradeLevel(save, upgrade);
+      var cost = availability.Cost;
+      save.storedFullBottles -= cost.fullBottles;
+      save.storedGoldBottles -= cost.goldBottles;
+      ApplyUpgradeWithoutCost(save, upgrade, configuration);
+      return true;
+    }
+
+    public static void SynchronizeUpgradeValues(
+      CareStationSaveData save,
+      CareStationUpgradeConfiguration configuration)
+    {
+      if (save == null) return;
+      configuration = configuration ?? new CareStationUpgradeConfiguration();
+      save.workerLevel = Math.Max(1, Math.Min(4, save.workerLevel));
+      save.storageLevel = Math.Max(1, Math.Min(4, save.storageLevel));
+      save.cartLevel = Math.Max(1, Math.Min(4, save.cartLevel));
+      save.crewCount = configuration.Value(CareStationUpgradeId.MoreWorkers, save.workerLevel);
+      save.storageHours = configuration.Value(CareStationUpgradeId.LargerStorage, save.storageLevel);
+      save.cartCapacity = configuration.Value(CareStationUpgradeId.BiggerCart, save.cartLevel);
+      save.unlockedUpgradeMask = 0;
+      if (save.workerLevel > 1) save.unlockedUpgradeMask |= UpgradeBit(CareStationUpgradeId.MoreWorkers);
+      if (save.storageLevel > 1) save.unlockedUpgradeMask |= UpgradeBit(CareStationUpgradeId.LargerStorage);
+      if (save.cartLevel > 1) save.unlockedUpgradeMask |= UpgradeBit(CareStationUpgradeId.BiggerCart);
+      save.collectedExperienceCount = Math.Max(0, save.storedFullBottles + save.storedGoldBottles);
+    }
+
+    public static float ProductionRateMultiplier(CareStationSaveData save)
+    {
+      if (save == null) return 1f;
+      return Math.Max(0.1f, save.crewCount / 2f) * Math.Max(0.1f, save.cartCapacity / 4f);
+    }
+
+    public static int ConcurrentCartCount(CareStationSaveData save)
+    {
+      return save == null ? 0 : Math.Max(0, save.crewCount);
+    }
+
+    private static void ApplyUpgradeWithoutCost(
+      CareStationSaveData save,
+      CareStationUpgradeId upgrade,
+      CareStationUpgradeConfiguration configuration)
+    {
+      if (save == null || upgrade == CareStationUpgradeId.None) return;
+      var level = GetUpgradeLevel(save, upgrade);
+      if (level >= CareStationUpgradeConfiguration.MaximumLevel) return;
+      save.selectedUpgrade = upgrade;
+      switch (upgrade)
+      {
+        case CareStationUpgradeId.MoreWorkers:
+          save.workerLevel = level + 1;
+          break;
+        case CareStationUpgradeId.LargerStorage:
+          save.storageLevel = level + 1;
+          break;
+        case CareStationUpgradeId.BiggerCart:
+          save.cartLevel = level + 1;
+          break;
+      }
+      SynchronizeUpgradeValues(save, configuration);
+    }
+
+    public static bool EnsureShiftSupply(CareStationSaveData save)
+    {
+      if (save == null || save.offlineCollectionResolved || save.pendingOfflineXP > 0) return false;
+      save.careShiftId = Math.Max(1, save.careShiftId);
+      if (save.shiftSupplyGeneratedForShiftId == save.careShiftId)
+      {
+        // A generated supply which has not been stored must survive reload;
+        // the generated marker is the idempotency key for this shift.
+        if (save.offlinePushAwayCompletion == CareStationPushAwayCompletion.None)
+        {
+          save.pendingOfflineXP = 1;
+          save.collectedOfflineBottleValue = 0;
+          save.offlineRewardReason = CareStationPushAwayCompletion.NoOfflineReward;
+        }
+        return false;
+      }
+
+      save.pendingOfflineXP = 1;
+      save.collectedOfflineBottleValue = 0;
+      save.shiftSupplyGeneratedForShiftId = save.careShiftId;
+      save.offlineRewardReason = CareStationPushAwayCompletion.NoOfflineReward;
+      save.offlinePushAwayCompletion = CareStationPushAwayCompletion.None;
+      return true;
+    }
+
+    public static bool TryBeginNextShift(
+      CareStationSaveData save,
+      bool validOfflineInterval,
+      bool developmentOverride = false)
+    {
+      if (save == null || save.currentState != CareStationState.AutoShift ||
+          !save.careShiftCompleted || !save.endShiftConsumed ||
+          (!validOfflineInterval && !developmentOverride)) return false;
+      if (!save.nextShiftPrepared)
+      {
+        save.currentShift = Math.Max(1, save.currentShift + 1);
+        save.careShiftId = Math.Max(1, save.careShiftId + 1);
+      }
+      save.nextShiftPrepared = false;
+      return true;
+    }
+  }
+
+  public static class CareStationEventLog
+  {
+    private const int MaximumRecords = 64;
+
+    public static void Append(
+      CareStationSaveData save,
+      CareStationEventType eventType,
+      DateTime utcNow,
+      CareActionType originalAction = CareActionType.None,
+      CareActionType replacementAction = CareActionType.None,
+      CareActionPauseReason pauseReason = CareActionPauseReason.None)
+    {
+      if (save == null) return;
+      var previous = save.eventHistory ?? Array.Empty<CareStationEventRecord>();
+      var keep = Math.Min(previous.Length, MaximumRecords - 1);
+      var records = new CareStationEventRecord[keep + 1];
+      var sourceStart = Math.Max(0, previous.Length - keep);
+      if (keep > 0) Array.Copy(previous, sourceStart, records, 0, keep);
+      records[keep] = new CareStationEventRecord
+      {
+        eventType = eventType,
+        shiftId = Math.Max(1, save.careShiftId),
+        recordedUtc = utcNow.ToUniversalTime().ToString("O"),
+        originalAction = originalAction,
+        replacementAction = replacementAction,
+        pauseReason = pauseReason,
+      };
+      save.eventHistory = records;
+    }
+  }
+
+  public static class CareStationStateRules
+  {
+    public static bool CanEnterRepairReveal(bool careActionCompleted)
+    {
+      return careActionCompleted;
+    }
+
+    public static bool CanSettleExperience(bool experienceReachedBar)
+    {
+      return experienceReachedBar;
+    }
+
+    public static bool CanOfferStationUpgrade(int shift, bool allExperienceCollected, CareStationUpgradeId selected)
+    {
+      return shift == 3 && allExperienceCollected && selected == CareStationUpgradeId.None;
+    }
+
+    public static bool CanOfferStationUpgrade(int completedShift, bool allExperienceCollected, int unlockedUpgradeMask)
+    {
+      return completedShift > 0 && completedShift % 3 == 0 && allExperienceCollected &&
+             (unlockedUpgradeMask & CareStationShiftRules.AllUpgradeMask) != CareStationShiftRules.AllUpgradeMask;
+    }
+
+    public static bool CanOfferStationUpgrade(
+      int completedShift,
+      bool allExperienceCollected,
+      CareStationSaveData save)
+    {
+      return completedShift > 0 && completedShift % 3 == 0 && allExperienceCollected &&
+             CareStationShiftRules.HasAvailableUpgrade(save);
+    }
+
+    public static bool CanOfferPushAwayFallback(CareStationState state, float elapsedSeconds, float delaySeconds)
+    {
+      return (state == CareStationState.WaitPushAwayReady ||
+              state == CareStationState.WaitPushAway ||
+              state == CareStationState.WaitOfflinePushAway ||
+              state == CareStationState.WaitCarePushAway) &&
+             elapsedSeconds >= Math.Max(0f, delaySeconds);
+    }
+
+    public static bool CanOfferReturnFallback(CareStationState state, float elapsedSeconds, float delaySeconds)
+    {
+      return state == CareStationState.WaitReturnToNeutral &&
+             elapsedSeconds >= Math.Max(0f, delaySeconds);
+    }
+
+    public static bool RequiresOfflineCollection(int pendingOfflineBottleValue, bool offlineCollectionResolved)
+    {
+      return pendingOfflineBottleValue > 0 && !offlineCollectionResolved;
+    }
+
+    public static bool CanPresentIncident(bool offlineCollectionResolved, bool returnedNeutralAfterOffline)
+    {
+      return offlineCollectionResolved && returnedNeutralAfterOffline;
+    }
+
+    public static bool CanArmCollection(
+      CareStationCollectionPhase phase,
+      bool careActionCompleted,
+      bool returnedNeutralAfterOffline)
+    {
+      if (phase == CareStationCollectionPhase.Offline) return !careActionCompleted;
+      if (phase == CareStationCollectionPhase.Care) return careActionCompleted && returnedNeutralAfterOffline;
+      return false;
+    }
+
+    public static bool LegacyRandomFlowEnabled(bool careStationMode)
+    {
+      return !careStationMode;
+    }
+  }
+}

@@ -533,7 +533,7 @@ MonoBehaviour:
   _pushAwayDistanceThreshold: 0.6
   _pushAwayRelativeThreshold: 0.72
   _pushAwayAbsoluteDrop: 0.18
-  _pushAwayHoldSeconds: 0.25
+  _pushAwayHoldSeconds: 0.5
   _pushAwayReadyRelativeThreshold: 0.9
   _pushAwayReadyHoldSeconds: 0.35
   _faceDistanceSmoothSpeed: 8

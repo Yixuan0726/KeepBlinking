@@ -84,6 +84,11 @@ namespace KeepBlinking.Gameplay
         ? _worldCamera.orthographicSize / _defaultOrthographicSize
         : 1f;
 
+    public void SetTooCloseStatusVisible(bool visible)
+    {
+      _showTooCloseStatus = visible;
+    }
+
     public void Configure(Camera worldCamera, SpriteRenderer backgroundRenderer)
     {
       if (_worldCamera != worldCamera)

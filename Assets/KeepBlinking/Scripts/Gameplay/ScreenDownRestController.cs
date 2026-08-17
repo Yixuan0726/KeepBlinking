@@ -124,6 +124,11 @@ namespace KeepBlinking.Gameplay
     private int _storedGoldFragments;
     private bool _simulateScreenDown;
     private bool _simulateReturn;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    private float _developmentTimeMultiplier = 1f;
+#endif
+    private bool _stationUse;
+    private float _configuredRestDuration;
     private AudioSource _audioSource;
     private AudioClip _completionClip;
 
@@ -165,6 +170,7 @@ namespace KeepBlinking.Gameplay
         return;
       }
       Instance = this;
+      _configuredRestDuration = _restDuration;
       _view = gameObject.AddComponent<ScreenDownRestView>();
       CreateCompletionAudio();
     }
@@ -181,6 +187,20 @@ namespace KeepBlinking.Gameplay
 
     public bool StartRoundRest()
     {
+      _stationUse = false;
+      _restDuration = Mathf.Max(1f, _configuredRestDuration);
+      return StartRestInternal();
+    }
+
+    public bool StartStationRest(float durationSeconds)
+    {
+      _stationUse = true;
+      _restDuration = Mathf.Max(1f, durationSeconds);
+      return StartRestInternal();
+    }
+
+    private bool StartRestInternal()
+    {
       if (IsActive) return false;
       _wasSkipped = false;
       _restElapsed = 0f;
@@ -193,7 +213,7 @@ namespace KeepBlinking.Gameplay
       _gameplay?.SetFirstLevelModalPaused(true, true);
       ResolveAndEnableSensors();
       SetState(ScreenDownRestState.WaitingForCameraReady);
-      _view?.Show();
+      if (!_stationUse) _view?.Show();
       ScreenDownRestStarted?.Invoke();
       return true;
     }
@@ -213,6 +233,25 @@ namespace KeepBlinking.Gameplay
       if (!IsActive) return;
       _wasSkipped = true;
       SetState(ScreenDownRestState.SeedBloom);
+    }
+
+    public void CancelStationRestForDevelopment()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      if (!_stationUse || !IsActive) return;
+      _gameplay?.SetScreenDownRestActive(false);
+      _gameplay?.SetFirstLevelModalPaused(false, false);
+      _view?.Hide();
+      _stationUse = false;
+      SetState(ScreenDownRestState.Dormant);
+#endif
+    }
+
+    public void SetDevelopmentTimeMultiplier(float multiplier)
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      _developmentTimeMultiplier = Mathf.Clamp(multiplier, 1f, 20f);
+#endif
     }
 
     public void ShowReturnNeutralPrompt(string prompt)
@@ -252,6 +291,9 @@ namespace KeepBlinking.Gameplay
 
       if (!IsActive) return;
       var delta = Time.unscaledDeltaTime;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      if (_stationUse) delta *= _developmentTimeMultiplier;
+#endif
       UpdateState(delta);
       _view?.Render(State, RestProgress, _simulateScreenDown, _simulateReturn);
     }
@@ -273,13 +315,13 @@ namespace KeepBlinking.Gameplay
             break;
           }
           if (!TryCaptureInitialOrientation(true)) break;
-          SetState(ScreenDownRestState.RestSeedIntro);
+          SetState(_stationUse ? ScreenDownRestState.PromptScreenDown : ScreenDownRestState.RestSeedIntro);
           break;
         case ScreenDownRestState.RestSeedIntro:
           if (StateElapsed >= _restSeedIntroSeconds) SetState(ScreenDownRestState.PromptScreenDown);
           break;
         case ScreenDownRestState.PromptScreenDown:
-          if (StateElapsed >= 0.7f) SetState(ScreenDownRestState.WaitScreenDown);
+          if (StateElapsed >= (_stationUse ? 0.2f : 0.7f)) SetState(ScreenDownRestState.WaitScreenDown);
           break;
         case ScreenDownRestState.WaitScreenDown:
           if (IsScreenDownAndStable(delta))
@@ -329,7 +371,11 @@ namespace KeepBlinking.Gameplay
           if (IsFaceReady())
           {
             _faceReturnHeldSeconds += delta;
-            if (_faceReturnHeldSeconds >= _faceReturnHoldSeconds) SetState(ScreenDownRestState.SeedBloom);
+            if (_faceReturnHeldSeconds >= _faceReturnHoldSeconds)
+            {
+              if (_stationUse) FinishOpening();
+              else SetState(ScreenDownRestState.SeedBloom);
+            }
           }
           else
           {
@@ -513,7 +559,7 @@ namespace KeepBlinking.Gameplay
       _gameplay?.SetScreenDownRestActive(false);
       SoftFocusFieldController.Instance?.SetCareInteractionPaused(false);
       _gameplay?.SetFirstLevelModalPaused(false, false);
-      _view?.Hide();
+      if (!_stationUse) _view?.Hide();
       if (_wasSkipped)
       {
         SetState(ScreenDownRestState.Skipped);

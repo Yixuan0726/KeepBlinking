@@ -66,6 +66,7 @@ namespace KeepBlinking.Gameplay
     private int _roundSerial;
     private int _currentRoundId;
     private int _expectedRoundSampleCount;
+    private bool _finalGoldReleaseSpawned;
 
     public DryCoreBossState State => _state;
     public bool IsActive => _state != DryCoreBossState.Inactive && _state != DryCoreBossState.Completed;
@@ -110,6 +111,7 @@ namespace KeepBlinking.Gameplay
       _dryCoreDefeatedEmitted = false;
       _bossRewardCompletedEmitted = false;
       _firstBossDefeatedEmitted = false;
+      _finalGoldReleaseSpawned = false;
       _gameplay.BeginFirstLevelBossMode();
       _view.Show();
       _view.SetFragmentFeedbackCount(0);
@@ -377,6 +379,11 @@ namespace KeepBlinking.Gameplay
       _resolvingRestModules = false;
 
       var requestedDamage = 1 + Mathf.Max(0, _pendingExtraCoreDamage);
+      if (CareUpgradeController.Instance != null && CareUpgradeController.Instance.BossCoreEchoEnabled)
+      {
+        requestedDamage++;
+        _gameplay.NotifyCareUpgradeActivated(FirstLevelModuleId.BossCoreEcho);
+      }
       if (_completedCycles == 0)
       {
         requestedDamage = Mathf.Min(requestedDamage, Mathf.Max(1, _remainingCores - 1));
@@ -495,6 +502,17 @@ namespace KeepBlinking.Gameplay
       else if (_state == DryCoreBossState.Defeated &&
                _defeatedRewardState == DefeatedRewardState.WaitPushAway)
       {
+        if (!_finalGoldReleaseSpawned && CareUpgradeController.Instance != null && CareUpgradeController.Instance.BossGoldReleaseEnabled)
+        {
+          _finalGoldReleaseSpawned = true;
+          _gameplay.SpawnBossBonusExperienceSamples(
+            _currentRoundId,
+            8,
+            _view.BossViewportAnchor,
+            CareExperienceState.Rested);
+          _expectedRoundSampleCount = _gameplay.GetPendingBossExperienceSampleCount(_currentRoundId);
+          _gameplay.NotifyCareUpgradeActivated(FirstLevelModuleId.BossGoldRelease);
+        }
         _view.SetPrompt(DryCoreBossPrompt.None);
         SetDefeatedRewardState(DefeatedRewardState.WaitExperienceCollected);
       }

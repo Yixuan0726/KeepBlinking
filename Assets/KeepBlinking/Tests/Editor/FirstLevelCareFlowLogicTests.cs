@@ -183,7 +183,7 @@ namespace KeepBlinking.Tests
     }
 
     [Test]
-    public void DefaultCareRoundsHaveTheExpectedRealFragmentBudgets()
+    public void DefaultCareCircuitKeepsFocusNodesVisualAndUsesTypedPendingBudgets()
     {
       var horizontal = FirstLevelCareRewardPlan.DirectionalFragments(
         CareMovementDirection.Left,
@@ -197,12 +197,14 @@ namespace KeepBlinking.Tests
       Assert.That(vertical, Is.EqualTo(14));
       Assert.That(focusShift, Is.EqualTo(40));
       Assert.That(horizontal + vertical + focusShift, Is.EqualTo(68));
+      // Focus Shift's 40 nodes are visual guidance; it transforms existing XP
+      // rather than creating 40 Raw samples.
       Assert.That(2 + horizontal + 8, Is.EqualTo(24));
-      Assert.That(2 + focusShift + 8, Is.EqualTo(50));
-      Assert.That(2 + horizontal + vertical + focusShift + 8, Is.EqualTo(78));
-      Assert.That((2 + horizontal + 8) + (2 + vertical + 8) +
-                  (2 + focusShift + 8) + (2 + horizontal + vertical + focusShift + 8),
-        Is.EqualTo(176));
+      Assert.That(2 + vertical + 8, Is.EqualTo(24));
+      Assert.That(2 + 8, Is.EqualTo(10));
+      Assert.That(2 + horizontal + vertical + 8, Is.EqualTo(38));
+      Assert.That(24 + 24 + 10 + 38, Is.EqualTo(96));
+      Assert.That(46 + 46 + 28 + 66, Is.EqualTo(186), "Base typed XP value across all four rounds.");
     }
 
     [Test]
@@ -306,7 +308,7 @@ namespace KeepBlinking.Tests
     }
 
     [Test]
-    public void CareExperiencePoolsAreSizedAboveTheLargestSeventyEightFragmentRound()
+    public void CareExperiencePoolsCoverTheLargestLegalFirstLevelBuild()
     {
       var gameplayRoot = new GameObject("Care Pool Capacity Test");
       var emitterRoot = new GameObject("Care Feedback Pool Test");
@@ -314,7 +316,7 @@ namespace KeepBlinking.Tests
       {
         var gameplay = gameplayRoot.AddComponent<EdgeOrbitHarvestMvp>();
         var emitter = emitterRoot.AddComponent<CareExperienceRewardEmitter>();
-        Assert.That(GetInt(gameplay, "_experienceSamplePoolCapacity"), Is.GreaterThanOrEqualTo(90));
+        Assert.That(GetInt(gameplay, "_experienceSamplePoolCapacity"), Is.GreaterThanOrEqualTo(120));
         Assert.That(GetFloat(gameplay, "_careSampleReleaseInterval"), Is.InRange(0.03f, 0.06f));
         Assert.That(GetInt(emitter, "_floatingTextPoolCapacity"), Is.InRange(3, 4));
       }

@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using KeepBlinking.Gameplay;
+using KeepBlinking.CareStation;
 using UnityEngine;
 
 namespace KeepBlinking.Input
@@ -66,10 +67,21 @@ namespace KeepBlinking.Input
     private double _nextReferenceSwitchAt;
     private float _latestL2CSLatencyMilliseconds = -1f;
     private bool _offScreenSamplingRequested;
+    private bool _careStationSuppressed;
 
     public GazeProviderMode Mode => _mode;
     public bool IsTestRunning => _phase != TestPhase.Idle && _phase != TestPhase.Complete;
     public string L2CSStatus => _l2cs.IsAvailable ? "READY" : _l2cs.FailureReason;
+
+    public void SetCareStationSuppressed(bool suppressed)
+    {
+      _careStationSuppressed = suppressed;
+      if (!suppressed) return;
+      _showDevelopmentOverlay = false;
+      _offScreenSamplingRequested = false;
+      _phase = TestPhase.Idle;
+      _mode = GazeProviderMode.Current;
+    }
 
     public static GazeProviderComparisonController EnsureExists()
     {
@@ -270,6 +282,7 @@ namespace KeepBlinking.Input
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
     private void OnGUI()
     {
+      if (_careStationSuppressed || CareStationController.Instance != null) return;
       if (_phase == TestPhase.FreeLook)
       {
         DrawFreeLookTest();

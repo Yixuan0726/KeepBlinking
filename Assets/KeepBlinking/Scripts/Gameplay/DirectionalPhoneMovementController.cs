@@ -263,6 +263,7 @@ namespace KeepBlinking.Gameplay
     public static event Action<CareMovementDirection, float> DirectionalProgressChanged;
     public static event Action<CareMovementDirection> DirectionalStepCompleted;
     public static event Action<DirectionalPhoneRoutine> DirectionalMovementCompleted;
+    public static event Action<DirectionalPhoneRoutine> DirectionalMovementSkipped;
 
     public DirectionalPhoneMovementState State { get; private set; } = DirectionalPhoneMovementState.Dormant;
     public DirectionalPhoneAxis CurrentAxis => _axis;
@@ -353,6 +354,16 @@ namespace KeepBlinking.Gameplay
       SetState(DirectionalPhoneMovementState.Preparing, "HOLD STEADY");
       DirectionalMovementStarted?.Invoke(routine);
       return true;
+    }
+
+    public void Skip()
+    {
+      if (!IsActive) return;
+      var skippedRoutine = _routine;
+      State = DirectionalPhoneMovementState.Completed;
+      _emitter?.SetEmissionPaused(false);
+      _view?.Hide();
+      DirectionalMovementSkipped?.Invoke(skippedRoutine);
     }
 
     private void Update()

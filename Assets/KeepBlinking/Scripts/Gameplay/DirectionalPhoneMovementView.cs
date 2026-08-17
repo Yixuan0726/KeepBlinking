@@ -7,7 +7,7 @@ namespace KeepBlinking.Gameplay
 {
   public sealed class DirectionalPhoneMovementView : MonoBehaviour
   {
-    private readonly List<Image> _trackNodes = new List<Image>(16);
+    private readonly List<Image> _trackNodes = new List<Image>(48);
     private CanvasGroup _group;
     private RectTransform _trackRoot;
     private RectTransform _phoneRoot;
@@ -22,6 +22,7 @@ namespace KeepBlinking.Gameplay
     private DirectionalPhoneAxis _axis;
     private DirectionalPhoneMovementState _state;
     private int _nodeCount = 14;
+    private int _trailCount = 1;
 
     private void Awake()
     {
@@ -48,21 +49,25 @@ namespace KeepBlinking.Gameplay
     public void ConfigureAxis(DirectionalPhoneAxis axis, int nodeCount)
     {
       _axis = axis;
-      _nodeCount = Mathf.Clamp(nodeCount, 12, Mathf.Min(16, _trackNodes.Count));
+      _nodeCount = Mathf.Clamp(nodeCount, 12, 16);
+      _trailCount = Mathf.Clamp(CareUpgradeController.Instance != null ? CareUpgradeController.Instance.MoveTrailCount : 1, 1, 3);
       _trackRoot.gameObject.SetActive(true);
-      for (var i = 0; i < _trackNodes.Count; i++)
+      for (var index = 0; index < _trackNodes.Count; index++)
       {
-        var node = _trackNodes[i];
-        var visible = i < _nodeCount;
+        var row = index / 16;
+        var i = index % 16;
+        var node = _trackNodes[index];
+        var visible = row < _trailCount && i < _nodeCount;
         node.gameObject.SetActive(visible);
         if (!visible) continue;
         var t = _nodeCount <= 1 ? 0.5f : i / (float)(_nodeCount - 1);
         node.rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
         node.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
         node.rectTransform.pivot = new Vector2(0.5f, 0.5f);
+        var cross = (row - (_trailCount - 1) * 0.5f) * 38f;
         node.rectTransform.anchoredPosition = axis == DirectionalPhoneAxis.Horizontal
-          ? new Vector2(Mathf.Lerp(-270f, 270f, t), 0f)
-          : new Vector2(0f, Mathf.Lerp(-235f, 235f, t));
+          ? new Vector2(Mathf.Lerp(-270f, 270f, t), cross)
+          : new Vector2(cross, Mathf.Lerp(-235f, 235f, t));
         node.rectTransform.sizeDelta = new Vector2(31f, 31f);
         node.color = KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.TextPrimary, 0.16f);
       }
@@ -199,13 +204,23 @@ namespace KeepBlinking.Gameplay
         var reached = maxProgress + 0.0001f >= threshold;
         var current = !reached && i == Mathf.Clamp(Mathf.FloorToInt(maxProgress * _nodeCount), 0, _nodeCount - 1);
         var color = reached
-          ? KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.AccentPrimary, 0.92f)
+          ? KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.TextPrimary, 0.92f)
           : KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.TextPrimary, current ? 0.34f : 0.16f);
-        _trackNodes[i].color = color;
         var pulse = reached && endpointHolding && i == _nodeCount - 1
           ? 1f + Mathf.Sin(Time.unscaledTime * 3f) * 0.08f
           : 1f;
-        _trackNodes[i].rectTransform.localScale = Vector3.one * pulse;
+        for (var row = 0; row < _trailCount; row++)
+        {
+          var node = _trackNodes[row * 16 + i];
+          var isTripleSideTrail = _trailCount == 3 && row != 1;
+          var isPrimaryTrail = _trailCount == 1 || (_trailCount == 3 && row == 1);
+          node.color = isPrimaryTrail
+            ? color
+            : KeepBlinkingTheme.WithAlpha(
+              isTripleSideTrail ? KeepBlinkingTheme.AccentPrimary : KeepBlinkingTheme.TextPrimary,
+              reached ? (isTripleSideTrail ? 0.5f : 0.76f) : current ? 0.26f : 0.12f);
+          node.rectTransform.localScale = Vector3.one * pulse;
+        }
       }
     }
 
@@ -240,7 +255,7 @@ namespace KeepBlinking.Gameplay
         new Vector2(0.5f, 0.5f),
         Vector2.zero,
         new Vector2(620f, 540f));
-      for (var i = 0; i < 16; i++)
+      for (var i = 0; i < 48; i++)
       {
         var node = FirstLevelUiFactory.CreateImage(
           $"Track Node {i + 1}",

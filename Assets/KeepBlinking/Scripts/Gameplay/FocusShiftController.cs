@@ -140,6 +140,7 @@ namespace KeepBlinking.Gameplay
     public static event Action<CareMovementDirection, float, float> FocusShiftProgressChanged;
     public static event Action<CareMovementDirection> FocusShiftStepCompleted;
     public static event Action FocusShiftCompleted;
+    public static event Action FocusShiftSkipped;
 
     public FocusShiftState State { get; private set; } = FocusShiftState.Dormant;
     public float DistanceRatio => _smoothedRatio;
@@ -231,6 +232,16 @@ namespace KeepBlinking.Gameplay
       _view?.SetCalibrating(0f, false, 1f);
       FocusShiftStarted?.Invoke();
       return true;
+    }
+
+    public void Skip()
+    {
+      if (!IsActive) return;
+      State = FocusShiftState.Completed;
+      _emitter?.SetEmissionPaused(false);
+      _gameplay?.SetFocusShiftActive(false);
+      _view?.Hide();
+      FocusShiftSkipped?.Invoke();
     }
 
     private void Update()
@@ -553,8 +564,9 @@ namespace KeepBlinking.Gameplay
         var segment = _lastRewardSegment + 1;
         if (segment >= 0 && segment < 64) _rewardedSegmentMask |= 1UL << segment;
         _lastRewardSegment = segment;
-        var nodeProgress = (segment + 1f) / Mathf.Max(1, step.Rewards);
-        _emitter?.EnqueueFragments(1, false, step.Direction, nodeProgress);
+        // CARE CIRCUIT uses these nodes only as honest movement feedback.
+        // Experience is created by MOVE, transformed after the full two-cycle
+        // Focus Shift, and optionally emitted by FAR WAVE at a valid Far point.
       }
     }
 
