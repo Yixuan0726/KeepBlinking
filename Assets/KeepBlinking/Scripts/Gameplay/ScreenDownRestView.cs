@@ -15,6 +15,9 @@ namespace KeepBlinking.Gameplay
     private Image _ripple;
     private TextMeshProUGUI _title;
     private TextMeshProUGUI _prompt;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    private TextMeshProUGUI _diagnostics;
+#endif
     private Button _skip;
     private ScreenDownRestState _state;
     private float _stateChangedAt;
@@ -57,6 +60,14 @@ namespace KeepBlinking.Gameplay
       _prompt.text = string.IsNullOrEmpty(prompt) ? "RETURN TO CENTER" : prompt;
       _skip.gameObject.SetActive(false);
     }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    public void SetDiagnostics(string text)
+    {
+      if (_diagnostics == null) return;
+      _diagnostics.text = text;
+    }
+#endif
 
     public void SetState(ScreenDownRestState state)
     {
@@ -124,6 +135,11 @@ namespace KeepBlinking.Gameplay
       FirstLevelUiFactory.SetRect(_title.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 355f), new Vector2(640f, 64f));
       _prompt = FirstLevelUiFactory.CreateText("Prompt", safe, string.Empty, 34f, FontStyles.Bold, TextAlignmentOptions.Center, KeepBlinkingTheme.TextPrimary, true);
       FirstLevelUiFactory.SetRect(_prompt.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -250f), new Vector2(820f, 120f));
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      _diagnostics = FirstLevelUiFactory.CreateText("Motion Diagnostics", safe, string.Empty, 20f, FontStyles.Normal, TextAlignmentOptions.Center, KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.TextPrimary, 0.65f), true);
+      FirstLevelUiFactory.SetRect(_diagnostics.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 96f), new Vector2(860f, 96f));
+#endif
 
       _skip = FirstLevelUiFactory.CreateButton("Skip", safe, "SKIP", KeepBlinkingTheme.AccentWarm);
       FirstLevelUiFactory.SetRect(_skip.GetComponent<RectTransform>(), Vector2.one, Vector2.one, Vector2.one, new Vector2(-36f, -42f), new Vector2(180f, 68f));

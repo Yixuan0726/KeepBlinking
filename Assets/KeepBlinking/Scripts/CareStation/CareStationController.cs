@@ -21,8 +21,10 @@ namespace KeepBlinking.CareStation
     [SerializeField, Range(0.25f, 0.4f)] private float _gestureReferenceCaptureSeconds = 0.3f;
     [SerializeField, Range(3, 15)] private int _gestureReferenceMinimumSamples = 5;
     [SerializeField, Min(0.1f)] private float _gestureScaleSmoothingSpeed = 12f;
-    [SerializeField, Range(0.005f, 0.05f)] private float _distanceDeadZone = 0.02f;
-    [SerializeField, Range(0.03f, 0.15f)] private float _distanceCompleteThreshold = 0.06f;
+    // Linear distance fractions (see FaceDistanceRatio): 0.22 means the step completes once
+    // the player has moved to 1/1.22 = 82% of the reference distance, about 8 cm from 45 cm.
+    [SerializeField, Range(0.01f, 0.12f)] private float _distanceDeadZone = 0.05f;
+    [SerializeField, Range(0.08f, 0.4f)] private float _distanceCompleteThreshold = 0.22f;
     [SerializeField, Range(0.05f, 1f)] private float _distanceStepHoldSeconds = 0.25f;
     [SerializeField, Range(0.05f, 1f)] private float _distanceProgressFallSeconds = 0.25f;
     [SerializeField, Range(0f, 2f)] private float _distanceStepTransitionSeconds = 0.4f;
@@ -575,7 +577,7 @@ namespace KeepBlinking.CareStation
       _gameplay.SetCareCollectionArmed(true);
       if (!_gameplay.StartCareCollectionFromSkip()) return;
       var reference = CurrentPushReferenceValid ? CurrentPushReferenceScale : 1f;
-      SetCurrentPushReference(reference * (1f - _distanceCompleteThreshold), true);
+      SetCurrentPushReference(FaceDistanceRatio.ToFaceScale(reference, 1f - _distanceCompleteThreshold), true);
       RecordPushAwayCompletion(CareStationPushAwayCompletion.FallbackCompleted);
       BeginCollectionState(_save.activeCollectionPhase);
 #endif
@@ -1994,7 +1996,7 @@ namespace KeepBlinking.CareStation
         sampleDelta = Mathf.Clamp(delta, 0f, 0.25f);
         sampleFresh = true;
         _currentPushRatio = ratio;
-        _rawPushFaceScale = CurrentPushReferenceScale * ratio;
+        _rawPushFaceScale = FaceDistanceRatio.ToFaceScale(CurrentPushReferenceScale, ratio);
         ObservePushScale(_rawPushFaceScale);
         _smoothedPushFaceScale = _rawPushFaceScale;
         _currentPushFaceScale = _smoothedPushFaceScale;
@@ -2032,7 +2034,7 @@ namespace KeepBlinking.CareStation
         _smoothedPushFaceScale = Mathf.Lerp(_smoothedPushFaceScale, scale, smoothing);
       }
       _currentPushFaceScale = _smoothedPushFaceScale;
-      _currentPushRatio = _smoothedPushFaceScale / CurrentPushReferenceScale;
+      _currentPushRatio = FaceDistanceRatio.FromFaceScale(_smoothedPushFaceScale, CurrentPushReferenceScale);
       ratio = _currentPushRatio;
       return CareDistanceReferenceSampler.IsValidScale(ratio);
     }
@@ -2332,9 +2334,9 @@ namespace KeepBlinking.CareStation
       _save.activeCollectionPhase = savedPhase;
       if (DevelopmentNeutralActive)
       {
-        _smoothedPushFaceScale = referenceScale * (1f + _distanceCompleteThreshold);
+        _smoothedPushFaceScale = FaceDistanceRatio.ToFaceScale(referenceScale, 1f + _distanceCompleteThreshold);
         _currentPushFaceScale = _smoothedPushFaceScale;
-        _currentPushRatio = _smoothedPushFaceScale / referenceScale;
+        _currentPushRatio = FaceDistanceRatio.FromFaceScale(_smoothedPushFaceScale, referenceScale);
         validRatio = true;
         sampleDelta = delta;
         sampleFresh = true;

@@ -74,9 +74,9 @@ namespace KeepBlinking.Gameplay
     public float SessionBaselineFaceX { get; private set; } = 0.5f;
     public float SessionBaselineFaceY { get; private set; } = 0.5f;
     public bool HasSessionFaceCenterBaseline => _sessionFaceCenterFrozen;
-    public Quaternion NeutralPhoneAttitude => _screenRest != null
-      ? _screenRest.InitialDeviceAttitude
-      : Quaternion.identity;
+    public Vector3 NeutralDeviceGravity => _screenRest != null
+      ? _screenRest.InitialDeviceGravity
+      : Vector3.back;
 
     public static bool RoundUsesGuidedEyeMovement(int oneBasedRound)
     {

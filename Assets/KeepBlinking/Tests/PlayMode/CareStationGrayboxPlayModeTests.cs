@@ -11,6 +11,10 @@ namespace KeepBlinking.Tests
 {
   public sealed class CareStationGrayboxPlayModeTests
   {
+    // Face scales are area-like, so a completed Away step -- 22% farther, a linear ratio of
+    // 0.78 -- is that ratio squared. See FaceDistanceRatio.
+    private const float FarStepScale = 0.6084f;
+
     [UnityTest]
     public IEnumerator UnifiedClosedEyeRunnerPlaysEachCueOnlyOnce()
     {
@@ -129,7 +133,7 @@ namespace KeepBlinking.Tests
       save.distanceResetReferenceValid = true;
       var resetAway = new CareRelativeDistanceStep(
         CareDistanceDirection.Away, holdSeconds: 0.1f);
-      var resetAwayScale = save.distanceResetReferenceScale * 0.939f;
+      var resetAwayScale = save.distanceResetReferenceScale * FarStepScale;
       Assert.That(resetAway.Advance(
         resetAwayScale, save.distanceResetReferenceScale, 0.1f, true, true), Is.True);
       save.distanceResetAwayScale = resetAwayScale;
@@ -158,7 +162,7 @@ namespace KeepBlinking.Tests
         CareDistanceDirection.Away, holdSeconds: 0.1f);
       Assert.That(carePush.Advance(resetAwayScale, save.carePushReferenceScale, 0.1f, true, true), Is.False,
         "The distance reset scale cannot be reused as the care collection origin.");
-      var careFarScale = save.carePushReferenceScale * 0.939f;
+      var careFarScale = save.carePushReferenceScale * FarStepScale;
       Assert.That(carePush.Advance(
         careFarScale, save.carePushReferenceScale, 0.1f, true, true), Is.True);
 
@@ -190,7 +194,7 @@ namespace KeepBlinking.Tests
     public IEnumerator PushTimelineUsesAwayThenNewCloserOrigin()
     {
       const float referenceScale = 0.12f;
-      const float awayScale = referenceScale * 0.939f;
+      const float awayScale = referenceScale * FarStepScale;
       var away = new CareRelativeDistanceStep(
         CareDistanceDirection.Away, holdSeconds: 0.1f);
 

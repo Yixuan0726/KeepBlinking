@@ -23,9 +23,12 @@ namespace KeepBlinking.Gameplay
     [SerializeField, Range(0.3f, 0.8f)] private float _farVisualScale = 0.42f;
     [SerializeField, Range(1.3f, 1.9f)] private float _nearVisualScale = 1.72f;
     [SerializeField, Range(1.6f, 2.2f)] private float _tooCloseVisualScale = 1.95f;
-    [SerializeField, Range(0.6f, 0.95f)] private float _visualFarRatio = 0.72f;
-    [SerializeField, Range(1.12f, 1.25f)] private float _visualNearRatio = 1.18f;
-    [SerializeField, Range(1.25f, 1.4f)] private float _visualCapRatio = 1.30f;
+    // Endpoints of the visual depth feedback, in the same linear ratio the controller judges
+    // with. They track the Far band floor, the middle of the Near band and Too Close, so the
+    // sample keeps growing across the whole movement instead of saturating early.
+    [SerializeField, Range(0.6f, 0.95f)] private float _visualFarRatio = 0.69f;
+    [SerializeField, Range(1.12f, 1.5f)] private float _visualNearRatio = 1.34f;
+    [SerializeField, Range(1.3f, 1.8f)] private float _visualCapRatio = 1.60f;
     [SerializeField, Range(3f, 12f)] private float _visualResponse = 6.5f;
 
     public static float EvaluateDistanceVisualScale(

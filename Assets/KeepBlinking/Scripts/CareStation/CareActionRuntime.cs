@@ -33,8 +33,9 @@ namespace KeepBlinking.CareStation
       closedEyeDurationSeconds = 45f,
       closeStartHoldSeconds = 1.5f,
       reopenHoldSeconds = 0.5f,
-      distanceDeadZone = 0.02f,
-      distanceCompleteThreshold = 0.06f,
+      // Linear distance fractions (see FaceDistanceRatio), not raw face-scale fractions.
+      distanceDeadZone = 0.05f,
+      distanceCompleteThreshold = 0.22f,
       distanceStepHoldSeconds = 0.25f,
       distanceProgressFallSeconds = 0.25f,
       focusStepTransitionSeconds = 0.4f,
@@ -54,8 +55,8 @@ namespace KeepBlinking.CareStation
       closedEyeDurationSeconds = Mathf.Max(1f, closedEyeDurationSeconds);
       closeStartHoldSeconds = Mathf.Max(0.1f, closeStartHoldSeconds);
       reopenHoldSeconds = Mathf.Max(0.1f, reopenHoldSeconds);
-      distanceDeadZone = Mathf.Clamp(distanceDeadZone, 0.005f, 0.05f);
-      distanceCompleteThreshold = Mathf.Clamp(distanceCompleteThreshold, distanceDeadZone + 0.005f, 0.15f);
+      distanceDeadZone = Mathf.Clamp(distanceDeadZone, 0.01f, 0.12f);
+      distanceCompleteThreshold = Mathf.Clamp(distanceCompleteThreshold, distanceDeadZone + 0.01f, 0.4f);
       distanceStepHoldSeconds = Mathf.Clamp(distanceStepHoldSeconds, 0.05f, 1f);
       distanceProgressFallSeconds = Mathf.Clamp(distanceProgressFallSeconds, 0.05f, 1f);
       focusStepTransitionSeconds = Mathf.Clamp(focusStepTransitionSeconds, 0f, 2f);
@@ -402,9 +403,8 @@ namespace KeepBlinking.CareStation
       var sampleDelta = input.DistanceSampleDeltaSeconds > 0f
         ? Mathf.Clamp(input.DistanceSampleDeltaSeconds, 0f, 0.25f)
         : delta;
-      var completed = _focusDistanceStep.Advance(
+      var completed = _focusDistanceStep.AdvanceRatio(
         input.DistanceRatio,
-        1f,
         sampleDelta,
         true,
         input.DistanceSampleFresh);

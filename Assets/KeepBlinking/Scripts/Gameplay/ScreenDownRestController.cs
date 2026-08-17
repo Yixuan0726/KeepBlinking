@@ -27,8 +27,21 @@ namespace KeepBlinking.Gameplay
     Skipped,
   }
 
+  /// <summary>
+  /// Orientation judgements for the screen-down rest.
+  ///
+  /// Everything here works on the gravity vector expressed in *device* space, never on
+  /// <see cref="UnityEngine.InputSystem.AttitudeSensor"/>. The device frame is fixed by Unity
+  /// (x right, y up along the screen, z out of the screen), so the screen normal is always
+  /// <see cref="Vector3.forward"/> and a single dot product answers "is the screen facing the
+  /// ground". Attitude, by contrast, is not a device-to-Unity-world rotation on Android/iOS --
+  /// using it to derive a world gravity vector produced a reference that depended on the pose
+  /// held while calibrating, which is why face-down was never detected on device.
+  /// </summary>
   public static class ScreenDownRestMotionLogic
   {
+    public const float StandardGravity = 9.80665f;
+
     public static int StoredGoldFragments(float validRestSeconds, float restDurationSeconds)
     {
       return Mathf.Clamp(
@@ -37,39 +50,55 @@ namespace KeepBlinking.Gameplay
         Mathf.Max(0, Mathf.FloorToInt(restDurationSeconds)));
     }
 
-    public static Vector3 ScreenNormal(Quaternion attitude)
+    /// <summary>
+    /// Accelerometer and gravity readings are expected in g units, but a platform reporting
+    /// m/s^2 would otherwise make every stability check fail. Rescale the obvious case.
+    /// </summary>
+    public static float ToGravityUnits(float rawMagnitude)
     {
-      return (attitude * Vector3.forward).normalized;
+      return rawMagnitude > 4f ? rawMagnitude / StandardGravity : rawMagnitude;
     }
 
-    public static bool IsScreenDown(
-      Vector3 initialScreenNormal,
-      Vector3 currentScreenNormal,
-      Vector3 worldGravity,
-      float relativeAngleThreshold,
-      float groundAlignmentDegrees)
+    /// <summary>
+    /// Face-down means gravity points along the screen normal (+z) in device space:
+    /// lying face up reads (0, 0, -1), lying face down reads (0, 0, +1).
+    /// </summary>
+    public static bool IsScreenDown(Vector3 deviceGravity, float groundAlignmentDegrees)
     {
-      var relativeAngle = Vector3.Angle(initialScreenNormal, currentScreenNormal);
-      var gravityDirection = worldGravity.sqrMagnitude > 0.0001f ? worldGravity.normalized : Vector3.down;
-      var groundAligned = Vector3.Dot(currentScreenNormal.normalized, gravityDirection) >=
-                          Mathf.Cos(Mathf.Clamp(groundAlignmentDegrees, 0f, 89f) * Mathf.Deg2Rad);
-      return relativeAngle >= Mathf.Clamp(relativeAngleThreshold, 90f, 180f) || groundAligned;
+      if (deviceGravity.sqrMagnitude <= 0.0001f) return false;
+      return Vector3.Dot(deviceGravity.normalized, Vector3.forward) >=
+             Mathf.Cos(Mathf.Clamp(groundAlignmentDegrees, 5f, 80f) * Mathf.Deg2Rad);
     }
 
-    public static bool IsReturned(Quaternion initialAttitude, Quaternion currentAttitude, float maximumAngle)
+    /// <summary>
+    /// Comparing device-space gravity vectors ignores heading, so turning around while picking
+    /// the phone back up no longer blocks the return.
+    /// </summary>
+    public static bool IsReturned(Vector3 initialDeviceGravity, Vector3 currentDeviceGravity, float maximumAngle)
     {
-      return Quaternion.Angle(initialAttitude, currentAttitude) <= Mathf.Max(1f, maximumAngle);
+      if (initialDeviceGravity.sqrMagnitude <= 0.0001f || currentDeviceGravity.sqrMagnitude <= 0.0001f) return false;
+      return Vector3.Angle(initialDeviceGravity, currentDeviceGravity) <= Mathf.Max(1f, maximumAngle);
     }
 
+    /// <summary>
+    /// A resting device measures exactly 1 g. The reference is the constant, not a sample taken
+    /// while the player happened to be holding the phone.
+    /// </summary>
     public static bool IsStable(
       float accelerationMagnitude,
-      float stableAccelerationMagnitude,
       float accelerationTolerance,
       float angularSpeed,
       float maximumAngularSpeed)
     {
-      return Mathf.Abs(accelerationMagnitude - stableAccelerationMagnitude) <= Mathf.Max(0.01f, accelerationTolerance) &&
+      return Mathf.Abs(ToGravityUnits(accelerationMagnitude) - 1f) <= Mathf.Max(0.01f, accelerationTolerance) &&
              angularSpeed <= Mathf.Max(0.01f, maximumAngularSpeed);
+    }
+
+    /// <summary>Radians per second implied by how fast the gravity direction is sweeping.</summary>
+    public static float AngularSpeedFromGravity(Vector3 previousGravity, Vector3 currentGravity, float delta)
+    {
+      if (previousGravity.sqrMagnitude <= 0.0001f || currentGravity.sqrMagnitude <= 0.0001f) return 0f;
+      return Vector3.Angle(previousGravity, currentGravity) * Mathf.Deg2Rad / Mathf.Max(0.0001f, delta);
     }
   }
 
@@ -78,8 +107,7 @@ namespace KeepBlinking.Gameplay
     public const string ReportDisplayName = "Screen-Down Rest";
 
     [Header("Orientation")]
-    [SerializeField, Range(90f, 180f)] private float _screenDownRelativeAngle = 150f;
-    [SerializeField, Range(5f, 60f)] private float _groundAlignmentDegrees = 30f;
+    [SerializeField, Range(10f, 70f)] private float _groundAlignmentDegrees = 40f;
     [SerializeField, Min(0.1f)] private float _screenDownHoldSeconds = 0.5f;
     [SerializeField, Range(5f, 45f)] private float _returnAngleDegrees = 20f;
     [SerializeField, Min(0.1f)] private float _returnHoldSeconds = 0.4f;
@@ -104,15 +132,15 @@ namespace KeepBlinking.Gameplay
 
     private EdgeOrbitHarvestMvp _gameplay;
     private ScreenDownRestView _view;
-    private AttitudeSensor _attitudeSensor;
     private GravitySensor _gravitySensor;
     private Accelerometer _accelerometer;
     private UnityEngine.InputSystem.Gyroscope _gyroscope;
-    private Quaternion _initialDeviceAttitude = Quaternion.identity;
-    private Quaternion _previousAttitude = Quaternion.identity;
-    private Vector3 _initialScreenNormal = Vector3.forward;
-    private Vector3 _initialWorldGravity = Vector3.down;
-    private float _stableAccelerationMagnitude = 1f;
+    private Vector3 _initialDeviceGravity = Vector3.back;
+    private Vector3 _deviceGravity = Vector3.back;
+    private Vector3 _previousDeviceGravity = Vector3.zero;
+    private float _accelerationMagnitude = 1f;
+    private float _angularSpeed;
+    private float _sensorRetryAt;
     private float _stateStartedAt;
     private float _conditionHeldSeconds;
     private float _restElapsed;
@@ -139,16 +167,15 @@ namespace KeepBlinking.Gameplay
     public static event Action<int> ScreenDownRestRewardsReady;
 
     public ScreenDownRestState State { get; private set; } = ScreenDownRestState.Dormant;
-    public Quaternion InitialDeviceAttitude => _initialDeviceAttitude;
-    public Vector3 InitialScreenNormal => _initialScreenNormal;
+    public Vector3 InitialDeviceGravity => _initialDeviceGravity;
+    public Vector3 DeviceGravity => _deviceGravity;
     public bool HasSessionNeutralOrientation => _sessionNeutralConfigured;
     public int StoredGoldFragments => _storedGoldFragments;
     public float RestProgress => Mathf.Clamp01(_restElapsed / Mathf.Max(0.1f, _restDuration));
     public bool IsActive => State != ScreenDownRestState.Dormant &&
                             State != ScreenDownRestState.Completed &&
                             State != ScreenDownRestState.Skipped;
-    public bool SensorsAvailable => _attitudeSensor != null &&
-                                    (_gravitySensor != null || _accelerometer != null);
+    public bool SensorsAvailable => _gravitySensor != null || _accelerometer != null;
 
     public static ScreenDownRestController EnsureExists(EdgeOrbitHarvestMvp gameplay)
     {
@@ -291,11 +318,46 @@ namespace KeepBlinking.Gameplay
 
       if (!IsActive) return;
       var delta = Time.unscaledDeltaTime;
+      // Sample before the development time multiplier is applied: a scaled delta would
+      // understate how fast the device is actually turning.
+      SampleMotion(delta);
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
       if (_stationUse) delta *= _developmentTimeMultiplier;
 #endif
+      RetrySensorsIfUnavailable();
       UpdateState(delta);
       _view?.Render(State, RestProgress, _simulateScreenDown, _simulateReturn);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      _view?.SetDiagnostics(BuildDiagnostics());
+#endif
+    }
+
+    /// <summary>
+    /// Reads the motion sensors once per frame so every judgement in <see cref="UpdateState"/>
+    /// sees the same sample, and so the no-gyroscope fallback always has a fresh previous
+    /// sample instead of one left over from whenever a short-circuited check last ran.
+    /// </summary>
+    private void SampleMotion(float delta)
+    {
+      var gravity = ReadGravity();
+      if (gravity.sqrMagnitude > 0.0001f)
+      {
+        _deviceGravity = gravity.normalized;
+        _angularSpeed = _gyroscope != null
+          ? _gyroscope.angularVelocity.ReadValue().magnitude
+          : ScreenDownRestMotionLogic.AngularSpeedFromGravity(_previousDeviceGravity, _deviceGravity, delta);
+        _previousDeviceGravity = _deviceGravity;
+      }
+      _accelerationMagnitude = ReadAccelerationMagnitude();
+    }
+
+    private void RetrySensorsIfUnavailable()
+    {
+      if (State != ScreenDownRestState.SensorUnavailable) return;
+      if (Time.unscaledTime < _sensorRetryAt) return;
+      _sensorRetryAt = Time.unscaledTime + 0.5f;
+      ResolveAndEnableSensors();
+      if (SensorsAvailable) SetState(ScreenDownRestState.CaptureNormalOrientation);
     }
 
     private void UpdateState(float delta)
@@ -324,7 +386,7 @@ namespace KeepBlinking.Gameplay
           if (StateElapsed >= (_stationUse ? 0.2f : 0.7f)) SetState(ScreenDownRestState.WaitScreenDown);
           break;
         case ScreenDownRestState.WaitScreenDown:
-          if (IsScreenDownAndStable(delta))
+          if (IsScreenDownAndStable())
           {
             _conditionHeldSeconds += delta;
             if (_conditionHeldSeconds >= _screenDownHoldSeconds) SetState(ScreenDownRestState.Resting);
@@ -337,7 +399,7 @@ namespace KeepBlinking.Gameplay
           }
           break;
         case ScreenDownRestState.Resting:
-          if (!IsScreenDownAndStable(delta))
+          if (!IsScreenDownAndStable())
           {
             if (!_preserveInterruptedRestProgress) _restElapsed = 0f;
             SetState(ScreenDownRestState.WaitScreenDown);
@@ -357,7 +419,7 @@ namespace KeepBlinking.Gameplay
           if (StateElapsed >= 0.25f) SetState(ScreenDownRestState.WaitNormalOrientation);
           break;
         case ScreenDownRestState.WaitNormalOrientation:
-          if (IsNormalOrientationAndStable(delta))
+          if (IsNormalOrientationAndStable())
           {
             _conditionHeldSeconds += delta;
             if (_conditionHeldSeconds >= _returnHoldSeconds) SetState(ScreenDownRestState.WaitFaceReturn);
@@ -403,11 +465,9 @@ namespace KeepBlinking.Gameplay
 
     private void ResolveAndEnableSensors()
     {
-      _attitudeSensor = AttitudeSensor.current;
       _gravitySensor = GravitySensor.current;
       _accelerometer = Accelerometer.current;
       _gyroscope = UnityEngine.InputSystem.Gyroscope.current;
-      EnableSensor(_attitudeSensor);
       EnableSensor(_gravitySensor);
       EnableSensor(_accelerometer);
       EnableSensor(_gyroscope);
@@ -422,80 +482,77 @@ namespace KeepBlinking.Gameplay
     {
       if (allowConfiguredNeutral && _sessionNeutralConfigured)
       {
-        _previousAttitude = _initialDeviceAttitude;
         _orientationCaptured = true;
         return true;
       }
 
       if (_simulateScreenDown || _simulateReturn)
       {
-        _initialDeviceAttitude = Quaternion.identity;
-        _previousAttitude = Quaternion.identity;
-        _initialScreenNormal = Vector3.forward;
-        _initialWorldGravity = Vector3.down;
-        _stableAccelerationMagnitude = 1f;
+        _initialDeviceGravity = Vector3.back;
+        _deviceGravity = Vector3.back;
+        _previousDeviceGravity = Vector3.back;
         _orientationCaptured = true;
         return true;
       }
 
       var gravity = ReadGravity();
       var accelerationMagnitude = ReadAccelerationMagnitude();
-      if (_attitudeSensor == null || gravity.sqrMagnitude <= 0.0001f || accelerationMagnitude <= 0.01f)
-        return false;
+      if (gravity.sqrMagnitude <= 0.0001f || accelerationMagnitude <= 0.01f) return false;
 
-      var attitude = _attitudeSensor.attitude.ReadValue();
-      var attitudeMagnitude = attitude.x * attitude.x + attitude.y * attitude.y + attitude.z * attitude.z + attitude.w * attitude.w;
-      if (attitudeMagnitude <= 0.25f) return false;
-
-      _initialDeviceAttitude = attitude;
-      _previousAttitude = _initialDeviceAttitude;
-      _initialScreenNormal = ScreenDownRestMotionLogic.ScreenNormal(_initialDeviceAttitude);
-      _initialWorldGravity = (_initialDeviceAttitude * gravity.normalized).normalized;
-      _stableAccelerationMagnitude = accelerationMagnitude;
+      _initialDeviceGravity = gravity.normalized;
+      _deviceGravity = _initialDeviceGravity;
+      _previousDeviceGravity = _initialDeviceGravity;
       _orientationCaptured = true;
       return true;
     }
 
-    private bool IsScreenDownAndStable(float delta)
+    private bool IsScreenDownAndStable()
     {
       if (_simulateScreenDown) return true;
       if (!_orientationCaptured || !SensorsAvailable) return false;
-      var attitude = _attitudeSensor.attitude.ReadValue();
-      var currentNormal = ScreenDownRestMotionLogic.ScreenNormal(attitude);
-      return ScreenDownRestMotionLogic.IsScreenDown(
-               _initialScreenNormal,
-               currentNormal,
-               _initialWorldGravity,
-               _screenDownRelativeAngle,
-               _groundAlignmentDegrees) &&
-             IsMovementStable(attitude, delta);
+      return ScreenDownRestMotionLogic.IsScreenDown(_deviceGravity, _groundAlignmentDegrees) &&
+             IsMovementStable();
     }
 
-    private bool IsNormalOrientationAndStable(float delta)
+    private bool IsNormalOrientationAndStable()
     {
       if (_simulateReturn) return true;
       if (!_orientationCaptured || !SensorsAvailable) return false;
-      var attitude = _attitudeSensor.attitude.ReadValue();
-      return ScreenDownRestMotionLogic.IsReturned(_initialDeviceAttitude, attitude, _returnAngleDegrees) &&
-             IsMovementStable(attitude, delta);
+      return ScreenDownRestMotionLogic.IsReturned(_initialDeviceGravity, _deviceGravity, _returnAngleDegrees) &&
+             IsMovementStable();
     }
 
-    private bool IsMovementStable(Quaternion attitude, float delta)
+    private bool IsMovementStable()
     {
-      var angularSpeed = _gyroscope != null
-        ? _gyroscope.angularVelocity.ReadValue().magnitude
-        : Quaternion.Angle(_previousAttitude, attitude) / Mathf.Max(0.0001f, delta) * Mathf.Deg2Rad;
       var maximumAngularSpeed = _gyroscope != null
         ? _maximumGyroRadiansPerSecond
         : _maximumFallbackDegreesPerSecond * Mathf.Deg2Rad;
-      _previousAttitude = attitude;
       return ScreenDownRestMotionLogic.IsStable(
-        ReadAccelerationMagnitude(),
-        _stableAccelerationMagnitude,
+        _accelerationMagnitude,
         _accelerationTolerance,
-        angularSpeed,
+        _angularSpeed,
         maximumAngularSpeed);
     }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    /// <summary>
+    /// On-device readout: without it a stuck rest looks identical whether the camera never
+    /// reported a face, the sensors are missing, the phone is not flat enough, or the device
+    /// is still judged to be moving.
+    /// </summary>
+    private string BuildDiagnostics()
+    {
+      var down = Vector3.Dot(_deviceGravity, Vector3.forward);
+      var sensor = _gravitySensor != null ? "gravity" : _accelerometer != null ? "accel" : "none";
+      return
+        $"g·fwd {down:F2} (need {Mathf.Cos(Mathf.Clamp(_groundAlignmentDegrees, 5f, 80f) * Mathf.Deg2Rad):F2})  " +
+        $"|a| {ScreenDownRestMotionLogic.ToGravityUnits(_accelerationMagnitude):F2}g  " +
+        $"ω {_angularSpeed:F2}rad/s\n" +
+        $"src {sensor}  gyro {(_gyroscope != null ? "y" : "n")}  " +
+        $"face {(EyeInputDebugState.Latest.FaceDetected ? "y" : "n")}  " +
+        $"hold {_conditionHeldSeconds:F1}s";
+    }
+#endif
 
     private Vector3 ReadGravity()
     {

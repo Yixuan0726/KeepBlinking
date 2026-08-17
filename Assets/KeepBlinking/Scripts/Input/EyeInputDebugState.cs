@@ -47,6 +47,44 @@ namespace KeepBlinking.Input
     public ScreenOrientation ScreenOrientation;
   }
 
+  /// <summary>
+  /// Converts the area-like face scale into the linear ratio that distance gestures need.
+  ///
+  /// <see cref="EyeInputDebugSnapshot.RobustFaceScale"/> is a squared span (see
+  /// CalculateRobustFaceScale), so a raw scale ratio moves twice as fast as the distance the
+  /// player actually travelled: a raw ratio of 1.10 is only 4.7% closer, not 10%. Thresholds
+  /// authored as "10% closer" therefore fired after a centimetre or two. Anything asking "how
+  /// far did they move" must go through here; anything comparing absolute face scales (fixed
+  /// distance baselines, saved references) keeps using the raw scale.
+  /// </summary>
+  public static class FaceDistanceRatio
+  {
+    /// <summary>
+    /// Linear face-size ratio against a reference scale: 1.25 means the face is 25% wider,
+    /// which is the same as standing at 1/1.25 = 80% of the reference distance. Returns 0 for
+    /// unusable input so existing positive-finite guards reject it.
+    /// </summary>
+    public static float FromFaceScale(float faceScale, float referenceScale)
+    {
+      if (!(faceScale > 0f) || !(referenceScale > 0f) ||
+          float.IsNaN(faceScale) || float.IsNaN(referenceScale) ||
+          float.IsInfinity(faceScale) || float.IsInfinity(referenceScale)) return 0f;
+      return Mathf.Sqrt(faceScale / referenceScale);
+    }
+
+    /// <summary>Inverse of <see cref="FromFaceScale"/>, for tests and development simulation.</summary>
+    public static float ToFaceScale(float referenceScale, float linearRatio)
+    {
+      return referenceScale * linearRatio * linearRatio;
+    }
+
+    /// <summary>Distance as a multiple of the reference distance: 0.8 means 20% closer.</summary>
+    public static float DistanceMultiple(float linearRatio)
+    {
+      return linearRatio > 0f ? 1f / linearRatio : 0f;
+    }
+  }
+
   public static class EyeInputDebugState
   {
     public const float BlinkOpenThreshold = 0.35f;

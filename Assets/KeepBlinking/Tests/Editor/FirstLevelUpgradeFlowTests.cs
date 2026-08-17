@@ -300,21 +300,70 @@ namespace KeepBlinking.Tests
       Assert.That(gameplay.IsModuleUpgradeOpen, Is.False);
     }
 
+    // Device-space gravity: (0,0,-1) lying face up, (0,0,+1) lying face down,
+    // (0,-1,0) held upright in front of the player.
+    private static Vector3 GravityForPitchFromUpright(float degreesTippedBack)
+    {
+      return Quaternion.Euler(degreesTippedBack, 0f, 0f) * Vector3.down;
+    }
+
     [Test]
     public void ScreenDownRestMotionStillRejectsPortraitAndAcceptsFaceDown()
     {
-      Assert.That(ScreenDownRestMotionLogic.IsScreenDown(Vector3.forward, Vector3.forward, Vector3.down, 150f, 30f), Is.False);
-      Assert.That(ScreenDownRestMotionLogic.IsScreenDown(Vector3.forward, Vector3.back, Vector3.down, 150f, 30f), Is.True);
+      Assert.That(ScreenDownRestMotionLogic.IsScreenDown(Vector3.back, 40f), Is.False, "lying face up");
+      Assert.That(ScreenDownRestMotionLogic.IsScreenDown(Vector3.down, 40f), Is.False, "held upright");
+      Assert.That(ScreenDownRestMotionLogic.IsScreenDown(Vector3.forward, 40f), Is.True, "lying face down");
+      Assert.That(ScreenDownRestMotionLogic.IsScreenDown(new Vector3(0f, -0.34f, 0.94f), 40f), Is.True, "20 deg off flat");
+      Assert.That(ScreenDownRestMotionLogic.IsScreenDown(new Vector3(0f, -0.77f, 0.64f), 40f), Is.False, "50 deg off flat");
+    }
+
+    [Test]
+    public void ScreenDownRestDetectsFaceDownFromAnyStartingPose()
+    {
+      // The pose the player actually calibrates in is the phone held up in front of the face,
+      // roughly 60 deg from horizontal -- only about 120 deg away from face-down, which is why
+      // a relative-angle judgement against the neutral pose never fired on device.
+      foreach (var neutral in new[]
+               {
+                 GravityForPitchFromUpright(0f),
+                 GravityForPitchFromUpright(30f),
+                 GravityForPitchFromUpright(60f),
+                 Vector3.back,
+               })
+      {
+        Assert.That(ScreenDownRestMotionLogic.IsScreenDown(neutral, 40f), Is.False, $"neutral {neutral} must not read as face down");
+        Assert.That(ScreenDownRestMotionLogic.IsScreenDown(Vector3.forward, 40f), Is.True, $"face down after neutral {neutral}");
+      }
     }
 
     [Test]
     public void ScreenDownRestRequiresStableMotionAndNeutralReturn()
     {
-      Assert.That(ScreenDownRestMotionLogic.IsStable(1f, 1f, 0.18f, 0.2f, 0.35f), Is.True);
-      Assert.That(ScreenDownRestMotionLogic.IsStable(1.4f, 1f, 0.18f, 0.2f, 0.35f), Is.False);
-      Assert.That(ScreenDownRestMotionLogic.IsStable(1f, 1f, 0.18f, 0.8f, 0.35f), Is.False);
-      Assert.That(ScreenDownRestMotionLogic.IsReturned(Quaternion.identity, Quaternion.Euler(0f, 18f, 0f), 20f), Is.True);
-      Assert.That(ScreenDownRestMotionLogic.IsReturned(Quaternion.identity, Quaternion.Euler(0f, 24f, 0f), 20f), Is.False);
+      Assert.That(ScreenDownRestMotionLogic.IsStable(1f, 0.18f, 0.2f, 0.35f), Is.True);
+      Assert.That(ScreenDownRestMotionLogic.IsStable(1.4f, 0.18f, 0.2f, 0.35f), Is.False);
+      Assert.That(ScreenDownRestMotionLogic.IsStable(1f, 0.18f, 0.8f, 0.35f), Is.False);
+      // A platform reporting m/s^2 must still read as resting rather than as permanent motion.
+      Assert.That(ScreenDownRestMotionLogic.IsStable(ScreenDownRestMotionLogic.StandardGravity, 0.18f, 0.2f, 0.35f), Is.True);
+
+      var neutral = GravityForPitchFromUpright(30f);
+      Assert.That(ScreenDownRestMotionLogic.IsReturned(neutral, GravityForPitchFromUpright(48f), 20f), Is.True);
+      Assert.That(ScreenDownRestMotionLogic.IsReturned(neutral, GravityForPitchFromUpright(54f), 20f), Is.False);
+      // Heading changes must not block the return. Device-space gravity is the world down
+      // vector seen through the inverse device rotation, and yaw about world up drops out --
+      // unlike the attitude quaternion, which carried heading and rejected the return whenever
+      // the player had turned more than the tolerance while picking the phone back up.
+      foreach (var yaw in new[] { 0f, 45f, 120f, 250f })
+      {
+        // Tipping the screen 30 deg up is a 30 deg pitch up of the device, so the pose that
+        // produces `neutral` is Rx(-30) with any heading applied on top of it.
+        var deviceRotation = Quaternion.Euler(0f, yaw, 0f) * Quaternion.Euler(-30f, 0f, 0f);
+        var gravityInDeviceSpace = Quaternion.Inverse(deviceRotation) * Vector3.down;
+        Assert.That(
+          ScreenDownRestMotionLogic.IsReturned(neutral, gravityInDeviceSpace, 20f),
+          Is.True,
+          $"return must survive a {yaw} deg heading change");
+      }
+      Assert.That(ScreenDownRestMotionLogic.IsReturned(neutral, Vector3.forward, 20f), Is.False, "face down is not neutral");
     }
 
     [Test]

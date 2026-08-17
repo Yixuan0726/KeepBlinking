@@ -85,15 +85,18 @@ namespace KeepBlinking.Gameplay
       public int Rewards { get; }
     }
 
+    // All of these are LINEAR face-size ratios (see FaceDistanceRatio), so a value of r means
+    // the player is at 1/r of their calibrated distance. The comments give the distance a
+    // 45 cm baseline works out to.
     [Header("Required Ranges")]
     [SerializeField, Range(1, 4)] private int _focusShiftCycles = 2;
-    [SerializeField] private float _neutralMin = 0.95f;
-    [SerializeField] private float _neutralMax = 1.05f;
-    [SerializeField] private float _nearMin = 1.10f;
-    [SerializeField] private float _nearMax = 1.14f;
-    [SerializeField] private float _farMin = 0.84f;
-    [SerializeField] private float _farMax = 0.88f;
-    [SerializeField] private float _tooCloseRatio = 1.18f;
+    [SerializeField] private float _neutralMin = 0.95f;   // 47 cm
+    [SerializeField] private float _neutralMax = 1.05f;   // 43 cm
+    [SerializeField] private float _nearMin = 1.25f;      // 36 cm -- 20% closer
+    [SerializeField] private float _nearMax = 1.43f;      // 31 cm -- 30% closer
+    [SerializeField] private float _farMin = 0.69f;       // 65 cm -- 45% farther
+    [SerializeField] private float _farMax = 0.80f;       // 56 cm -- 25% farther
+    [SerializeField] private float _tooCloseRatio = 1.60f; // 28 cm
 
     [Header("Timing")]
     [SerializeField, Min(0.2f)] private float _neutralHoldSeconds = 0.4f;
@@ -143,6 +146,7 @@ namespace KeepBlinking.Gameplay
     public static event Action FocusShiftSkipped;
 
     public FocusShiftState State { get; private set; } = FocusShiftState.Dormant;
+    /// <summary>Linear face-size ratio against the session baseline; 1.25 means 20% closer.</summary>
     public float DistanceRatio => _smoothedRatio;
     public float RawDistanceRatio => _rawSessionRatio;
     public float SessionBaselineFaceScale => _sessionBaselineFaceScale;
@@ -259,7 +263,7 @@ namespace KeepBlinking.Gameplay
         if (_latestSampleValid)
         {
           _lastFreshSampleAt = now;
-          _rawSessionRatio = faceScale / _sessionBaselineFaceScale;
+          _rawSessionRatio = FaceDistanceRatio.FromFaceScale(faceScale, _sessionBaselineFaceScale);
           if (_trackingPaused)
           {
             ResumeTracking(now, _rawSessionRatio);
@@ -338,7 +342,7 @@ namespace KeepBlinking.Gameplay
         return;
 
       var median = Median(_localBaselineSamples);
-      var medianSessionRatio = median / _sessionBaselineFaceScale;
+      var medianSessionRatio = FaceDistanceRatio.FromFaceScale(median, _sessionBaselineFaceScale);
       if (!IsFinitePositive(median) || medianSessionRatio < _neutralMin || medianSessionRatio > _neutralMax)
       {
         ResetLocalBaselineCapture();
@@ -346,7 +350,7 @@ namespace KeepBlinking.Gameplay
       }
 
       _localFocusBaseline = median;
-      _rawSessionRatio = GetFreshFaceScale(snapshot) / _sessionBaselineFaceScale;
+      _rawSessionRatio = FaceDistanceRatio.FromFaceScale(GetFreshFaceScale(snapshot), _sessionBaselineFaceScale);
       _smoothedRatio = _ratioFilter.Reset(_rawSessionRatio, now);
       _stepIndex = 0;
       BeginStep(medianSessionRatio);

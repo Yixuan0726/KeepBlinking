@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using KeepBlinking.Input;
 using UnityEngine;
 
 namespace KeepBlinking.CareStation
@@ -93,6 +94,9 @@ namespace KeepBlinking.CareStation
   /// <summary>
   /// One low-latency relative distance step. It owns no global baseline: the
   /// caller supplies the immutable median reference captured for this step.
+  ///
+  /// Thresholds are linear distance fractions: 0.22 means "move until the face is 22% wider",
+  /// i.e. to 1/1.22 = 82% of the reference distance. See <see cref="FaceDistanceRatio"/>.
   /// </summary>
   public sealed class CareRelativeDistanceStep
   {
@@ -104,15 +108,15 @@ namespace KeepBlinking.CareStation
 
     public CareRelativeDistanceStep(
       CareDistanceDirection direction,
-      float deadZone = 0.02f,
-      float completeThreshold = 0.06f,
+      float deadZone = 0.05f,
+      float completeThreshold = 0.22f,
       float holdSeconds = 0.25f,
       float progressFallSeconds = 0.25f,
       float initialProgress = 0f,
       float initialStableSeconds = 0f)
     {
       Direction = direction;
-      _deadZone = Mathf.Clamp(deadZone, 0f, 0.2f);
+      _deadZone = Mathf.Clamp(deadZone, 0f, 0.4f);
       _completeThreshold = Mathf.Max(_deadZone + 0.005f, completeThreshold);
       _holdSeconds = Mathf.Max(0.05f, holdSeconds);
       _progressFallSeconds = Mathf.Max(0.05f, progressFallSeconds);
@@ -126,6 +130,7 @@ namespace KeepBlinking.CareStation
     public float StableSeconds => _stableSeconds;
     public bool Completed { get; private set; }
 
+    /// <summary>Drives the step from a raw face scale pair (an area-like quantity).</summary>
     public bool Advance(
       float currentScale,
       float referenceScale,
@@ -140,13 +145,32 @@ namespace KeepBlinking.CareStation
         _stableSeconds = 0f;
         return false;
       }
+      return AdvanceRatio(
+        FaceDistanceRatio.FromFaceScale(currentScale, referenceScale),
+        sampleDelta,
+        true,
+        true);
+    }
 
-      var ratio = currentScale / referenceScale;
-      if (!CareDistanceReferenceSampler.IsValidScale(ratio))
+    /// <summary>
+    /// Drives the step from an already-converted linear ratio. Callers that hold a ratio must
+    /// use this rather than passing it as a scale against a reference of 1, which would apply
+    /// the area-to-linear conversion a second time and halve the movement required.
+    /// </summary>
+    public bool AdvanceRatio(
+      float linearRatio,
+      float sampleDelta,
+      bool trackingValid,
+      bool sampleFresh)
+    {
+      if (Completed || !sampleFresh) return false;
+      if (!trackingValid || !CareDistanceReferenceSampler.IsValidScale(linearRatio))
       {
         _stableSeconds = 0f;
         return false;
       }
+
+      var ratio = linearRatio;
       DirectionDelta = Direction == CareDistanceDirection.Closer ? ratio - 1f : 1f - ratio;
       var target = Mathf.Clamp01((DirectionDelta - _deadZone) /
                                  Mathf.Max(0.005f, _completeThreshold - _deadZone));

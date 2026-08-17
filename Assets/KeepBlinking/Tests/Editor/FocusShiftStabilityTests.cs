@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using KeepBlinking.Gameplay;
+using KeepBlinking.Input;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -106,40 +107,69 @@ namespace KeepBlinking.Tests
     }
 
     [Test]
+    public void DistanceRatioIsLinearSoTheNearBandNeedsRealMovement()
+    {
+      // RobustFaceScale is a squared span, so a raw scale ratio moves twice as fast as the
+      // player does. Quadrupling the face scale is only half the distance.
+      Assert.That(FaceDistanceRatio.FromFaceScale(4f, 1f), Is.EqualTo(2f).Within(0.0001f));
+      Assert.That(FaceDistanceRatio.FromFaceScale(1f, 1f), Is.EqualTo(1f).Within(0.0001f));
+      Assert.That(FaceDistanceRatio.DistanceMultiple(2f), Is.EqualTo(0.5f).Within(0.0001f));
+      Assert.That(FaceDistanceRatio.ToFaceScale(0.1f, 1.25f), Is.EqualTo(0.15625f).Within(0.000001f));
+      Assert.That(FaceDistanceRatio.FromFaceScale(-1f, 1f), Is.Zero, "Invalid input must not pass a scale gate.");
+      Assert.That(FaceDistanceRatio.FromFaceScale(1f, 0f), Is.Zero);
+
+      // 1.10 was the old nearMin. Read as a raw face scale it is barely a 5% lean, which must
+      // no longer come anywhere near completing the Near step.
+      var oldNearThreshold = FaceDistanceRatio.FromFaceScale(1.10f, 1f);
+      Assert.That(oldNearThreshold, Is.LessThan(1.25f));
+      Assert.That(FaceDistanceRatio.DistanceMultiple(oldNearThreshold), Is.GreaterThan(0.95f));
+      // The shipping Near band is a real arm movement: 20% to 30% of the baseline distance.
+      Assert.That(FaceDistanceRatio.DistanceMultiple(1.25f), Is.EqualTo(0.80f).Within(0.005f));
+      Assert.That(FaceDistanceRatio.DistanceMultiple(1.43f), Is.EqualTo(0.70f).Within(0.005f));
+      Assert.That(FaceDistanceRatio.DistanceMultiple(0.80f), Is.EqualTo(1.25f).Within(0.005f));
+      Assert.That(FaceDistanceRatio.DistanceMultiple(0.69f), Is.EqualTo(1.45f).Within(0.005f));
+    }
+
+    [Test]
     public void DistanceReferenceHasClearMonotonicFarNeutralNearAndTooCloseSizes()
     {
       const float farScale = 0.42f;
       const float nearScale = 1.72f;
       const float capScale = 1.95f;
       float Scale(float ratio) => FocusShiftView.EvaluateDistanceVisualScale(
-        ratio, farScale, nearScale, capScale, 0.72f, 1.18f, 1.30f);
+        ratio, farScale, nearScale, capScale, 0.69f, 1.34f, 1.60f);
 
-      Assert.That(Scale(0.72f), Is.EqualTo(farScale).Within(0.001f));
+      Assert.That(Scale(0.69f), Is.EqualTo(farScale).Within(0.001f));
       Assert.That(Scale(1f), Is.EqualTo(1f).Within(0.001f));
-      Assert.That(Scale(1.18f), Is.EqualTo(nearScale).Within(0.001f));
-      Assert.That(Scale(1.30f), Is.EqualTo(capScale).Within(0.001f));
+      Assert.That(Scale(1.34f), Is.EqualTo(nearScale).Within(0.001f));
+      Assert.That(Scale(1.60f), Is.EqualTo(capScale).Within(0.001f));
       Assert.That(Scale(2f), Is.EqualTo(capScale).Within(0.001f),
         "Too Close visual feedback must remain capped.");
-      Assert.That(Scale(0.88f), Is.LessThan(Scale(0.95f)));
+      // The whole Far -> Near travel must still read as continuous growth.
+      Assert.That(Scale(0.80f), Is.LessThan(Scale(0.95f)));
       Assert.That(Scale(0.95f), Is.LessThan(Scale(1f)));
-      Assert.That(Scale(1f), Is.LessThan(Scale(1.10f)));
-      Assert.That(Scale(1.10f), Is.LessThan(Scale(1.18f)));
-      Assert.That(Scale(1.18f), Is.LessThan(Scale(1.30f)));
+      Assert.That(Scale(1f), Is.LessThan(Scale(1.25f)));
+      Assert.That(Scale(1.25f), Is.LessThan(Scale(1.34f)));
+      Assert.That(Scale(1.34f), Is.LessThan(Scale(1.43f)));
+      Assert.That(Scale(1.43f), Is.LessThan(Scale(1.60f)));
     }
 
     [Test]
     public void GuidanceCorrectsFarAndNearOvershootInsteadOfRepeatingWrongPrompt()
     {
+      // Shipping bands, as linear ratios: neutral 0.95-1.05, near 1.25-1.43, far 0.69-0.80.
       FocusShiftGuidance Guidance(CareMovementDirection direction, float ratio) =>
-        FocusShiftController.ResolveGuidance(direction, ratio, 0.95f, 1.05f, 1.10f, 1.14f, 0.84f, 0.88f, 1.18f);
+        FocusShiftController.ResolveGuidance(direction, ratio, 0.95f, 1.05f, 1.25f, 1.43f, 0.69f, 0.80f, 1.60f);
 
       Assert.That(Guidance(CareMovementDirection.Far, 0.92f), Is.EqualTo(FocusShiftGuidance.MoveAway));
-      Assert.That(Guidance(CareMovementDirection.Far, 0.86f), Is.EqualTo(FocusShiftGuidance.HoldSteady));
-      Assert.That(Guidance(CareMovementDirection.Far, 0.80f), Is.EqualTo(FocusShiftGuidance.MoveCloser));
+      Assert.That(Guidance(CareMovementDirection.Far, 0.75f), Is.EqualTo(FocusShiftGuidance.HoldSteady));
+      Assert.That(Guidance(CareMovementDirection.Far, 0.64f), Is.EqualTo(FocusShiftGuidance.MoveCloser));
       Assert.That(Guidance(CareMovementDirection.Near, 1.06f), Is.EqualTo(FocusShiftGuidance.MoveCloser));
-      Assert.That(Guidance(CareMovementDirection.Near, 1.12f), Is.EqualTo(FocusShiftGuidance.HoldSteady));
-      Assert.That(Guidance(CareMovementDirection.Near, 1.16f), Is.EqualTo(FocusShiftGuidance.MoveAway));
-      Assert.That(Guidance(CareMovementDirection.Near, 1.20f), Is.EqualTo(FocusShiftGuidance.MoveAway));
+      // A ratio that used to complete the Near step is now barely a fifth of the way there.
+      Assert.That(Guidance(CareMovementDirection.Near, 1.12f), Is.EqualTo(FocusShiftGuidance.MoveCloser));
+      Assert.That(Guidance(CareMovementDirection.Near, 1.34f), Is.EqualTo(FocusShiftGuidance.HoldSteady));
+      Assert.That(Guidance(CareMovementDirection.Near, 1.50f), Is.EqualTo(FocusShiftGuidance.MoveAway));
+      Assert.That(Guidance(CareMovementDirection.Near, 1.65f), Is.EqualTo(FocusShiftGuidance.MoveAway));
     }
 
     private static object GetField(object target, string name)

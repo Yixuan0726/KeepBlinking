@@ -1,10 +1,21 @@
 using KeepBlinking.CareStation;
+using KeepBlinking.Input;
 using NUnit.Framework;
 
 namespace KeepBlinking.Tests
 {
   public sealed class CareDistanceReferenceTests
   {
+    /// <summary>
+    /// Face scales are area-like, so the scale matching a linear ratio r is r squared. Tests
+    /// that drive the step with scales must go through here, or they silently assert against
+    /// half the movement they read as.
+    /// </summary>
+    private static float Scale(float linearRatio)
+    {
+      return FaceDistanceRatio.ToFaceScale(1f, linearRatio);
+    }
+
     [Test]
     public void ReferenceUsesShortMedianWindowAndLocksUntilStepCompletes()
     {
@@ -40,33 +51,33 @@ namespace KeepBlinking.Tests
     public void CloserShowsProgressAboveTwoPercentAndCompletesAtSixPercentHold()
     {
       var step = new CareRelativeDistanceStep(CareDistanceDirection.Closer, 0.02f, 0.06f, 0.25f);
-      Assert.That(step.Advance(1.019f, 1f, 0.1f, true, true), Is.False);
+      Assert.That(step.Advance(Scale(1.019f), 1f, 0.1f, true, true), Is.False);
       Assert.That(step.Progress, Is.Zero);
-      Assert.That(step.Advance(1.03f, 1f, 0.1f, true, true), Is.False);
+      Assert.That(step.Advance(Scale(1.03f), 1f, 0.1f, true, true), Is.False);
       Assert.That(step.Progress, Is.EqualTo(0.25f).Within(0.01f));
-      Assert.That(step.Advance(1.061f, 1f, 0.13f, true, true), Is.False);
+      Assert.That(step.Advance(Scale(1.061f), 1f, 0.13f, true, true), Is.False);
       Assert.That(step.Progress, Is.EqualTo(1f));
-      Assert.That(step.Advance(1.061f, 1f, 0.12f, true, true), Is.True);
+      Assert.That(step.Advance(Scale(1.061f), 1f, 0.12f, true, true), Is.True);
     }
 
     [Test]
     public void AwayShowsProgressAboveTwoPercentAndCompletesAtSixPercentHold()
     {
       var step = new CareRelativeDistanceStep(CareDistanceDirection.Away, 0.02f, 0.06f, 0.25f);
-      Assert.That(step.Advance(0.97f, 1f, 0.1f, true, true), Is.False);
+      Assert.That(step.Advance(Scale(0.97f), 1f, 0.1f, true, true), Is.False);
       Assert.That(step.Progress, Is.EqualTo(0.25f).Within(0.01f));
-      Assert.That(step.Advance(0.939f, 1f, 0.13f, true, true), Is.False);
-      Assert.That(step.Advance(0.939f, 1f, 0.12f, true, true), Is.True);
+      Assert.That(step.Advance(Scale(0.939f), 1f, 0.13f, true, true), Is.False);
+      Assert.That(step.Advance(Scale(0.939f), 1f, 0.12f, true, true), Is.True);
     }
 
     [Test]
     public void WrongDirectionFallsGraduallyWithoutPenaltyOrCompletion()
     {
       var step = new CareRelativeDistanceStep(CareDistanceDirection.Closer, 0.02f, 0.06f, 0.25f, 0.4f);
-      step.Advance(1.05f, 1f, 0.1f, true, true);
+      step.Advance(Scale(1.05f), 1f, 0.1f, true, true);
       var prior = step.Progress;
       Assert.That(prior, Is.GreaterThan(0f));
-      Assert.That(step.Advance(0.97f, 1f, 0.1f, true, true), Is.False);
+      Assert.That(step.Advance(Scale(0.97f), 1f, 0.1f, true, true), Is.False);
       Assert.That(step.Progress, Is.GreaterThan(0f));
       Assert.That(step.Progress, Is.LessThan(prior));
     }
@@ -76,11 +87,12 @@ namespace KeepBlinking.Tests
     {
       const float reference = 0.14f;
       var step = new CareRelativeDistanceStep(CareDistanceDirection.Away);
-      step.Advance(reference * 0.95f, reference, 0.1f, true, true);
+      step.Advance(reference * Scale(0.88f), reference, 0.1f, true, true);
       var progress = step.Progress;
+      Assert.That(progress, Is.GreaterThan(0f));
       step.FreezeForTrackingLoss();
-      step.Advance(reference * 0.5f, reference, 1f, false, true);
-      step.Advance(reference * 0.5f, reference, 1f, true, false);
+      step.Advance(reference * Scale(0.5f), reference, 1f, false, true);
+      step.Advance(reference * Scale(0.5f), reference, 1f, true, false);
       Assert.That(step.Progress, Is.EqualTo(progress).Within(0.0001f));
       Assert.That(reference, Is.EqualTo(0.14f));
     }
@@ -89,10 +101,11 @@ namespace KeepBlinking.Tests
     public void CurrentScaleImmediatelyChangesDirectionalProgress()
     {
       var step = new CareRelativeDistanceStep(CareDistanceDirection.Away);
-      step.Advance(0.99f, 1f, 0.05f, true, true);
+      step.Advance(Scale(0.99f), 1f, 0.05f, true, true);
       Assert.That(step.Progress, Is.Zero);
-      step.Advance(0.96f, 1f, 0.05f, true, true);
-      Assert.That(step.DirectionDelta, Is.EqualTo(0.04f).Within(0.0001f));
+      // Half of the way from the 5% dead zone to the 22% completion threshold.
+      step.Advance(Scale(0.865f), 1f, 0.05f, true, true);
+      Assert.That(step.DirectionDelta, Is.EqualTo(0.135f).Within(0.0001f));
       Assert.That(step.Progress, Is.EqualTo(0.5f).Within(0.01f));
     }
 
@@ -122,7 +135,7 @@ namespace KeepBlinking.Tests
         action.Advance(0.01f, FreshFrame(1f, 0.01f));
         Assert.That(action.ExpectedDistanceDirection,
           Is.EqualTo((step & 1) == 0 ? CareDistanceDirection.Closer : CareDistanceDirection.Away));
-        var ratio = (step & 1) == 0 ? 1.061f : 0.939f;
+        var ratio = (step & 1) == 0 ? 1.221f : 0.779f;
         action.Advance(0.1f, FreshFrame(ratio, 0.1f));
         if (step < 3)
         {
@@ -141,10 +154,10 @@ namespace KeepBlinking.Tests
     public void SeparatePushPhasesAndCloserResetUseIndependentStepOrigins()
     {
       const float firstOrigin = 0.12f;
+      var farOrigin = firstOrigin * Scale(0.779f);
       var firstAway = new CareRelativeDistanceStep(CareDistanceDirection.Away, holdSeconds: 0.1f);
-      Assert.That(firstAway.Advance(firstOrigin * 0.939f, firstOrigin, 0.1f, true, true), Is.True);
+      Assert.That(firstAway.Advance(farOrigin, firstOrigin, 0.1f, true, true), Is.True);
 
-      var farOrigin = firstOrigin * 0.939f;
       var closer = new CareRelativeDistanceStep(CareDistanceDirection.Closer, holdSeconds: 0.1f);
       Assert.That(closer.Advance(firstOrigin, farOrigin, 0.1f, true, true), Is.True);
 
@@ -152,7 +165,7 @@ namespace KeepBlinking.Tests
       var secondAway = new CareRelativeDistanceStep(CareDistanceDirection.Away, holdSeconds: 0.1f);
       Assert.That(secondAway.Advance(farOrigin, secondOrigin, 1f, true, true), Is.False,
         "The first collection movement cannot complete the second collection origin.");
-      Assert.That(secondAway.Advance(secondOrigin * 0.939f, secondOrigin, 0.1f, true, true), Is.True);
+      Assert.That(secondAway.Advance(secondOrigin * Scale(0.779f), secondOrigin, 0.1f, true, true), Is.True);
     }
 
     [Test]
@@ -183,14 +196,15 @@ namespace KeepBlinking.Tests
         action.Advance(0.01f, FreshFrame(1f, 0.01f));
         var closer = (stepIndex & 1) == 0;
 
-        action.Advance(0.02f, FreshFrame(closer ? 1.021f : 0.979f, 0.02f));
-        Assert.That(action.DirectionProgress, Is.GreaterThan(0f), $"Step {stepIndex + 1} must react just past 2%.");
+        action.Advance(0.02f, FreshFrame(closer ? 1.06f : 0.94f, 0.02f));
+        Assert.That(action.DirectionProgress, Is.GreaterThan(0f),
+          $"Step {stepIndex + 1} must react just past the 5% dead zone.");
         Assert.That(action.DirectionProgress, Is.LessThan(0.1f));
 
-        action.Advance(0.03f, FreshFrame(closer ? 1.04f : 0.96f, 0.03f));
+        action.Advance(0.03f, FreshFrame(closer ? 1.135f : 0.865f, 0.03f));
         Assert.That(action.DirectionProgress, Is.EqualTo(0.5f).Within(0.02f));
 
-        action.Advance(0.1f, FreshFrame(closer ? 1.061f : 0.939f, 0.1f));
+        action.Advance(0.1f, FreshFrame(closer ? 1.221f : 0.779f, 0.1f));
         Assert.That(action.Data.focusTargetStep, Is.EqualTo(stepIndex + 1));
       }
 

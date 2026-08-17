@@ -74,8 +74,7 @@ namespace KeepBlinking.CareStation
     [Header("Screen Down")]
     [SerializeField, Min(0.1f)] private float _screenDownDemoSeconds = 1.2f;
     [SerializeField, Min(1f)] private float _screenDownSeconds = 20f;
-    [SerializeField, Range(90f, 180f)] private float _screenDownRelativeAngle = 150f;
-    [SerializeField, Range(5f, 60f)] private float _groundAlignmentDegrees = 35f;
+    [SerializeField, Range(10f, 70f)] private float _groundAlignmentDegrees = 40f;
     [SerializeField, Range(5f, 45f)] private float _returnAngleDegrees = 20f;
     [SerializeField, Min(0.1f)] private float _screenDownHoldSeconds = 0.5f;
     [SerializeField, Min(0.1f)] private float _returnHoldSeconds = 0.4f;
@@ -91,8 +90,10 @@ namespace KeepBlinking.CareStation
     [SerializeField, Range(0.25f, 0.4f)] private float _gestureReferenceCaptureSeconds = 0.3f;
     [SerializeField, Range(3, 15)] private int _gestureReferenceMinimumSamples = 5;
     [SerializeField, Min(0.1f)] private float _gestureScaleSmoothingSpeed = 12f;
-    [SerializeField, Range(0.005f, 0.05f)] private float _distanceDeadZone = 0.02f;
-    [SerializeField, Range(0.03f, 0.15f)] private float _distanceCompleteThreshold = 0.06f;
+    // Linear distance fractions (see FaceDistanceRatio): 0.22 means the step completes once
+    // the player has moved to 1/1.22 = 82% of the reference distance, about 8 cm from 45 cm.
+    [SerializeField, Range(0.01f, 0.12f)] private float _distanceDeadZone = 0.05f;
+    [SerializeField, Range(0.08f, 0.4f)] private float _distanceCompleteThreshold = 0.22f;
     [SerializeField, Range(0.05f, 1f)] private float _distanceStepHoldSeconds = 0.25f;
     [SerializeField, Range(0.05f, 1f)] private float _distanceProgressFallSeconds = 0.25f;
     [SerializeField, Range(0f, 2f)] private float _focusStepTransitionSeconds = 0.4f;
@@ -108,15 +109,14 @@ namespace KeepBlinking.CareStation
     private CareActionRuntime _runtime;
     private EdgeOrbitHarvestMvp _gameplay;
     private CareStationView _view;
-    private AttitudeSensor _attitudeSensor;
     private GravitySensor _gravitySensor;
     private Accelerometer _accelerometer;
     private UnityEngine.InputSystem.Gyroscope _gyroscope;
-    private Quaternion _initialAttitude;
-    private Quaternion _previousAttitude;
-    private Vector3 _initialScreenNormal;
-    private Vector3 _initialWorldGravity;
-    private float _stableAccelerationMagnitude = 1f;
+    private Vector3 _initialDeviceGravity = Vector3.back;
+    private Vector3 _deviceGravity = Vector3.back;
+    private Vector3 _previousDeviceGravity = Vector3.zero;
+    private float _accelerationMagnitude = 1f;
+    private float _angularSpeed;
     private bool _orientationCaptured;
     private bool _applicationActive = true;
     private bool _hasFocus = true;
@@ -446,7 +446,7 @@ namespace KeepBlinking.CareStation
         referenceValid = true;
         distanceRatio = _simulatedDistanceRatio.Value;
         _currentGestureRatio = distanceRatio;
-        _rawGestureFaceScale = _runtime.Data.gestureReferenceScale * distanceRatio;
+        _rawGestureFaceScale = FaceDistanceRatio.ToFaceScale(_runtime.Data.gestureReferenceScale, distanceRatio);
         ObserveFocusScale(_rawGestureFaceScale);
         _smoothedGestureFaceScale = _rawGestureFaceScale;
         _hasSmoothedGestureFaceScale = true;
@@ -455,9 +455,10 @@ namespace KeepBlinking.CareStation
         distanceSampleDelta = delta;
       }
 #endif
-      var sensorAvailable = SensorsAvailable;
-      var screenDown = IsScreenDownAndStable(delta);
-      var returned = IsReturnedAndStable(delta);
+      SampleMotion(delta);
+      var sensorAvailable = SensorsAvailable && _orientationCaptured;
+      var screenDown = IsScreenDownAndStable();
+      var returned = IsReturnedAndStable();
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
       sensorAvailable |= _simulateScreenDown || _simulateReturn;
       screenDown |= _simulateScreenDown;
@@ -622,7 +623,9 @@ namespace KeepBlinking.CareStation
         var smoothing = 1f - Mathf.Exp(-_gestureScaleSmoothingSpeed * Mathf.Max(0f, smoothingDelta));
         _smoothedGestureFaceScale = Mathf.Lerp(_smoothedGestureFaceScale, scale, smoothing);
       }
-      _currentGestureRatio = _smoothedGestureFaceScale / _runtime.Data.gestureReferenceScale;
+      _currentGestureRatio = FaceDistanceRatio.FromFaceScale(
+        _smoothedGestureFaceScale,
+        _runtime.Data.gestureReferenceScale);
       ratio = _currentGestureRatio;
     }
 
@@ -817,11 +820,9 @@ namespace KeepBlinking.CareStation
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
       if (_simulateScreenDown || _simulateReturn)
       {
-        _initialAttitude = Quaternion.identity;
-        _initialScreenNormal = Vector3.forward;
-        _initialWorldGravity = Vector3.down;
-        _previousAttitude = _initialAttitude;
-        _stableAccelerationMagnitude = 1f;
+        _initialDeviceGravity = Vector3.back;
+        _deviceGravity = Vector3.back;
+        _previousDeviceGravity = Vector3.back;
         _orientationCaptured = true;
         return;
       }
@@ -830,66 +831,67 @@ namespace KeepBlinking.CareStation
       var gravity = ReadGravity();
       var acceleration = ReadAccelerationMagnitude();
       if (gravity.sqrMagnitude <= 0.0001f || acceleration <= 0.01f) return;
-      _initialAttitude = _attitudeSensor.attitude.ReadValue();
-      _initialScreenNormal = ScreenDownRestMotionLogic.ScreenNormal(_initialAttitude);
-      _initialWorldGravity = (_initialAttitude * gravity.normalized).normalized;
-      _previousAttitude = _initialAttitude;
-      _stableAccelerationMagnitude = acceleration;
+      _initialDeviceGravity = gravity.normalized;
+      _deviceGravity = _initialDeviceGravity;
+      _previousDeviceGravity = _initialDeviceGravity;
       _orientationCaptured = true;
     }
 
     private void ResolveSensors()
     {
-      _attitudeSensor = AttitudeSensor.current;
       _gravitySensor = GravitySensor.current;
       _accelerometer = Accelerometer.current;
       _gyroscope = UnityEngine.InputSystem.Gyroscope.current;
-      Enable(_attitudeSensor);
       Enable(_gravitySensor);
       Enable(_accelerometer);
       Enable(_gyroscope);
     }
 
-    private bool SensorsAvailable => _orientationCaptured && _attitudeSensor != null &&
-                                     (_gravitySensor != null || _accelerometer != null);
+    private bool SensorsAvailable => _gravitySensor != null || _accelerometer != null;
 
     private static void Enable(InputDevice sensor)
     {
       if (sensor != null && !sensor.enabled) InputSystem.EnableDevice(sensor);
     }
 
-    private bool IsScreenDownAndStable(float delta)
+    /// <summary>
+    /// Sampled once per frame so both judgements below share one reading and the no-gyroscope
+    /// fallback always compares against the previous frame. See <see cref="ScreenDownRestMotionLogic"/>
+    /// for why this works on device-space gravity instead of the attitude sensor.
+    /// </summary>
+    private void SampleMotion(float delta)
     {
-      if (!SensorsAvailable) return false;
-      var attitude = _attitudeSensor.attitude.ReadValue();
-      var currentNormal = ScreenDownRestMotionLogic.ScreenNormal(attitude);
-      return ScreenDownRestMotionLogic.IsScreenDown(
-               _initialScreenNormal,
-               currentNormal,
-               _initialWorldGravity,
-               _screenDownRelativeAngle,
-               _groundAlignmentDegrees) && IsStable(attitude, delta);
+      var gravity = ReadGravity();
+      if (gravity.sqrMagnitude > 0.0001f)
+      {
+        _deviceGravity = gravity.normalized;
+        _angularSpeed = _gyroscope != null
+          ? _gyroscope.angularVelocity.ReadValue().magnitude
+          : ScreenDownRestMotionLogic.AngularSpeedFromGravity(_previousDeviceGravity, _deviceGravity, delta);
+        _previousDeviceGravity = _deviceGravity;
+      }
+      _accelerationMagnitude = ReadAccelerationMagnitude();
     }
 
-    private bool IsReturnedAndStable(float delta)
+    private bool IsScreenDownAndStable()
     {
-      if (!SensorsAvailable) return false;
-      var attitude = _attitudeSensor.attitude.ReadValue();
-      return ScreenDownRestMotionLogic.IsReturned(_initialAttitude, attitude, _returnAngleDegrees) &&
-             IsStable(attitude, delta);
+      if (!_orientationCaptured || !SensorsAvailable) return false;
+      return ScreenDownRestMotionLogic.IsScreenDown(_deviceGravity, _groundAlignmentDegrees) && IsStable();
     }
 
-    private bool IsStable(Quaternion attitude, float delta)
+    private bool IsReturnedAndStable()
     {
-      var angularSpeed = _gyroscope != null
-        ? _gyroscope.angularVelocity.ReadValue().magnitude
-        : Quaternion.Angle(_previousAttitude, attitude) / Mathf.Max(0.0001f, delta) * Mathf.Deg2Rad;
-      _previousAttitude = attitude;
+      if (!_orientationCaptured || !SensorsAvailable) return false;
+      return ScreenDownRestMotionLogic.IsReturned(_initialDeviceGravity, _deviceGravity, _returnAngleDegrees) &&
+             IsStable();
+    }
+
+    private bool IsStable()
+    {
       return ScreenDownRestMotionLogic.IsStable(
-        ReadAccelerationMagnitude(),
-        _stableAccelerationMagnitude,
+        _accelerationMagnitude,
         _accelerationTolerance,
-        angularSpeed,
+        _angularSpeed,
         _maximumGyroRadiansPerSecond);
     }
 
