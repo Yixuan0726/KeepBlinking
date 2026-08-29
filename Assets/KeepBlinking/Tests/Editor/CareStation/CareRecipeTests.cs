@@ -16,10 +16,10 @@ namespace KeepBlinking.Tests
       var save = new CareStationSaveData { careShiftId = 1 };
       var expected = new[]
       {
-        CareActionType.ScreenDown,
-        CareActionType.ClosedEyeRest,
         CareActionType.FocusShift,
+        CareActionType.PilotEyeRoutine,
         CareActionType.GuidedEyeCircles,
+        CareActionType.ClosedEyeRest,
       };
       for (var index = 0; index < expected.Length; index++)
       {
@@ -35,15 +35,24 @@ namespace KeepBlinking.Tests
     }
 
     [Test]
-    public void FirstTwoFormalRecipesAreDoubleActions()
+    public void FirstTwoFormalRecipesUseTheFixedBlinkFreeCareOrder()
     {
       var save = new CareStationSaveData { trainingProgress = 4, careShiftId = 5 };
       var first = CareRecipeGenerator.CreateForShift(save, 41, Settings);
-      Assert.That(first.ActionCount, Is.EqualTo(2));
+      Assert.That(first.actionList, Is.EqualTo(new[]
+      {
+        CareActionType.FocusShift,
+        CareActionType.ClosedEyeRest,
+      }));
       CompleteAndApply(save, first);
       save.careShiftId++;
       var second = CareRecipeGenerator.CreateForShift(save, 42, Settings);
-      Assert.That(second.ActionCount, Is.EqualTo(2));
+      Assert.That(second.actionList, Is.EqualTo(new[]
+      {
+        CareActionType.PilotEyeRoutine,
+        CareActionType.GuidedEyeCircles,
+        CareActionType.ClosedEyeRest,
+      }));
     }
 
     [TestCase(CareRecipeType.Single, 1)]
@@ -56,7 +65,7 @@ namespace KeepBlinking.Tests
     }
 
     [Test]
-    public void FormalRecipesNeverRepeatAnActionOrCombineBothClosedEyeActions()
+    public void FormalRecipesNeverRepeatAnActionAndAlwaysHaveActiveAndRestWork()
     {
       for (var seed = 0; seed < 100; seed++)
       {
@@ -64,39 +73,41 @@ namespace KeepBlinking.Tests
         {
           var recipe = CareRecipeGenerator.CreateFormal(type, 20, seed, Array.Empty<string>(), 0, 0);
           Assert.That(recipe.actionList.Distinct().Count(), Is.EqualTo(recipe.ActionCount));
-          Assert.That(recipe.actionList.Contains(CareActionType.ClosedEyeRest) &&
-                      recipe.actionList.Contains(CareActionType.GuidedEyeCircles), Is.False);
+          Assert.That(recipe.actionList.Contains(CareActionType.BlinkReset), Is.False);
+          Assert.That(recipe.actionList.Contains(CareActionType.ScreenDown), Is.False);
+          if (type != CareRecipeType.Single)
+            Assert.That(CareActionLibrary.HasValidFormalComposition(recipe.actionList), Is.True);
         }
       }
     }
 
     [Test]
-    public void FocusAndClosedEyeActionsUseComfortableOrder()
+    public void FormalTripleActionsUseComfortableOrder()
     {
       for (var seed = 0; seed < 64; seed++)
       {
         var recipe = CareRecipeGenerator.CreateFormal(CareRecipeType.Triple, 20, seed, Array.Empty<string>(), 0, 0);
-        Assert.That(recipe.actionList[0], Is.EqualTo(CareActionType.ScreenDown));
-        Assert.That(recipe.actionList[1], Is.EqualTo(CareActionType.FocusShift));
-        Assert.That(new[] { CareActionType.ClosedEyeRest, CareActionType.GuidedEyeCircles },
-          Does.Contain(recipe.actionList[2]));
+        Assert.That(recipe.actionList[2], Is.EqualTo(CareActionType.ClosedEyeRest));
+        Assert.That(CareActionLibrary.IsActiveAction(recipe.actionList[0]) ||
+                    CareActionLibrary.IsRestOrOffscreenAction(recipe.actionList[0]), Is.True);
       }
     }
 
     [Test]
-    public void FocusShiftWaitsOneCompleteShiftBeforeAppearingAgain()
+    public void NewlyGeneratedFormalShiftsNeverUseSingleRecipesAndFitTwoToThreeMinutes()
     {
-      var save = new CareStationSaveData { trainingProgress = 4, careShiftId = 10 };
-      var completed = Recipe(CareRecipeType.Double, 10, CareActionType.ScreenDown, CareActionType.FocusShift);
-      completed.recipeCompleted = true;
-      CareRecipeGenerator.ApplyCompletionToProgress(save, completed);
-      Assert.That(save.focusShiftCooldownUntilShiftId, Is.EqualTo(11));
-
-      for (var seed = 0; seed < 50; seed++)
+      for (var seed = 0; seed < 100; seed++)
       {
-        var next = CareRecipeGenerator.CreateFormal(CareRecipeType.Triple, 11, seed, Array.Empty<string>(), save.focusShiftCooldownUntilShiftId, 0);
-        Assert.That(next.actionList.Contains(CareActionType.FocusShift), Is.False);
-        Assert.That(next.ActionCount, Is.LessThan(3), "The generator must lower recipe length when cooldowns exhaust valid triples.");
+        var save = new CareStationSaveData
+        {
+          trainingProgress = 4,
+          formalRecipesCreated = 2,
+          careShiftId = 20 + seed,
+        };
+        var next = CareRecipeGenerator.CreateForShift(save, seed, Settings);
+        Assert.That(next.recipeType, Is.Not.EqualTo(CareRecipeType.Single));
+        var duration = CareActionLibrary.EstimatedRecipeSeconds(next.actionList, next.deepRest);
+        Assert.That(duration, Is.InRange(120f, 180f));
       }
     }
 
@@ -117,13 +128,43 @@ namespace KeepBlinking.Tests
     [Test]
     public void ImmediateAndRecentRecipeHistoryAreAvoidedWhenAlternativesExist()
     {
-      var repeated = CareRecipeGenerator.Signature(new[] { CareActionType.ScreenDown, CareActionType.FocusShift });
-      var history = new[] { "ScreenDown>ClosedEyeRest", "FocusShift>GuidedEyeCircles", repeated };
+      var repeated = CareRecipeGenerator.Signature(new[]
+        { CareActionType.PilotEyeRoutine, CareActionType.GuidedEyeCircles, CareActionType.ClosedEyeRest });
+      var history = new[]
+      {
+        CareRecipeGenerator.Signature(new[]
+          { CareActionType.FocusShift, CareActionType.GuidedEyeCircles, CareActionType.ClosedEyeRest }),
+        repeated,
+      };
       for (var seed = 0; seed < 32; seed++)
       {
-        var recipe = CareRecipeGenerator.CreateFormal(CareRecipeType.Double, 20, seed, history, 0, 0);
+        var recipe = CareRecipeGenerator.CreateFormal(CareRecipeType.Triple, 20, seed, history, 0, 0);
         Assert.That(CareRecipeGenerator.Signature(recipe.actionList), Is.Not.EqualTo(repeated));
       }
+    }
+
+    [Test]
+    public void RetiredBlinkStepRemovalRemapsMasksAndSupplementsShortRoutine()
+    {
+      var recipe = Recipe(
+        CareRecipeType.Triple,
+        50,
+        CareActionType.ScreenDown,
+        CareActionType.BlinkReset,
+        CareActionType.ClosedEyeRest);
+      recipe.completedActionMask = 1;
+      recipe.currentActionIndex = 1;
+
+      Assert.That(CareRecipeGenerator.RemoveRetiredBlinkReset(recipe, true), Is.True);
+
+      Assert.That(recipe.actionList, Is.EqualTo(new[]
+      {
+        CareActionType.FocusShift,
+        CareActionType.ClosedEyeRest,
+      }));
+      Assert.That(recipe.completedActionMask, Is.EqualTo(0));
+      Assert.That(recipe.currentActionIndex, Is.EqualTo(0));
+      Assert.That(CareActionLibrary.EstimatedRecipeSeconds(recipe.actionList, recipe.deepRest), Is.InRange(120f, 180f));
     }
 
     [Test]
@@ -138,11 +179,11 @@ namespace KeepBlinking.Tests
     [Test]
     public void CompletedStepAndRecipeSignalsCanOnlyBeConsumedOnce()
     {
-      var recipe = Recipe(CareRecipeType.Double, 2, CareActionType.ScreenDown, CareActionType.FocusShift);
+      var recipe = Recipe(CareRecipeType.Double, 2, CareActionType.FocusShift, CareActionType.ClosedEyeRest);
       var runtime = new CareRecipeRuntime(recipe);
-      Assert.That(runtime.CompleteCurrentAction(CareActionType.ScreenDown).Accepted, Is.True);
-      Assert.That(runtime.CompleteCurrentAction(CareActionType.ScreenDown).Accepted, Is.False);
-      Assert.That(runtime.CompleteCurrentAction(CareActionType.FocusShift).RecipeCompleted, Is.True);
+      Assert.That(runtime.CompleteCurrentAction(CareActionType.FocusShift).Accepted, Is.True);
+      Assert.That(runtime.CompleteCurrentAction(CareActionType.FocusShift).Accepted, Is.False);
+      Assert.That(runtime.CompleteCurrentAction(CareActionType.ClosedEyeRest).RecipeCompleted, Is.True);
       Assert.That(runtime.TryConsumeCompletionSignal(), Is.True);
       Assert.That(runtime.TryConsumeCompletionSignal(), Is.False);
       Assert.That(runtime.TryConsumeForProduction(), Is.True);
@@ -150,48 +191,38 @@ namespace KeepBlinking.Tests
     }
 
     [Test]
-    public void DeveloperSkippedScreenDownAdvancesRecipesWithoutDuplicatingProduction()
+    public void RetiredActionsAreRemovedWithoutDuplicatingProduction()
     {
-      var recipes = new[]
-      {
-        Recipe(CareRecipeType.Single, 31, CareActionType.ScreenDown),
-        Recipe(CareRecipeType.Double, 32, CareActionType.ScreenDown, CareActionType.FocusShift),
-        Recipe(CareRecipeType.Triple, 33, CareActionType.ScreenDown, CareActionType.FocusShift, CareActionType.ClosedEyeRest),
-      };
-      foreach (var recipe in recipes)
-      {
-        var runtime = new CareRecipeRuntime(recipe);
-        var skipped = runtime.CompleteCurrentAction(CareActionType.ScreenDown);
-        Assert.That(skipped.Accepted, Is.True);
-        recipe.developerSkippedActionMask |= 1 << skipped.CompletedStepIndex;
-        Assert.That(recipe.IsStepDeveloperSkipped(0), Is.True);
-        Assert.That(recipe.CurrentAction, Is.EqualTo(recipe.ActionCount == 1 ? CareActionType.None : CareActionType.FocusShift));
-        while (!recipe.recipeCompleted)
-          Assert.That(runtime.CompleteCurrentAction(recipe.CurrentAction).Accepted, Is.True);
-        Assert.That(runtime.TryConsumeForProduction(), Is.True);
-        Assert.That(runtime.TryConsumeForProduction(), Is.False);
-      }
+      var recipe = Recipe(CareRecipeType.Triple, 33,
+        CareActionType.ScreenDown, CareActionType.FocusShift, CareActionType.ClosedEyeRest);
+      Assert.That(CareRecipeGenerator.RemoveRetiredBlinkReset(recipe, true), Is.True);
+      CollectionAssert.DoesNotContain(recipe.actionList, CareActionType.ScreenDown);
+      var runtime = new CareRecipeRuntime(recipe);
+      while (!recipe.recipeCompleted)
+        Assert.That(runtime.CompleteCurrentAction(recipe.CurrentAction).Accepted, Is.True);
+      Assert.That(runtime.TryConsumeForProduction(), Is.True);
+      Assert.That(runtime.TryConsumeForProduction(), Is.False);
     }
 
     [Test]
-    public void ChangeStepReplacesScreenDownWithRealRestAndPreservesCompletedSteps()
+    public void ChangeStepReplacesGuidedWithRealRestAndPreservesCompletedSteps()
     {
       var recipe = Recipe(
         CareRecipeType.Triple,
         40,
-        CareActionType.ScreenDown,
         CareActionType.FocusShift,
-        CareActionType.GuidedEyeCircles);
+        CareActionType.GuidedEyeCircles,
+        CareActionType.ClosedEyeRest);
       var runtime = new CareRecipeRuntime(recipe);
-      Assert.That(runtime.CompleteCurrentAction(CareActionType.ScreenDown).Accepted, Is.True);
+      Assert.That(runtime.CompleteCurrentAction(CareActionType.FocusShift).Accepted, Is.True);
 
       var replacement = runtime.ReplaceCurrentWithClosedEyeRest();
       Assert.That(replacement.Accepted, Is.True);
-      Assert.That(replacement.OriginalAction, Is.EqualTo(CareActionType.FocusShift));
+      Assert.That(replacement.OriginalAction, Is.EqualTo(CareActionType.GuidedEyeCircles));
       Assert.That(recipe.IsStepCompleted(0), Is.True);
       Assert.That(recipe.CurrentAction, Is.EqualTo(CareActionType.ClosedEyeRest));
       Assert.That(recipe.IsStepReplaced(1), Is.True);
-      Assert.That(recipe.OriginalActionAt(1), Is.EqualTo(CareActionType.FocusShift));
+      Assert.That(recipe.OriginalActionAt(1), Is.EqualTo(CareActionType.GuidedEyeCircles));
       Assert.That(recipe.recipeCompleted, Is.False);
     }
 
@@ -201,23 +232,23 @@ namespace KeepBlinking.Tests
       var recipe = Recipe(
         CareRecipeType.Double,
         41,
-        CareActionType.ScreenDown,
+        CareActionType.FocusShift,
         CareActionType.ClosedEyeRest);
       var runtime = new CareRecipeRuntime(recipe);
       var replacement = runtime.ReplaceCurrentWithClosedEyeRest();
 
       Assert.That(replacement.Accepted, Is.True);
       Assert.That(recipe.actionList, Is.EqualTo(new[] { CareActionType.ClosedEyeRest }));
-      Assert.That(recipe.OriginalActionAt(0), Is.EqualTo(CareActionType.ScreenDown));
+      Assert.That(recipe.OriginalActionAt(0), Is.EqualTo(CareActionType.FocusShift));
       Assert.That(runtime.CompleteCurrentAction(CareActionType.ClosedEyeRest).RecipeCompleted, Is.True);
       Assert.That(runtime.TryConsumeForProduction(), Is.True);
       Assert.That(runtime.TryConsumeForProduction(), Is.False,
         "Replacing a step cannot create a second bottle-production signal.");
     }
 
-    [TestCase(CareActionType.ScreenDown)]
     [TestCase(CareActionType.FocusShift)]
     [TestCase(CareActionType.GuidedEyeCircles)]
+    [TestCase(CareActionType.PilotEyeRoutine)]
     public void EveryEligibleCareActionCanBeReplacedByClosedEyeRest(CareActionType original)
     {
       var recipe = Recipe(CareRecipeType.Single, 43, original);
@@ -250,6 +281,56 @@ namespace KeepBlinking.Tests
     public void PipelineFeedbackMatchesRecipeLength(int step, int count, int expectedMask)
     {
       Assert.That(CareRecipePipeline.StageMaskForCompletion(step, count), Is.EqualTo(expectedMask));
+    }
+
+    [Test]
+    public void PilotRestoresFilterAndCareCoreWithoutRetiredTasks()
+    {
+      Assert.That(
+        CareRecipePipeline.StageMaskForAction(CareActionType.PilotEyeRoutine),
+        Is.EqualTo(CareRecipePipeline.Filter | CareRecipePipeline.CareCore));
+      Assert.That(CareRecipePipeline.StageMaskForAction(CareActionType.GuidedEyeCircles),
+        Is.EqualTo(CareRecipePipeline.CareCore));
+      Assert.That(CareRecipePipeline.StageMaskForAction(CareActionType.ClosedEyeRest),
+        Is.EqualTo(CareRecipePipeline.Tank | CareRecipePipeline.CareCore));
+      Assert.That(CareRecipePipeline.StageMaskForAction(CareActionType.FocusShift),
+        Is.EqualTo(CareRecipePipeline.Press | CareRecipePipeline.Tank));
+      Assert.That(CareRecipePipeline.StageMaskForAction(CareActionType.ScreenDown), Is.Zero);
+      Assert.That(CareRecipePipeline.StageMaskForAction(CareActionType.BlinkReset), Is.Zero);
+    }
+
+    [Test]
+    public void EveryPilotIsImmediatelyFollowedByGuidedAndNeverLast()
+    {
+      for (var seed = 0; seed < 100; seed++)
+      {
+        var legacySingle = CareRecipeGenerator.CreateFormal(CareRecipeType.Single, 30, seed,
+          Array.Empty<string>(), 0, 0);
+        Assert.That(legacySingle.actionList.Contains(CareActionType.PilotEyeRoutine), Is.False,
+          "Even the legacy/development Single entry point must never create a standalone Pilot task.");
+
+        var recipe = CareRecipeGenerator.CreateFormal(CareRecipeType.Triple, 30, seed,
+          Array.Empty<string>(), 0, 0);
+        var pilot = Array.IndexOf(recipe.actionList, CareActionType.PilotEyeRoutine);
+        if (pilot < 0) continue;
+        Assert.That(pilot, Is.LessThan(recipe.ActionCount - 1));
+        Assert.That(recipe.actionList[pilot + 1], Is.EqualTo(CareActionType.GuidedEyeCircles));
+      }
+    }
+
+    [Test]
+    public void IllegalPilotRecipeMovesGuidedNextToPilotWithoutRepeatingIt()
+    {
+      var recipe = Recipe(CareRecipeType.Triple, 77,
+        CareActionType.GuidedEyeCircles, CareActionType.PilotEyeRoutine, CareActionType.ClosedEyeRest);
+      Assert.That(CareRecipeGenerator.RemoveRetiredBlinkReset(recipe, true), Is.True);
+      Assert.That(recipe.actionList, Is.EqualTo(new[]
+      {
+        CareActionType.PilotEyeRoutine,
+        CareActionType.GuidedEyeCircles,
+        CareActionType.ClosedEyeRest,
+      }));
+      Assert.That(recipe.actionList.Count(action => action == CareActionType.GuidedEyeCircles), Is.EqualTo(1));
     }
 
     private static CareRecipeSaveData Recipe(CareRecipeType type, int shift, params CareActionType[] actions)

@@ -1,12 +1,13 @@
 using System;
 using System.IO;
+using System.Linq;
 using UnityEngine;
 
 namespace KeepBlinking.CareStation
 {
   public sealed class CareStationSaveService
   {
-    public const int CurrentVersion = 15;
+    public const int CurrentVersion = 20;
     public string SavePath { get; }
 
     public CareStationSaveService(string savePath = null)
@@ -212,7 +213,7 @@ namespace KeepBlinking.CareStation
         data.careActionGestureReferenceScale = 0f;
         data.careActionReferenceValid = false;
       }
-      if (loadedVersion < CurrentVersion)
+      if (loadedVersion < 9)
       {
         // Recipe-capable legacy versions can still contain an empty recipe
         // while carrying pre-recipe shift progress. Preserve any serialized
@@ -315,6 +316,66 @@ namespace KeepBlinking.CareStation
           data.currentState = CareStationState.WaitDistanceResetMoveAway;
         data.collectedExperienceCount = data.storedFullBottles + data.storedGoldBottles;
       }
+      if (loadedVersion < 16)
+      {
+        // v16 changes the care language and action cadence without replacing an
+        // in-progress shift. The serialized enum values for ScreenDown and
+        // GuidedEyeCircles remain stable; only their player-facing names change.
+        // An already-running legacy action has effectively passed the new
+        // routine opening card, so resume it directly instead of replaying an
+        // input-blocking introduction after a reload.
+        if (IsRecipeFlowState(data.currentState) && data.currentRecipe != null)
+          data.currentRecipe.routineIntroCompleted = true;
+
+        if (data.currentRecipe != null && data.currentRecipe.ActionCount > 0)
+        {
+          data.currentRecipe.deepRest =
+            CareActionLibrary.EstimatedRecipeSeconds(data.currentRecipe.actionList, false) <
+            CareActionLibrary.MinimumFormalRoutineSeconds &&
+            CareActionLibrary.EstimatedRecipeSeconds(data.currentRecipe.actionList, true) <=
+            CareActionLibrary.MaximumFormalRoutineSeconds;
+        }
+
+        // Old Focus Shift checkpoints used a different threshold and step
+        // model. Preserve the recipe and shift, but safely restart only this
+        // current action against the immutable Session baseline.
+        if (data.careAction != null &&
+            data.careAction.actionType == CareActionType.FocusShift &&
+            data.careAction.stage != CareActionStage.Completed)
+        {
+          var sessionBaseline = data.careActionGestureReferenceScale;
+          var sessionBaselineValid = data.careActionReferenceValid &&
+                                     CareDistanceReferenceSampler.IsValidScale(sessionBaseline);
+          data.careAction.Reset();
+          data.careAction.actionType = CareActionType.FocusShift;
+          data.careAction.internalPhase = CareActionInternalPhase.FocusReference;
+          data.careAction.stage = CareActionStage.Preparing;
+          data.careAction.gestureReferenceScale = sessionBaselineValid ? sessionBaseline : 0f;
+          data.careAction.gestureReferenceValid = sessionBaselineValid;
+        }
+      }
+      if (loadedVersion < 17)
+      {
+        MigrateRetiredBlinkReset(data, loadedVersion);
+      }
+      if (loadedVersion < 18)
+      {
+        // v18 separates rare Gold Bottles from the physical Full Bottle rack
+        // and makes unaffordable upgrade opportunities deferrable. Inventory,
+        // recipe, collection and shift progress remain untouched.
+        data.upgradeDeferred = false;
+      }
+      if (loadedVersion < 19)
+      {
+        MigrateFinalCareActionLibrary(data);
+      }
+      if (loadedVersion < 20)
+      {
+        // v20 adds resumable, one-shot narration bookkeeping. Legacy actions
+        // keep all timing and progress; only narration starts with safe defaults.
+        ResetLegacyVoiceState(data.careAction);
+        ResetLegacyVoiceState(data.currentRecipe?.deferredActionSnapshot);
+      }
       data.saveVersion = CurrentVersion;
       data.currentShift = Mathf.Max(1, data.currentShift);
       data.careShiftId = Mathf.Max(1, data.careShiftId);
@@ -356,6 +417,8 @@ namespace KeepBlinking.CareStation
         data.distanceResetAwayCompleted = false;
       }
       CareStationShiftRules.SynchronizeUpgradeValues(data, new CareStationUpgradeConfiguration());
+      if (loadedVersion < 18)
+        data.offlineProductionPausedByFullStorage = CareStationStorageRules.Remaining(data) <= 0;
       data.completedShifts = Mathf.Max(0, data.completedShifts);
       data.unlockedUpgradeMask &= CareStationShiftRules.AllUpgradeMask;
       data.pendingGoldBottleCount = Mathf.Clamp(data.pendingGoldBottleCount, 0, Mathf.Max(1, data.pendingIncidentXP));
@@ -382,7 +445,13 @@ namespace KeepBlinking.CareStation
       SanitizeReference(ref data.offlinePushReferenceScale, ref data.offlinePushReferenceValid);
       SanitizeReference(ref data.carePushReferenceScale, ref data.carePushReferenceValid);
       SanitizeCareAction(data.careAction);
-      data.trainingProgress = Mathf.Clamp(data.trainingProgress, 0, 4);
+      if (data.currentRecipe.deferredActionSnapshot == null)
+        data.currentRecipe.deferredActionSnapshot = new CareActionSaveData();
+      SanitizeCareAction(data.currentRecipe.deferredActionSnapshot);
+      if (CareActionLibrary.IsRetiredTask(data.currentRecipe.deferredActionSnapshot.actionType))
+        data.currentRecipe.deferredActionSnapshot.Reset();
+      data.completedTrainingActionMask &= CareRecipeGenerator.AllTrainingActionMask;
+      data.trainingProgress = CareRecipeGenerator.CompletedTrainingCount(data.completedTrainingActionMask);
       data.formalRecipesCreated = Mathf.Max(0, data.formalRecipesCreated);
       data.focusShiftCooldownUntilShiftId = Mathf.Max(0, data.focusShiftCooldownUntilShiftId);
       data.guidedEyeCirclesCooldownUntilShiftId = Mathf.Max(0, data.guidedEyeCirclesCooldownUntilShiftId);
@@ -433,6 +502,66 @@ namespace KeepBlinking.CareStation
       }
       if (string.IsNullOrWhiteSpace(data.lastActiveUtc)) data.StampActive(utcNow);
       if (string.IsNullOrWhiteSpace(data.lastClaimedUtc)) data.StampClaimed(utcNow);
+    }
+
+    private static void MigrateRetiredBlinkReset(CareStationSaveData data, int loadedVersion)
+    {
+      var completedTrainingMask = 0;
+      if (loadedVersion >= 16)
+      {
+        // v16 training order was retired Blink, Focus, Screen Break, Rest.
+        // Blink supplied no care credit; retain only real completed actions.
+        if (data.trainingProgress >= 2) completedTrainingMask |= CareRecipeGenerator.TrainingBit(CareActionType.FocusShift);
+        if (data.trainingProgress >= 3) completedTrainingMask |= CareRecipeGenerator.TrainingBit(CareActionType.ScreenDown);
+        if (data.trainingProgress >= 4) completedTrainingMask |= CareRecipeGenerator.TrainingBit(CareActionType.ClosedEyeRest);
+      }
+      else
+      {
+        // v1-v15 used Screen Down, Closed-Eye Rest, Focus Shift and Guided
+        // Eye Circles. All four remain real actions under their current names.
+        if (data.trainingProgress >= 1) completedTrainingMask |= CareRecipeGenerator.TrainingBit(CareActionType.ScreenDown);
+        if (data.trainingProgress >= 2) completedTrainingMask |= CareRecipeGenerator.TrainingBit(CareActionType.ClosedEyeRest);
+        if (data.trainingProgress >= 3) completedTrainingMask |= CareRecipeGenerator.TrainingBit(CareActionType.FocusShift);
+        if (data.trainingProgress >= 4) completedTrainingMask |= CareRecipeGenerator.TrainingBit(CareActionType.GuidedEyeCircles);
+      }
+
+      var recipe = data.currentRecipe;
+      if (recipe != null && recipe.recipeType == CareRecipeType.Training && recipe.recipeCompleted &&
+          recipe.actionList != null && recipe.actionList.Length == 1)
+        completedTrainingMask |= CareRecipeGenerator.TrainingBit(recipe.actionList[0]);
+      data.completedTrainingActionMask = completedTrainingMask & CareRecipeGenerator.AllTrainingActionMask;
+      data.trainingProgress = CareRecipeGenerator.CompletedTrainingCount(data.completedTrainingActionMask);
+
+      var activeBlinkTraining = recipe != null && recipe.recipeType == CareRecipeType.Training &&
+                                !recipe.recipeCompleted && recipe.actionList != null &&
+                                recipe.actionList.Contains(CareActionType.BlinkReset);
+      if (activeBlinkTraining)
+      {
+        var replacement = CareRecipeGenerator.CreateTraining(
+          CareRecipeGenerator.NextTrainingIndex(data),
+          Math.Max(1, recipe.createdShiftId > 0 ? recipe.createdShiftId : data.careShiftId),
+          recipe.recipeSeed);
+        // The shift/routine itself is already in progress. Avoid replaying the
+        // global opening card, while allowing the Focus action's own intro.
+        replacement.routineIntroCompleted = recipe.routineIntroCompleted;
+        replacement.routineIntroElapsedSeconds = recipe.routineIntroElapsedSeconds;
+        data.currentRecipe = recipe = replacement;
+      }
+      else if (recipe != null)
+      {
+        CareRecipeGenerator.RemoveRetiredBlinkReset(recipe, true);
+      }
+
+      if (data.careAction != null && data.careAction.actionType == CareActionType.BlinkReset)
+        data.careAction.Reset();
+
+      if (data.recentRecipeHistory != null)
+      {
+        data.recentRecipeHistory = data.recentRecipeHistory
+          .Where(entry => !string.IsNullOrEmpty(entry) &&
+                          entry.IndexOf(nameof(CareActionType.BlinkReset), StringComparison.Ordinal) < 0)
+          .ToArray();
+      }
     }
 
     private static void MigrateLegacyRecipe(CareStationSaveData data)
@@ -549,15 +678,121 @@ namespace KeepBlinking.CareStation
       action.elapsedSeconds = Mathf.Max(0f, action.elapsedSeconds);
       action.phaseElapsedSeconds = Mathf.Max(0f, action.phaseElapsedSeconds);
       action.holdElapsedSeconds = Mathf.Max(0f, action.holdElapsedSeconds);
-      action.focusTargetStep = Mathf.Clamp(action.focusTargetStep, 0, 4);
+      action.focusTargetStep = Mathf.Clamp(action.focusTargetStep, 0, 12);
+      action.focusCycleCount = Mathf.Clamp(action.focusCycleCount, 0, 6);
       action.distanceDirectionProgress = Mathf.Clamp01(action.distanceDirectionProgress);
       if (!Enum.IsDefined(typeof(CareDistanceFallbackReason), action.distanceFallbackReason))
         action.distanceFallbackReason = CareDistanceFallbackReason.None;
       if (!Enum.IsDefined(typeof(CareActionCompletionSource), action.completionSource))
         action.completionSource = CareActionCompletionSource.None;
       action.guidedStage = Mathf.Clamp(action.guidedStage, 0, 7);
+      action.guidedLapCount = Mathf.Clamp(action.guidedLapCount, 0, 3);
+      action.guidedNormalizedProgress = Mathf.Clamp01(action.guidedNormalizedProgress);
+      action.pilotCurrentAxis = Mathf.Clamp(action.pilotCurrentAxis, 0, 4);
+      action.pilotCurrentRound = Mathf.Clamp(action.pilotCurrentRound, 0, 3);
+      action.pilotCurrentEndpoint = Mathf.Clamp(action.pilotCurrentEndpoint, 0, 4);
+      action.pilotNormalizedMoveProgress = Mathf.Clamp01(action.pilotNormalizedMoveProgress);
+      action.restEarlyOpenVoiceCooldown = Mathf.Max(0f, action.restEarlyOpenVoiceCooldown);
+      action.consumedVoiceCueMask &= 0x00FFFFFF;
+      action.lastVoiceEventId = Mathf.Max(-1, action.lastVoiceEventId);
       SanitizeReference(ref action.gestureReferenceScale, ref action.gestureReferenceValid);
       if (!Enum.IsDefined(typeof(CareActionType), action.actionType)) action.Reset();
+    }
+
+    private static void ResetLegacyVoiceState(CareActionSaveData action)
+    {
+      if (action == null) return;
+      action.consumedVoiceCueMask = 0;
+      action.lastVoiceEventId = -1;
+    }
+
+    private static void MigrateFinalCareActionLibrary(CareStationSaveData data)
+    {
+      if (data == null) return;
+
+      var displacedActiveAction = data.careAction != null &&
+                                  data.careAction.actionType != CareActionType.None &&
+                                  !CareActionLibrary.IsRetiredTask(data.careAction.actionType) &&
+                                  data.careAction.internalPhase != CareActionInternalPhase.None &&
+                                  data.careAction.stage != CareActionStage.Completed
+        ? data.careAction
+        : null;
+
+      // v18 bit 2 represented the retired Screen Break training. It must not
+      // become credit for the new Pilot action which intentionally reuses that
+      // bit in v19. Real Focus, Guided and Rest credit is preserved.
+      data.completedTrainingActionMask &=
+        CareRecipeGenerator.TrainingBit(CareActionType.FocusShift) |
+        CareRecipeGenerator.TrainingBit(CareActionType.GuidedEyeCircles) |
+        CareRecipeGenerator.TrainingBit(CareActionType.ClosedEyeRest);
+      data.trainingProgress = CareRecipeGenerator.CompletedTrainingCount(data.completedTrainingActionMask);
+
+      var recipe = data.currentRecipe;
+      var postProduction = recipe != null && (recipe.recipeCompleted || recipe.completionConsumed ||
+        data.careActionCompleted || data.pendingIncidentXP > 0 || data.collectedCareBottleValue > 0);
+      if (postProduction && recipe != null) recipe.completionFeedbackPlayed = true;
+      if (recipe != null && !postProduction)
+      {
+        var retiredTraining = recipe.recipeType == CareRecipeType.Training && recipe.actionList != null &&
+                              recipe.actionList.Any(CareActionLibrary.IsRetiredTask);
+        if (retiredTraining)
+        {
+          var next = CareRecipeGenerator.NextTrainingIndex(data);
+          var replacement = CareRecipeGenerator.CreateTraining(
+            next,
+            Math.Max(1, recipe.createdShiftId > 0 ? recipe.createdShiftId : data.careShiftId),
+            recipe.recipeSeed);
+          replacement.routineIntroCompleted = recipe.routineIntroCompleted;
+          replacement.routineIntroElapsedSeconds = recipe.routineIntroElapsedSeconds;
+          data.currentRecipe = recipe = replacement;
+        }
+        else if (recipe.recipeType == CareRecipeType.Inspection)
+        {
+          var replacement = CareStationInspectionRules.CreateRecipe(
+            Math.Max(1, recipe.createdShiftId > 0 ? recipe.createdShiftId : data.careShiftId));
+          var oldGuided = Array.IndexOf(recipe.actionList ?? Array.Empty<CareActionType>(), CareActionType.GuidedEyeCircles);
+          var oldRest = Array.IndexOf(recipe.actionList ?? Array.Empty<CareActionType>(), CareActionType.ClosedEyeRest);
+          if (oldGuided >= 0 && recipe.IsStepCompleted(oldGuided)) replacement.completedActionMask |= 1 << 1;
+          if (oldRest >= 0 && recipe.IsStepCompleted(oldRest)) replacement.completedActionMask |= 1 << 2;
+          replacement.currentActionIndex = FirstIncompleteRecipeStep(replacement);
+          replacement.routineIntroCompleted = recipe.routineIntroCompleted;
+          replacement.routineIntroElapsedSeconds = recipe.routineIntroElapsedSeconds;
+          data.currentRecipe = recipe = replacement;
+        }
+        else
+        {
+          CareRecipeGenerator.RemoveRetiredBlinkReset(recipe, true);
+        }
+
+        if (displacedActiveAction != null && recipe.actionList != null &&
+            recipe.actionList.Contains(displacedActiveAction.actionType) &&
+            recipe.CurrentAction != displacedActiveAction.actionType)
+        {
+          recipe.deferredActionSnapshot = displacedActiveAction;
+          data.careAction = new CareActionSaveData();
+        }
+      }
+
+      if (!postProduction && data.careAction != null &&
+          CareActionLibrary.IsRetiredTask(data.careAction.actionType))
+        data.careAction.Reset();
+
+      if (data.recentRecipeHistory != null)
+      {
+        data.recentRecipeHistory = data.recentRecipeHistory
+          .Where(entry => !string.IsNullOrEmpty(entry) &&
+                          entry.IndexOf(nameof(CareActionType.BlinkReset), StringComparison.Ordinal) < 0 &&
+                          entry.IndexOf(nameof(CareActionType.ScreenDown), StringComparison.Ordinal) < 0)
+          .ToArray();
+      }
+    }
+
+    private static int FirstIncompleteRecipeStep(CareRecipeSaveData recipe)
+    {
+      if (recipe == null) return 0;
+      for (var index = 0; index < recipe.ActionCount; index++)
+        if (!recipe.IsStepCompleted(index)) return index;
+      return recipe.ActionCount;
     }
 
     private static void SanitizeReference(ref float scale, ref bool valid)

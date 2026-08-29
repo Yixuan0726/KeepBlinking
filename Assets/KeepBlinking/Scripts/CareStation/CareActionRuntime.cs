@@ -6,6 +6,8 @@ namespace KeepBlinking.CareStation
   [Serializable]
   public struct CareActionConfiguration
   {
+    public bool showIntro;
+    public float actionIntroSeconds;
     public float screenDownDemoSeconds;
     public float screenDownDurationSeconds;
     public float screenDownHoldSeconds;
@@ -18,15 +20,31 @@ namespace KeepBlinking.CareStation
     public float distanceStepHoldSeconds;
     public float distanceProgressFallSeconds;
     public float focusStepTransitionSeconds;
+    public float focusNeutralMinimum;
+    public float focusNeutralMaximum;
+    public float focusCloserRatio;
+    public float focusAwayRatio;
+    public float focusTooCloseRatio;
+    public float focusTargetHoldSeconds;
+    public float focusMinimumLegSeconds;
+    public float focusDirectionIntervalSeconds;
+    public int focusCycleCount;
     public float guidedPreviewSeconds;
     public float guidedClockwiseSeconds;
     public float guidedPauseSeconds;
     public float guidedCounterClockwiseSeconds;
     public float guidedRelaxSeconds;
+    public int guidedLapsPerDirection;
+    public float pilotIntroSeconds;
+    public float pilotRoundSeconds;
+    public int pilotRoundsPerAxis;
+    public float pilotTransitionSeconds;
 
     public static CareActionConfiguration Default => new CareActionConfiguration
     {
-      screenDownDemoSeconds = 1.2f,
+      showIntro = false,
+      actionIntroSeconds = 2.5f,
+      screenDownDemoSeconds = 3f,
       screenDownDurationSeconds = 20f,
       screenDownHoldSeconds = 0.5f,
       screenReturnHoldSeconds = 0.4f,
@@ -36,18 +54,33 @@ namespace KeepBlinking.CareStation
       // Linear distance fractions (see FaceDistanceRatio), not raw face-scale fractions.
       distanceDeadZone = 0.05f,
       distanceCompleteThreshold = 0.22f,
-      distanceStepHoldSeconds = 0.25f,
+      distanceStepHoldSeconds = 0.7f,
       distanceProgressFallSeconds = 0.25f,
-      focusStepTransitionSeconds = 0.4f,
-      guidedPreviewSeconds = 4f,
-      guidedClockwiseSeconds = 8f,
-      guidedPauseSeconds = 2f,
-      guidedCounterClockwiseSeconds = 8f,
-      guidedRelaxSeconds = 5f,
+      focusStepTransitionSeconds = 1.2f,
+      focusNeutralMinimum = 0.94f,
+      focusNeutralMaximum = 1.06f,
+      focusCloserRatio = 1.25f,
+      focusAwayRatio = 0.78f,
+      focusTooCloseRatio = 1.45f,
+      focusTargetHoldSeconds = 0.7f,
+      focusMinimumLegSeconds = 3f,
+      focusDirectionIntervalSeconds = 1.2f,
+      focusCycleCount = 6,
+      guidedPreviewSeconds = 2.5f,
+      guidedClockwiseSeconds = 5f,
+      guidedPauseSeconds = 0.9f,
+      guidedCounterClockwiseSeconds = 5f,
+      guidedRelaxSeconds = 12f,
+      guidedLapsPerDirection = 3,
+      pilotIntroSeconds = 3f,
+      pilotRoundSeconds = 3.5f,
+      pilotRoundsPerAxis = 3,
+      pilotTransitionSeconds = 1.25f,
     };
 
     public void Sanitize()
     {
+      actionIntroSeconds = Mathf.Clamp(actionIntroSeconds, 2f, 4f);
       screenDownDemoSeconds = Mathf.Max(0.1f, screenDownDemoSeconds);
       screenDownDurationSeconds = Mathf.Max(1f, screenDownDurationSeconds);
       screenDownHoldSeconds = Mathf.Max(0.1f, screenDownHoldSeconds);
@@ -60,11 +93,25 @@ namespace KeepBlinking.CareStation
       distanceStepHoldSeconds = Mathf.Clamp(distanceStepHoldSeconds, 0.05f, 1f);
       distanceProgressFallSeconds = Mathf.Clamp(distanceProgressFallSeconds, 0.05f, 1f);
       focusStepTransitionSeconds = Mathf.Clamp(focusStepTransitionSeconds, 0f, 2f);
+      focusNeutralMinimum = Mathf.Clamp(focusNeutralMinimum, 0.75f, 1f);
+      focusNeutralMaximum = Mathf.Clamp(focusNeutralMaximum, 1f, 1.2f);
+      focusCloserRatio = Mathf.Clamp(focusCloserRatio, 1.10f, 1.5f);
+      focusAwayRatio = Mathf.Clamp(focusAwayRatio, 0.55f, 0.9f);
+      focusTooCloseRatio = Mathf.Max(focusCloserRatio + 0.05f, focusTooCloseRatio);
+      focusTargetHoldSeconds = Mathf.Clamp(focusTargetHoldSeconds, 0.2f, 1.5f);
+      focusMinimumLegSeconds = Mathf.Clamp(focusMinimumLegSeconds, 2.5f, 8f);
+      focusDirectionIntervalSeconds = Mathf.Clamp(focusDirectionIntervalSeconds, 1.2f, 3f);
+      focusCycleCount = Mathf.Clamp(focusCycleCount, 1, 8);
       guidedPreviewSeconds = Mathf.Max(0.1f, guidedPreviewSeconds);
       guidedClockwiseSeconds = Mathf.Max(0.1f, guidedClockwiseSeconds);
       guidedPauseSeconds = Mathf.Max(0.1f, guidedPauseSeconds);
       guidedCounterClockwiseSeconds = Mathf.Max(0.1f, guidedCounterClockwiseSeconds);
       guidedRelaxSeconds = Mathf.Max(0.1f, guidedRelaxSeconds);
+      guidedLapsPerDirection = Mathf.Clamp(guidedLapsPerDirection, 1, 6);
+      pilotIntroSeconds = Mathf.Clamp(pilotIntroSeconds, 2f, 4f);
+      pilotRoundSeconds = Mathf.Clamp(pilotRoundSeconds, 2.5f, 5f);
+      pilotRoundsPerAxis = Mathf.Clamp(pilotRoundsPerAxis, 1, 4);
+      pilotTransitionSeconds = Mathf.Clamp(pilotTransitionSeconds, 1f, 1.5f);
     }
   }
 
@@ -78,7 +125,6 @@ namespace KeepBlinking.CareStation
     private CareActionConfiguration _config;
     private CareActionSaveData _data;
     private bool _manualPause;
-    private CareRelativeDistanceStep _focusDistanceStep;
 
     public CareActionSaveData Data => _data;
     public CareActionType ActionType => _data != null ? _data.actionType : CareActionType.None;
@@ -90,7 +136,7 @@ namespace KeepBlinking.CareStation
     public bool RequiresCamera => ActionType == CareActionType.ClosedEyeRest ||
                                   ActionType == CareActionType.FocusShift ||
                                   ActionType == CareActionType.GuidedEyeCircles;
-    public bool RequiresDevicePose => ActionType == CareActionType.ScreenDown;
+    public bool RequiresDevicePose => false;
     public string DisplayName => DisplayNameFor(ActionType);
     public string Prompt => Stage == CareActionStage.Completed || Stage == CareActionStage.Cancelled
       ? string.Empty
@@ -98,8 +144,14 @@ namespace KeepBlinking.CareStation
     public float Progress => CalculateProgress();
     public float RemainingSeconds => CalculateRemainingSeconds();
     public int RemainingSteps => ActionType == CareActionType.FocusShift
-      ? Mathf.Max(0, 4 - Mathf.Clamp(_data.focusTargetStep, 0, 4))
-      : 0;
+      ? Mathf.Max(0, _config.focusCycleCount * 2 - Mathf.Clamp(_data.focusTargetStep, 0, _config.focusCycleCount * 2))
+      : ActionType == CareActionType.PilotEyeRoutine
+        ? Mathf.Max(0, 4 * _config.pilotRoundsPerAxis -
+          (_data.pilotCurrentAxis * _config.pilotRoundsPerAxis + _data.pilotCurrentRound))
+        : ActionType == CareActionType.GuidedEyeCircles
+          ? Mathf.Max(0, _config.guidedLapsPerDirection * 2 -
+            (_data.guidedStage >= 3 ? _config.guidedLapsPerDirection : 0) - _data.guidedLapCount)
+          : 0;
     public float DirectionProgress => ActionType == CareActionType.FocusShift && _data != null
       ? Mathf.Clamp01(_data.distanceDirectionProgress)
       : 0f;
@@ -113,7 +165,13 @@ namespace KeepBlinking.CareStation
       _config.Sanitize();
       _data = restore ?? new CareActionSaveData();
       _manualPause = false;
-      _focusDistanceStep = null;
+      if (CareActionLibrary.IsRetiredTask(type))
+      {
+        _data.Reset();
+        _data.actionType = type;
+        _data.stage = CareActionStage.Cancelled;
+        return;
+      }
       if (restore != null && restore.actionType == type && restore.internalPhase != CareActionInternalPhase.None)
       {
         SanitizeRestoredData();
@@ -124,21 +182,37 @@ namespace KeepBlinking.CareStation
 
       _data.Reset();
       _data.actionType = type;
+      _data.introWasRequested = _config.showIntro;
       switch (type)
       {
-        case CareActionType.ScreenDown:
-          Enter(CareActionInternalPhase.ScreenDownDemo, CareActionStage.Demonstrating);
-          break;
         case CareActionType.ClosedEyeRest:
-          Enter(CareActionInternalPhase.ClosedEyePrompt, CareActionStage.WaitingForStart);
+          Enter(_config.showIntro
+              ? CareActionInternalPhase.ClosedEyeIntro
+              : CareActionInternalPhase.ClosedEyePrompt,
+            _config.showIntro ? CareActionStage.Demonstrating : CareActionStage.WaitingForStart);
           break;
         case CareActionType.FocusShift:
           _data.focusTargetStep = 0;
-          Enter(CareActionInternalPhase.FocusReference, CareActionStage.Preparing);
+          _data.focusCycleCount = 0;
+          _data.focusRearmed = false;
+          Enter(_config.showIntro
+              ? CareActionInternalPhase.FocusIntro
+              : CareActionInternalPhase.FocusReference,
+            _config.showIntro ? CareActionStage.Demonstrating : CareActionStage.Preparing);
           break;
         case CareActionType.GuidedEyeCircles:
           _data.guidedStage = 0;
-          Enter(CareActionInternalPhase.GuidedPreviewClockwise, CareActionStage.Demonstrating);
+          Enter(_config.showIntro
+              ? CareActionInternalPhase.GuidedPreviewClockwise
+              : CareActionInternalPhase.GuidedClockwise,
+            _config.showIntro ? CareActionStage.Demonstrating : CareActionStage.Active);
+          break;
+        case CareActionType.PilotEyeRoutine:
+          _data.pilotCurrentAxis = 0;
+          _data.pilotCurrentRound = 0;
+          _data.pilotCurrentEndpoint = 0;
+          Enter(_config.showIntro ? CareActionInternalPhase.PilotIntro : CareActionInternalPhase.PilotVertical,
+            _config.showIntro ? CareActionStage.Demonstrating : CareActionStage.Active);
           break;
         default:
           _data.stage = CareActionStage.Cancelled;
@@ -163,9 +237,6 @@ namespace KeepBlinking.CareStation
 
       switch (ActionType)
       {
-        case CareActionType.ScreenDown:
-          AdvanceScreenDown(delta, input);
-          break;
         case CareActionType.ClosedEyeRest:
           AdvanceClosedEye(delta, input);
           break;
@@ -174,6 +245,9 @@ namespace KeepBlinking.CareStation
           break;
         case CareActionType.GuidedEyeCircles:
           AdvanceGuidedCircles(delta, input);
+          break;
+        case CareActionType.PilotEyeRoutine:
+          AdvancePilotRoutine(delta);
           break;
       }
     }
@@ -221,20 +295,10 @@ namespace KeepBlinking.CareStation
       _data.pauseReason = CareActionPauseReason.None;
       switch (ActionType)
       {
-        case CareActionType.ScreenDown:
-          if (Phase == CareActionInternalPhase.ScreenDownDemo)
-            Enter(CareActionInternalPhase.ScreenDownWait, CareActionStage.WaitingForStart);
-          else if (Phase == CareActionInternalPhase.ScreenDownWait)
-            Enter(CareActionInternalPhase.ScreenDownRest, CareActionStage.Active);
-          else if (Phase == CareActionInternalPhase.ScreenDownRest)
-          {
-            _data.elapsedSeconds = _config.screenDownDurationSeconds;
-            Enter(CareActionInternalPhase.ScreenDownReturn, CareActionStage.WaitingForStart);
-          }
-          else Finish();
-          break;
         case CareActionType.ClosedEyeRest:
-          if (Phase == CareActionInternalPhase.ClosedEyePrompt)
+          if (Phase == CareActionInternalPhase.ClosedEyeIntro)
+            Enter(CareActionInternalPhase.ClosedEyePrompt, CareActionStage.WaitingForStart);
+          else if (Phase == CareActionInternalPhase.ClosedEyePrompt)
             Enter(CareActionInternalPhase.ClosedEyeActive, CareActionStage.Active);
           else if (Phase == CareActionInternalPhase.ClosedEyeActive)
           {
@@ -244,82 +308,42 @@ namespace KeepBlinking.CareStation
           else Finish();
           break;
         case CareActionType.FocusShift:
-          if (Phase == CareActionInternalPhase.FocusReference)
+          if (Phase == CareActionInternalPhase.FocusIntro)
+            Enter(CareActionInternalPhase.FocusReference, CareActionStage.Preparing);
+          else if (Phase == CareActionInternalPhase.FocusReference)
           {
-            _data.gestureReferenceScale = 1f;
-            _data.gestureReferenceValid = true;
-            Enter(FocusPhaseForStep(_data.focusTargetStep), CareActionStage.Active);
+            if (!_data.gestureReferenceValid)
+            {
+              _data.gestureReferenceScale = 1f;
+              _data.gestureReferenceValid = true;
+            }
+            Enter(_data.focusTargetStep <= 0
+              ? CareActionInternalPhase.FocusNeutralStart
+              : FocusPhaseForStep(_data.focusTargetStep), CareActionStage.Active);
           }
+          else if (Phase == CareActionInternalPhase.FocusNeutralFinish) Finish();
           else CompleteFocusTarget();
           break;
         case CareActionType.GuidedEyeCircles:
           AdvanceGuidedPhaseForDevelopment();
           break;
+        case CareActionType.PilotEyeRoutine:
+          AdvancePilotPhaseForDevelopment();
+          break;
       }
-    }
-
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-    public bool SkipUnavailableScreenDownForDevelopment()
-    {
-      if (!IsRunning || ActionType != CareActionType.ScreenDown ||
-          PauseReason != CareActionPauseReason.SensorUnavailable) return false;
-      Finish(CareActionCompletionSource.DeveloperSkipped);
-      return true;
-    }
-#endif
-
-    private void AdvanceScreenDown(float delta, CareActionInputFrame input)
-    {
-      if (Phase == CareActionInternalPhase.ScreenDownDemo)
-      {
-        _data.stage = CareActionStage.Demonstrating;
-        _data.pauseReason = CareActionPauseReason.None;
-        _data.phaseElapsedSeconds += delta;
-        if (_data.phaseElapsedSeconds >= _config.screenDownDemoSeconds)
-          Enter(CareActionInternalPhase.ScreenDownWait, CareActionStage.WaitingForStart);
-        return;
-      }
-      if (!input.DeviceSensorAvailable)
-      {
-        Wait(CareActionPauseReason.SensorUnavailable);
-        return;
-      }
-      if (Phase == CareActionInternalPhase.ScreenDownReturn)
-      {
-        _data.stage = CareActionStage.WaitingForStart;
-        _data.pauseReason = CareActionPauseReason.None;
-        _data.holdElapsedSeconds = input.ScreenReturned ? _data.holdElapsedSeconds + delta : 0f;
-        if (_data.holdElapsedSeconds >= _config.screenReturnHoldSeconds) Finish();
-        return;
-      }
-      if (Phase == CareActionInternalPhase.ScreenDownWait)
-      {
-        _data.stage = CareActionStage.WaitingForStart;
-        _data.pauseReason = CareActionPauseReason.None;
-        _data.holdElapsedSeconds = input.ScreenDown ? _data.holdElapsedSeconds + delta : 0f;
-        if (_data.holdElapsedSeconds >= _config.screenDownHoldSeconds)
-          Enter(CareActionInternalPhase.ScreenDownRest, CareActionStage.Active);
-        return;
-      }
-      if (!input.ScreenDown)
-      {
-        Pause(CareActionPauseReason.ScreenReturned);
-        return;
-      }
-      if (Stage == CareActionStage.Paused)
-      {
-        _data.holdElapsedSeconds += delta;
-        if (_data.holdElapsedSeconds < _config.screenDownHoldSeconds) return;
-        _data.holdElapsedSeconds = 0f;
-      }
-      ResumeActive();
-      _data.elapsedSeconds = Mathf.Min(_config.screenDownDurationSeconds, _data.elapsedSeconds + delta);
-      if (_data.elapsedSeconds >= _config.screenDownDurationSeconds)
-        Enter(CareActionInternalPhase.ScreenDownReturn, CareActionStage.WaitingForStart);
     }
 
     private void AdvanceClosedEye(float delta, CareActionInputFrame input)
     {
+      if (Phase == CareActionInternalPhase.ClosedEyeIntro)
+      {
+        _data.stage = CareActionStage.Demonstrating;
+        _data.pauseReason = CareActionPauseReason.None;
+        _data.phaseElapsedSeconds += delta;
+        if (_data.phaseElapsedSeconds >= _config.actionIntroSeconds)
+          Enter(CareActionInternalPhase.ClosedEyePrompt, CareActionStage.WaitingForStart);
+        return;
+      }
       if (!input.TrackingValid)
       {
         Pause(CareActionPauseReason.TrackingLost);
@@ -362,32 +386,21 @@ namespace KeepBlinking.CareStation
 
     private void AdvanceFocusShift(float delta, CareActionInputFrame input)
     {
+      if (Phase == CareActionInternalPhase.FocusIntro)
+      {
+        _data.stage = CareActionStage.Demonstrating;
+        _data.pauseReason = CareActionPauseReason.None;
+        _data.phaseElapsedSeconds += delta;
+        if (_data.phaseElapsedSeconds >= _config.actionIntroSeconds)
+          Enter(CareActionInternalPhase.FocusReference, CareActionStage.Preparing);
+        return;
+      }
       if (!input.TrackingValid)
       {
-        _focusDistanceStep?.FreezeForTrackingLoss();
+        _data.focusTrackingRecoveryGuard = true;
         _data.holdElapsedSeconds = 0f;
         _data.stage = CareActionStage.Paused;
         _data.pauseReason = CareActionPauseReason.TrackingLost;
-        return;
-      }
-      if (Phase == CareActionInternalPhase.FocusReference)
-      {
-        _data.stage = CareActionStage.Preparing;
-        _data.pauseReason = CareActionPauseReason.None;
-        _data.holdElapsedSeconds = 0f;
-        _data.phaseElapsedSeconds += delta;
-        // Both sides must confirm the new step reference. Input can still carry
-        // the previous frame's valid flag immediately after a target completes;
-        // the saved runtime flag is explicitly cleared by CompleteFocusTarget.
-        // Requiring both prevents one movement from skipping reference capture
-        // and advancing the following direction automatically.
-        if (!_data.gestureReferenceValid || !input.DistanceReferenceValid ||
-            !IsFinitePositive(input.DistanceRatio)) return;
-        var transitionDelay = _data.focusTargetStep == 0 ? 0f : _config.focusStepTransitionSeconds;
-        if (_data.phaseElapsedSeconds < transitionDelay) return;
-        _data.distanceDirectionProgress = 0f;
-        _focusDistanceStep = null;
-        Enter(FocusPhaseForStep(_data.focusTargetStep), CareActionStage.Active);
         return;
       }
       if (!input.DistanceReferenceValid || !IsFinitePositive(input.DistanceRatio))
@@ -395,45 +408,143 @@ namespace KeepBlinking.CareStation
         Pause(CareActionPauseReason.DistanceUnavailable);
         return;
       }
-      _data.stage = CareActionStage.Active;
-      _data.pauseReason = CareActionPauseReason.None;
-      _data.phaseElapsedSeconds += delta;
-      _data.elapsedSeconds += delta;
-      EnsureFocusDistanceStep();
+      if (_data.focusTrackingRecoveryGuard)
+      {
+        if (input.DistanceSampleFresh) _data.focusTrackingRecoveryGuard = false;
+        _data.holdElapsedSeconds = 0f;
+        _data.stage = CareActionStage.Paused;
+        _data.pauseReason = CareActionPauseReason.TrackingLost;
+        return;
+      }
+
+      if (Phase == CareActionInternalPhase.FocusReference)
+      {
+        _data.stage = CareActionStage.Preparing;
+        _data.pauseReason = CareActionPauseReason.None;
+        _data.holdElapsedSeconds = 0f;
+        _data.phaseElapsedSeconds += delta;
+        var transitionDelay = _data.focusTargetStep == 0 ? 0f : _config.focusDirectionIntervalSeconds;
+        if (_data.phaseElapsedSeconds < transitionDelay) return;
+        _data.distanceDirectionProgress = 0f;
+        Enter(_data.focusTargetStep == 0
+          ? CareActionInternalPhase.FocusNeutralStart
+          : FocusPhaseForStep(_data.focusTargetStep), CareActionStage.Active);
+        return;
+      }
+
       var sampleDelta = input.DistanceSampleDeltaSeconds > 0f
         ? Mathf.Clamp(input.DistanceSampleDeltaSeconds, 0f, 0.25f)
         : delta;
-      var completed = _focusDistanceStep.AdvanceRatio(
-        input.DistanceRatio,
-        sampleDelta,
-        true,
-        input.DistanceSampleFresh);
-      _data.distanceDirectionProgress = _focusDistanceStep.Progress;
-      _data.holdElapsedSeconds = _focusDistanceStep.StableSeconds;
-      if (completed) CompleteFocusTarget();
+      if (!input.DistanceSampleFresh) return;
+      var ratio = input.DistanceRatio;
+      var neutral = ratio >= _config.focusNeutralMinimum && ratio <= _config.focusNeutralMaximum;
+      if (Phase == CareActionInternalPhase.FocusNeutralStart ||
+          Phase == CareActionInternalPhase.FocusNeutralFinish)
+      {
+        _data.stage = CareActionStage.Active;
+        _data.pauseReason = CareActionPauseReason.None;
+        _data.distanceDirectionProgress = neutral ? 1f : 0f;
+        _data.holdElapsedSeconds = neutral ? _data.holdElapsedSeconds + sampleDelta : 0f;
+        if (_data.holdElapsedSeconds < _config.focusTargetHoldSeconds) return;
+        if (Phase == CareActionInternalPhase.FocusNeutralFinish)
+        {
+          Finish();
+          return;
+        }
+        _data.focusRearmed = true;
+        Enter(FocusPhaseForStep(0), CareActionStage.Active);
+        return;
+      }
+
+      _data.stage = CareActionStage.Active;
+      _data.pauseReason = CareActionPauseReason.None;
+      _data.phaseElapsedSeconds += sampleDelta;
+      _data.elapsedSeconds += delta;
+      if (neutral) _data.focusRearmed = true;
+      var direction = ExpectedDistanceDirection;
+      if (direction == CareDistanceDirection.Closer && ratio >= _config.focusTooCloseRatio)
+      {
+        _data.stage = CareActionStage.Paused;
+        _data.pauseReason = CareActionPauseReason.TooClose;
+        _data.holdElapsedSeconds = 0f;
+        return;
+      }
+
+      var targetReached = direction == CareDistanceDirection.Closer
+        ? ratio >= _config.focusCloserRatio
+        : ratio <= _config.focusAwayRatio;
+      var progress = direction == CareDistanceDirection.Closer
+        ? Mathf.InverseLerp(_config.focusNeutralMaximum, _config.focusCloserRatio, ratio)
+        : Mathf.InverseLerp(_config.focusNeutralMinimum, _config.focusAwayRatio, ratio);
+      _data.distanceDirectionProgress = Mathf.Clamp01(progress);
+      var paceReady = _data.phaseElapsedSeconds >= _config.focusMinimumLegSeconds;
+      _data.holdElapsedSeconds = targetReached && paceReady && _data.focusRearmed
+        ? _data.holdElapsedSeconds + sampleDelta
+        : 0f;
+      if (_data.holdElapsedSeconds >= _config.focusTargetHoldSeconds)
+        CompleteFocusTarget();
     }
 
     private void AdvanceGuidedCircles(float delta, CareActionInputFrame input)
     {
-      if (Phase == CareActionInternalPhase.GuidedPreviewClockwise ||
-          Phase == CareActionInternalPhase.GuidedPreviewCounterClockwise)
+      if (Phase == CareActionInternalPhase.GuidedPreviewClockwise)
       {
         _data.stage = CareActionStage.Demonstrating;
         _data.pauseReason = CareActionPauseReason.None;
         _data.phaseElapsedSeconds += delta;
-        var halfPreview = _config.guidedPreviewSeconds * 0.5f;
-        if (Phase == CareActionInternalPhase.GuidedPreviewClockwise && _data.phaseElapsedSeconds >= halfPreview)
+        _data.guidedNormalizedProgress = Mathf.Clamp01(_data.phaseElapsedSeconds / _config.guidedPreviewSeconds);
+        if (_data.phaseElapsedSeconds >= _config.guidedPreviewSeconds)
         {
           _data.guidedStage = 1;
-          Enter(CareActionInternalPhase.GuidedPreviewCounterClockwise, CareActionStage.Demonstrating);
+          _data.guidedLapCount = 0;
+          Enter(CareActionInternalPhase.GuidedClockwise, CareActionStage.Active);
         }
-        else if (Phase == CareActionInternalPhase.GuidedPreviewCounterClockwise && _data.phaseElapsedSeconds >= halfPreview)
+        return;
+      }
+
+      if (Phase == CareActionInternalPhase.GuidedClockwise ||
+          Phase == CareActionInternalPhase.GuidedPause ||
+          Phase == CareActionInternalPhase.GuidedCounterClockwise)
+      {
+        ResumeActive();
+        _data.phaseElapsedSeconds += delta;
+        _data.elapsedSeconds += delta;
+        var perLap = Phase == CareActionInternalPhase.GuidedCounterClockwise
+          ? _config.guidedCounterClockwiseSeconds
+          : _config.guidedClockwiseSeconds;
+        if (Phase == CareActionInternalPhase.GuidedPause)
+        {
+          _data.guidedNormalizedProgress = 0f;
+          if (_data.phaseElapsedSeconds >= _config.guidedPauseSeconds)
+          {
+            _data.guidedStage = 3;
+            _data.guidedLapCount = 0;
+            Enter(CareActionInternalPhase.GuidedCounterClockwise, CareActionStage.Active);
+          }
+          return;
+        }
+
+        var total = perLap * _config.guidedLapsPerDirection;
+        _data.guidedLapCount = Mathf.Clamp(Mathf.FloorToInt(_data.phaseElapsedSeconds / perLap), 0,
+          _config.guidedLapsPerDirection);
+        _data.guidedNormalizedProgress = Mathf.Repeat(_data.phaseElapsedSeconds, perLap) / perLap;
+        if (_data.phaseElapsedSeconds < total) return;
+        _data.guidedLapCount = _config.guidedLapsPerDirection;
+        _data.guidedNormalizedProgress = 1f;
+        if (Phase == CareActionInternalPhase.GuidedClockwise)
         {
           _data.guidedStage = 2;
+          Enter(CareActionInternalPhase.GuidedPause, CareActionStage.Active);
+        }
+        else
+        {
+          _data.guidedStage = 4;
+          _data.guidedClosedPhase = true;
           Enter(CareActionInternalPhase.GuidedPromptClose, CareActionStage.WaitingForStart);
         }
         return;
       }
+
       if (!input.TrackingValid)
       {
         Pause(CareActionPauseReason.TrackingLost);
@@ -446,8 +557,8 @@ namespace KeepBlinking.CareStation
         _data.holdElapsedSeconds = input.EyesClosed ? _data.holdElapsedSeconds + delta : 0f;
         if (_data.holdElapsedSeconds >= _config.closeStartHoldSeconds)
         {
-          _data.guidedStage = 3;
-          Enter(CareActionInternalPhase.GuidedClockwise, CareActionStage.Active);
+          _data.guidedStage = 5;
+          Enter(CareActionInternalPhase.GuidedClosedRest, CareActionStage.Active);
         }
         return;
       }
@@ -476,42 +587,80 @@ namespace KeepBlinking.CareStation
       ResumeActive();
       _data.phaseElapsedSeconds += delta;
       _data.elapsedSeconds += delta;
-      var duration = GuidedPhaseDuration(Phase);
-      if (_data.phaseElapsedSeconds < duration) return;
-      switch (Phase)
+      if (Phase == CareActionInternalPhase.GuidedClosedRest &&
+          _data.phaseElapsedSeconds >= _config.guidedRelaxSeconds)
       {
-        case CareActionInternalPhase.GuidedClockwise:
-          _data.guidedStage = 4;
-          Enter(CareActionInternalPhase.GuidedPause, CareActionStage.Active);
-          break;
-        case CareActionInternalPhase.GuidedPause:
-          _data.guidedStage = 5;
-          Enter(CareActionInternalPhase.GuidedCounterClockwise, CareActionStage.Active);
-          break;
-        case CareActionInternalPhase.GuidedCounterClockwise:
-          _data.guidedStage = 6;
-          Enter(CareActionInternalPhase.GuidedRelax, CareActionStage.Active);
-          break;
-        case CareActionInternalPhase.GuidedRelax:
-          _data.guidedStage = 7;
-          Enter(CareActionInternalPhase.GuidedWaitReopen, CareActionStage.WaitingForStart);
-          break;
+        _data.guidedStage = 6;
+        Enter(CareActionInternalPhase.GuidedWaitReopen, CareActionStage.WaitingForStart);
+      }
+    }
+
+    private void AdvancePilotRoutine(float delta)
+    {
+      if (Phase == CareActionInternalPhase.PilotIntro)
+      {
+        _data.stage = CareActionStage.Demonstrating;
+        _data.pauseReason = CareActionPauseReason.None;
+        _data.phaseElapsedSeconds += delta;
+        if (_data.phaseElapsedSeconds >= _config.pilotIntroSeconds)
+          Enter(PilotPhaseForAxis(0), CareActionStage.Active);
+        return;
+      }
+
+      if (Phase == CareActionInternalPhase.PilotTransition)
+      {
+        _data.stage = CareActionStage.Demonstrating;
+        _data.phaseElapsedSeconds += delta;
+        if (_data.phaseElapsedSeconds >= _config.pilotTransitionSeconds) Finish();
+        return;
+      }
+
+      ResumeActive();
+      _data.phaseElapsedSeconds += delta;
+      _data.elapsedSeconds += delta;
+      _data.pilotNormalizedMoveProgress = Mathf.Clamp01(_data.phaseElapsedSeconds / _config.pilotRoundSeconds);
+      _data.pilotCurrentEndpoint = Mathf.Clamp(
+        Mathf.FloorToInt(_data.pilotNormalizedMoveProgress * 4f), 0, 4);
+      if (_data.phaseElapsedSeconds < _config.pilotRoundSeconds) return;
+
+      _data.pilotCurrentRound++;
+      if (_data.pilotCurrentRound < _config.pilotRoundsPerAxis)
+      {
+        Enter(PilotPhaseForAxis(_data.pilotCurrentAxis), CareActionStage.Active);
+        return;
+      }
+
+      _data.pilotCurrentAxis++;
+      _data.pilotCurrentRound = 0;
+      _data.pilotCurrentEndpoint = 0;
+      _data.pilotNormalizedMoveProgress = 0f;
+      if (_data.pilotCurrentAxis >= 4)
+      {
+        _data.pilotCompletionConsumed = true;
+        Enter(CareActionInternalPhase.PilotTransition, CareActionStage.Demonstrating);
+      }
+      else
+      {
+        Enter(PilotPhaseForAxis(_data.pilotCurrentAxis), CareActionStage.Active);
       }
     }
 
     private void CompleteFocusTarget()
     {
+      var completedDirection = DirectionForFocusStep(_data.focusTargetStep);
       _data.focusTargetStep++;
+      if (completedDirection == CareDistanceDirection.Away)
+        _data.focusCycleCount = Mathf.Min(_config.focusCycleCount, _data.focusCycleCount + 1);
       _data.distanceDirectionProgress = 0f;
       _data.holdElapsedSeconds = 0f;
-      _focusDistanceStep = null;
-      if (_data.focusTargetStep >= 4)
+      _data.focusRearmed = false;
+      if (_data.focusTargetStep >= _config.focusCycleCount * 2)
       {
-        Finish();
+        Enter(CareActionInternalPhase.FocusNeutralFinish, CareActionStage.Active);
         return;
       }
-      _data.gestureReferenceScale = 0f;
-      _data.gestureReferenceValid = false;
+      // The immutable Session baseline remains valid for every one of the six
+      // cycles. FocusReference is only a paced transition/rearm gate.
       Enter(CareActionInternalPhase.FocusReference, CareActionStage.Preparing);
     }
 
@@ -529,30 +678,49 @@ namespace KeepBlinking.CareStation
       switch (Phase)
       {
         case CareActionInternalPhase.GuidedPreviewClockwise:
-          Enter(CareActionInternalPhase.GuidedPreviewCounterClockwise, CareActionStage.Demonstrating);
-          break;
-        case CareActionInternalPhase.GuidedPreviewCounterClockwise:
-          Enter(CareActionInternalPhase.GuidedPromptClose, CareActionStage.WaitingForStart);
-          break;
-        case CareActionInternalPhase.GuidedPromptClose:
           Enter(CareActionInternalPhase.GuidedClockwise, CareActionStage.Active);
           break;
         case CareActionInternalPhase.GuidedClockwise:
+          _data.guidedLapCount = _config.guidedLapsPerDirection;
           Enter(CareActionInternalPhase.GuidedPause, CareActionStage.Active);
           break;
         case CareActionInternalPhase.GuidedPause:
           Enter(CareActionInternalPhase.GuidedCounterClockwise, CareActionStage.Active);
           break;
         case CareActionInternalPhase.GuidedCounterClockwise:
-          Enter(CareActionInternalPhase.GuidedRelax, CareActionStage.Active);
+          _data.guidedLapCount = _config.guidedLapsPerDirection;
+          Enter(CareActionInternalPhase.GuidedPromptClose, CareActionStage.WaitingForStart);
           break;
-        case CareActionInternalPhase.GuidedRelax:
+        case CareActionInternalPhase.GuidedPromptClose:
+          Enter(CareActionInternalPhase.GuidedClosedRest, CareActionStage.Active);
+          break;
+        case CareActionInternalPhase.GuidedClosedRest:
           Enter(CareActionInternalPhase.GuidedWaitReopen, CareActionStage.WaitingForStart);
           break;
         default:
           Finish();
           break;
       }
+    }
+
+    private void AdvancePilotPhaseForDevelopment()
+    {
+      if (Phase == CareActionInternalPhase.PilotIntro)
+      {
+        Enter(CareActionInternalPhase.PilotVertical, CareActionStage.Active);
+        return;
+      }
+      if (Phase == CareActionInternalPhase.PilotTransition)
+      {
+        Finish();
+        return;
+      }
+      _data.pilotCurrentRound = 0;
+      _data.pilotCurrentAxis++;
+      if (_data.pilotCurrentAxis >= 4)
+        Enter(CareActionInternalPhase.PilotTransition, CareActionStage.Demonstrating);
+      else
+        Enter(PilotPhaseForAxis(_data.pilotCurrentAxis), CareActionStage.Active);
     }
 
     private void Enter(CareActionInternalPhase phase, CareActionStage stage)
@@ -571,11 +739,6 @@ namespace KeepBlinking.CareStation
       _data.pauseReason = CareActionPauseReason.None;
       _data.holdElapsedSeconds = 0f;
       _data.completionSource = source;
-      if (_data.actionType == CareActionType.FocusShift)
-      {
-        _data.gestureReferenceScale = 0f;
-        _data.gestureReferenceValid = false;
-      }
     }
 
     private void Pause(CareActionPauseReason reason)
@@ -598,42 +761,31 @@ namespace KeepBlinking.CareStation
       _data.pauseReason = CareActionPauseReason.None;
     }
 
-    private void EnsureFocusDistanceStep()
-    {
-      if (_focusDistanceStep != null && _focusDistanceStep.Direction == ExpectedDistanceDirection) return;
-      _focusDistanceStep = new CareRelativeDistanceStep(
-        ExpectedDistanceDirection,
-        _config.distanceDeadZone,
-        _config.distanceCompleteThreshold,
-        _config.distanceStepHoldSeconds,
-        _config.distanceProgressFallSeconds,
-        _data.distanceDirectionProgress,
-        _data.holdElapsedSeconds);
-    }
-
     private float CalculateProgress()
     {
       if (_data == null) return 0f;
       if (Stage == CareActionStage.Completed) return 1f;
       switch (ActionType)
       {
-        case CareActionType.ScreenDown:
-          return Mathf.Clamp01(_data.elapsedSeconds / _config.screenDownDurationSeconds);
         case CareActionType.ClosedEyeRest:
           return Mathf.Clamp01(_data.elapsedSeconds / _config.closedEyeDurationSeconds);
         case CareActionType.FocusShift:
-          if (Phase == CareActionInternalPhase.FocusReference) return 0f;
+          if (Phase == CareActionInternalPhase.FocusNeutralFinish) return 0.99f;
           return Mathf.Clamp01((_data.focusTargetStep +
-                                Mathf.Clamp01(_data.distanceDirectionProgress)) / 4f);
+                                Mathf.Clamp01(_data.distanceDirectionProgress)) /
+                               Mathf.Max(1f, _config.focusCycleCount * 2f));
         case CareActionType.GuidedEyeCircles:
-          if (Phase == CareActionInternalPhase.GuidedPreviewClockwise || Phase == CareActionInternalPhase.GuidedPreviewCounterClockwise)
-          {
-            var previewOffset = Phase == CareActionInternalPhase.GuidedPreviewCounterClockwise ? _config.guidedPreviewSeconds * 0.5f : 0f;
-            return 0.15f * Mathf.Clamp01((previewOffset + _data.phaseElapsedSeconds) / _config.guidedPreviewSeconds);
-          }
-          var total = _config.guidedClockwiseSeconds + _config.guidedPauseSeconds +
-                      _config.guidedCounterClockwiseSeconds + _config.guidedRelaxSeconds;
-          return 0.15f + 0.85f * Mathf.Clamp01(_data.elapsedSeconds / Mathf.Max(0.1f, total));
+          var guidedTotal = (_config.guidedClockwiseSeconds + _config.guidedCounterClockwiseSeconds) *
+                            _config.guidedLapsPerDirection + _config.guidedPauseSeconds +
+                            _config.guidedRelaxSeconds;
+          return Phase == CareActionInternalPhase.GuidedPreviewClockwise
+            ? 0.05f * Mathf.Clamp01(_data.phaseElapsedSeconds / _config.guidedPreviewSeconds)
+            : 0.05f + 0.95f * Mathf.Clamp01(_data.elapsedSeconds / Mathf.Max(0.1f, guidedTotal));
+        case CareActionType.PilotEyeRoutine:
+          if (Phase == CareActionInternalPhase.PilotTransition) return 0.99f;
+          return Mathf.Clamp01((_data.pilotCurrentAxis * _config.pilotRoundsPerAxis +
+                                _data.pilotCurrentRound + _data.pilotNormalizedMoveProgress) /
+                               Mathf.Max(1f, 4f * _config.pilotRoundsPerAxis));
         default:
           return 0f;
       }
@@ -644,14 +796,15 @@ namespace KeepBlinking.CareStation
       if (_data == null) return 0f;
       switch (ActionType)
       {
-        case CareActionType.ScreenDown:
-          return Mathf.Max(0f, _config.screenDownDurationSeconds - _data.elapsedSeconds);
         case CareActionType.ClosedEyeRest:
           return Mathf.Max(0f, _config.closedEyeDurationSeconds - _data.elapsedSeconds);
         case CareActionType.GuidedEyeCircles:
-          var total = _config.guidedClockwiseSeconds + _config.guidedPauseSeconds +
-                      _config.guidedCounterClockwiseSeconds + _config.guidedRelaxSeconds;
+          var total = (_config.guidedClockwiseSeconds + _config.guidedCounterClockwiseSeconds) *
+                      _config.guidedLapsPerDirection + _config.guidedPauseSeconds + _config.guidedRelaxSeconds;
           return Mathf.Max(0f, total - _data.elapsedSeconds);
+        case CareActionType.PilotEyeRoutine:
+          return Mathf.Max(0f, 4f * _config.pilotRoundsPerAxis * _config.pilotRoundSeconds -
+            _data.elapsedSeconds);
         default:
           return 0f;
       }
@@ -674,11 +827,18 @@ namespace KeepBlinking.CareStation
       _data.elapsedSeconds = Mathf.Max(0f, _data.elapsedSeconds);
       _data.phaseElapsedSeconds = Mathf.Max(0f, _data.phaseElapsedSeconds);
       _data.holdElapsedSeconds = Mathf.Max(0f, _data.holdElapsedSeconds);
-      _data.focusTargetStep = Mathf.Clamp(_data.focusTargetStep, 0, 4);
+      _data.focusTargetStep = Mathf.Clamp(_data.focusTargetStep, 0, _config.focusCycleCount * 2);
+      _data.focusCycleCount = Mathf.Clamp(_data.focusCycleCount, 0, _config.focusCycleCount);
       _data.distanceDirectionProgress = Mathf.Clamp01(_data.distanceDirectionProgress);
       if (!Enum.IsDefined(typeof(CareDistanceFallbackReason), _data.distanceFallbackReason))
         _data.distanceFallbackReason = CareDistanceFallbackReason.None;
       _data.guidedStage = Mathf.Clamp(_data.guidedStage, 0, 7);
+      _data.guidedLapCount = Mathf.Clamp(_data.guidedLapCount, 0, _config.guidedLapsPerDirection);
+      _data.guidedNormalizedProgress = Mathf.Clamp01(_data.guidedNormalizedProgress);
+      _data.pilotCurrentAxis = Mathf.Clamp(_data.pilotCurrentAxis, 0, 4);
+      _data.pilotCurrentRound = Mathf.Clamp(_data.pilotCurrentRound, 0, _config.pilotRoundsPerAxis);
+      _data.pilotCurrentEndpoint = Mathf.Clamp(_data.pilotCurrentEndpoint, 0, 4);
+      _data.pilotNormalizedMoveProgress = Mathf.Clamp01(_data.pilotNormalizedMoveProgress);
       if (!CareDistanceReferenceSampler.IsValidScale(_data.gestureReferenceScale))
       {
         _data.gestureReferenceScale = 0f;
@@ -691,14 +851,9 @@ namespace KeepBlinking.CareStation
 
     private static CareActionInternalPhase FocusPhaseForStep(int step)
     {
-      switch (step)
-      {
-        case 0: return CareActionInternalPhase.FocusNearOne;
-        case 1: return CareActionInternalPhase.FocusFarOne;
-        case 2: return CareActionInternalPhase.FocusNearTwo;
-        case 3: return CareActionInternalPhase.FocusFarTwo;
-        default: return CareActionInternalPhase.None;
-      }
+      return (step & 1) == 0
+        ? CareActionInternalPhase.FocusNearOne
+        : CareActionInternalPhase.FocusFarOne;
     }
 
     private static CareDistanceDirection DirectionForFocusStep(int step)
@@ -710,9 +865,13 @@ namespace KeepBlinking.CareStation
     {
       switch (phase)
       {
+        case CareActionInternalPhase.FocusIntro:
+        case CareActionInternalPhase.ClosedEyeIntro:
         case CareActionInternalPhase.ScreenDownDemo:
         case CareActionInternalPhase.GuidedPreviewClockwise:
         case CareActionInternalPhase.GuidedPreviewCounterClockwise:
+        case CareActionInternalPhase.PilotIntro:
+        case CareActionInternalPhase.PilotTransition:
           return CareActionStage.Demonstrating;
         case CareActionInternalPhase.FocusReference:
           return CareActionStage.Preparing;
@@ -730,14 +889,7 @@ namespace KeepBlinking.CareStation
 
     public static string DisplayNameFor(CareActionType type)
     {
-      switch (type)
-      {
-        case CareActionType.ScreenDown: return "SCREEN DOWN";
-        case CareActionType.ClosedEyeRest: return "CLOSED-EYE REST";
-        case CareActionType.FocusShift: return "FOCUS SHIFT";
-        case CareActionType.GuidedEyeCircles: return "GUIDED EYE CIRCLES";
-        default: return string.Empty;
-      }
+      return CareActionLibrary.DisplayName(type);
     }
 
     private static string PromptFor(CareActionInternalPhase phase, CareActionPauseReason reason)
@@ -750,29 +902,50 @@ namespace KeepBlinking.CareStation
           reason == CareActionPauseReason.Manual) return "PAUSED";
       switch (phase)
       {
-        case CareActionInternalPhase.FocusReference: return string.Empty;
-        case CareActionInternalPhase.ScreenDownDemo: return string.Empty;
+        case CareActionInternalPhase.FocusIntro: return "FOCUS SHIFT";
+        case CareActionInternalPhase.ClosedEyeIntro: return "CLOSED-EYE REST";
+        case CareActionInternalPhase.FocusReference:
+          return string.Empty;
+        case CareActionInternalPhase.ScreenDownDemo:
         case CareActionInternalPhase.ScreenDownWait:
-        case CareActionInternalPhase.ScreenDownRest: return "SCREEN DOWN";
-        case CareActionInternalPhase.ScreenDownReturn: return "RETURN";
+        case CareActionInternalPhase.ScreenDownRest:
+        case CareActionInternalPhase.ScreenDownReturn: return string.Empty;
         case CareActionInternalPhase.ClosedEyePrompt:
         case CareActionInternalPhase.ClosedEyeActive: return "CLOSE YOUR EYES";
         case CareActionInternalPhase.ClosedEyeWaitReopen: return "OPEN YOUR EYES";
-        case CareActionInternalPhase.FocusNeutralStart:
-        case CareActionInternalPhase.FocusNeutralFinish: return string.Empty;
+        case CareActionInternalPhase.FocusNeutralStart: return "RETURN TO CENTER";
+        case CareActionInternalPhase.FocusNeutralFinish: return "RETURN TO CENTER";
         case CareActionInternalPhase.FocusNearOne:
         case CareActionInternalPhase.FocusNearTwo: return "MOVE CLOSER";
         case CareActionInternalPhase.FocusFarOne:
         case CareActionInternalPhase.FocusFarTwo: return "MOVE AWAY";
         case CareActionInternalPhase.GuidedPreviewClockwise:
-        case CareActionInternalPhase.GuidedPreviewCounterClockwise: return "FOLLOW THE CIRCLE";
+        case CareActionInternalPhase.GuidedPreviewCounterClockwise: return "GUIDED EYE MOVEMENT";
+        case CareActionInternalPhase.GuidedClockwise: return "CLOCKWISE";
+        case CareActionInternalPhase.GuidedCounterClockwise: return "COUNTERCLOCKWISE";
+        case CareActionInternalPhase.GuidedPause: return "RETURN TO CENTER";
         case CareActionInternalPhase.GuidedPromptClose: return "CLOSE YOUR EYES";
+        case CareActionInternalPhase.GuidedClosedRest: return "CLOSE YOUR EYES";
         case CareActionInternalPhase.GuidedWaitReopen: return "OPEN YOUR EYES";
         case CareActionInternalPhase.GuidedRelax: return "RELAX";
-        case CareActionInternalPhase.GuidedClockwise:
-        case CareActionInternalPhase.GuidedPause:
-        case CareActionInternalPhase.GuidedCounterClockwise: return "FOLLOW THE RHYTHM";
+        case CareActionInternalPhase.PilotIntro: return "PILOT EYE ROUTINE";
+        case CareActionInternalPhase.PilotVertical: return "LOOK UP AND DOWN";
+        case CareActionInternalPhase.PilotHorizontal: return "LOOK LEFT AND RIGHT";
+        case CareActionInternalPhase.PilotDiagonalA:
+        case CareActionInternalPhase.PilotDiagonalB: return "FOLLOW THE DIAGONAL";
+        case CareActionInternalPhase.PilotTransition: return "AXES COMPLETE\nNEXT: SLOW CIRCLES";
         default: return string.Empty;
+      }
+    }
+
+    private static CareActionInternalPhase PilotPhaseForAxis(int axis)
+    {
+      switch (Mathf.Clamp(axis, 0, 3))
+      {
+        case 0: return CareActionInternalPhase.PilotVertical;
+        case 1: return CareActionInternalPhase.PilotHorizontal;
+        case 2: return CareActionInternalPhase.PilotDiagonalA;
+        default: return CareActionInternalPhase.PilotDiagonalB;
       }
     }
 

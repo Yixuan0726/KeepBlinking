@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Collections;
+using System.IO;
 using KeepBlinking.Gameplay;
 using TMPro;
 using UnityEngine;
@@ -10,7 +12,11 @@ namespace KeepBlinking.CareStation
 {
   public sealed class CareStationView : MonoBehaviour
   {
-    private readonly List<CareCrewPlaceholderView> _crew = new List<CareCrewPlaceholderView>(5);
+    [SerializeField, Range(6f, 18f)] private float _pilotPupilRange = 13f;
+    [SerializeField, Range(96f, 144f)] private float _pilotAxisRange = 128f;
+    private readonly List<CareStationWorkerArtView> _crew = new List<CareStationWorkerArtView>(3);
+    private readonly List<bool> _crewVisibilityBeforeGuidance = new List<bool>(3);
+    private readonly List<GameObject> _stationLabels = new List<GameObject>(4);
     private readonly List<RectTransform> _carts = new List<RectTransform>(5);
     private readonly List<Image> _xpVisuals = new List<Image>(24);
     private readonly List<Image> _dustGroups = new List<Image>(3);
@@ -19,7 +25,10 @@ namespace KeepBlinking.CareStation
     private readonly Dictionary<CareStationUpgradeId, TextMeshProUGUI> _upgradeCardTexts = new Dictionary<CareStationUpgradeId, TextMeshProUGUI>(3);
     private RectTransform _safe;
     private RectTransform _content;
+    private CanvasGroup _contentGroup;
+    private RectTransform _hudRoot;
     private RectTransform _stationStage;
+    private CanvasGroup _stationStageGroup;
     private RectTransform _transportRoot;
     private CanvasGroup _group;
     private RectTransform _incidentRoot;
@@ -30,6 +39,7 @@ namespace KeepBlinking.CareStation
     private RectTransform _actionRoot;
     private CanvasGroup _actionGroup;
     private TextMeshProUGUI _actionPrompt;
+    private TextMeshProUGUI _actionPurpose;
     private TextMeshProUGUI _recipeTitle;
     private TextMeshProUGUI _recipeStepText;
     private Image _actionProgress;
@@ -42,6 +52,7 @@ namespace KeepBlinking.CareStation
     private readonly List<Image> _routineDockDots = new List<Image>(4);
     private readonly List<TextMeshProUGUI> _routineDockLabels = new List<TextMeshProUGUI>(4);
     private readonly List<Image> _navigationTabs = new List<Image>(3);
+    private readonly List<Button> _navigationButtons = new List<Button>(3);
     private readonly List<TextMeshProUGUI> _navigationLabels = new List<TextMeshProUGUI>(3);
     private readonly List<Image> _stationTracks = new List<Image>(3);
     private readonly List<Image> _pressLayers = new List<Image>(2);
@@ -55,10 +66,17 @@ namespace KeepBlinking.CareStation
       new Vector2(0.14f, 0.12f),
     };
     private RectTransform _guidedOrbitDot;
+    private RectTransform _pilotRoot;
+    private readonly List<Image> _pilotAxes = new List<Image>(4);
+    private readonly List<Image> _pilotEndpoints = new List<Image>(8);
+    private RectTransform _pilotLeftPupil;
+    private RectTransform _pilotRightPupil;
+    private RectTransform _pilotGuideDot;
     private RectTransform _routineDock;
     private TextMeshProUGUI _routineDockTitle;
     private TextMeshProUGUI _routinePrimaryText;
     private RectTransform _navigationRoot;
+    private Image _upgradeOpportunityDot;
     private RectTransform _productionBottle;
     private Vector2 _productionCartHome;
     private Image _careDimmer;
@@ -69,6 +87,7 @@ namespace KeepBlinking.CareStation
     private TextMeshProUGUI _fullBottleText;
     private TextMeshProUGUI _goldBottleText;
     private TextMeshProUGUI _storageText;
+    private TextMeshProUGUI _toastText;
     private Image _storageFill;
     private RectTransform _welcomeRoot;
     private TextMeshProUGUI _welcomeLines;
@@ -92,13 +111,11 @@ namespace KeepBlinking.CareStation
     private RectTransform _changeStepConfirmRoot;
     private Button _fallbackButton;
     private Button _returnFallbackButton;
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-    private Button _skipCareStepButton;
-#endif
     private RectTransform _storageTank;
     private RectTransform _cart;
     private RectTransform _distanceSafetyRoot;
     private RectTransform _restIcon;
+    private CareStationFilterArtView _filterArt;
     private Image _filterBody;
     private Image _tankBody;
     private Image _tankLevel;
@@ -113,11 +130,26 @@ namespace KeepBlinking.CareStation
     private CareActionInternalPhase _renderedCareActionPhase;
     private float _actionStepPulseUntil;
     private float _pipelinePulseUntil;
+    private float _focusLegPulseUntil;
+    private CareDistanceDirection _focusLegPulseDirection;
+    private bool _focusLegPulseActive;
     private int _pipelineMask;
     private Vector3 _storageBaseScale = Vector3.one;
     private bool _storageFull;
     private bool _productionAnimating;
     private float _productionAnimationStartedAt;
+    private float _upgradeFeedbackUntil;
+    private CareStationUpgradeId _upgradeFeedbackCard;
+    private float _toastUntil;
+    private EyeMovementGuidanceOverlay _eyeMovementGuidance;
+    private bool _guidanceMode;
+    private bool _guidanceHudDebugVisible;
+    private bool _hudWasVisible;
+    private bool _transportWasVisible;
+    private bool _routineWasVisible;
+    private bool _navigationWasVisible;
+    private bool _actionWasVisible;
+    private bool _incidentWasVisible;
 
     public event Action IncidentSelected;
     public event Action ContinueSelected;
@@ -131,9 +163,8 @@ namespace KeepBlinking.CareStation
     public event Action<bool, CareSubjectiveScores> SubjectiveScoresSubmitted;
     public event Action<bool> SubjectiveScoresSkipped;
     public event Action CareReportDoneSelected;
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-    public event Action SkipCareStepSelected;
-#endif
+    public event Action<int> NavigationSelected;
+    public event Action UpgradeBackSelected;
     public event Action<CareStationUpgradeId> UpgradeSelected;
 
     public void Build()
@@ -145,6 +176,7 @@ namespace KeepBlinking.CareStation
 
       _content = FirstLevelUiFactory.CreateObject("Comfort Padded Content", _safe).GetComponent<RectTransform>();
       FirstLevelUiFactory.Stretch(_content, new Vector2(28f, 34f), new Vector2(-28f, -42f));
+      _contentGroup = _content.gameObject.AddComponent<CanvasGroup>();
 
       BuildHud();
       BuildStationStage();
@@ -156,6 +188,7 @@ namespace KeepBlinking.CareStation
       _careDimmer = FirstLevelUiFactory.CreateImage("Care Dimmer", _content, Color.clear);
       FirstLevelUiFactory.Stretch(_careDimmer.rectTransform);
       BuildActionOverlay();
+      _eyeMovementGuidance = EyeMovementGuidanceOverlay.Create(_safe);
       BuildChangeStepConfirmation();
       BuildWelcome();
       BuildUpgrade();
@@ -163,6 +196,9 @@ namespace KeepBlinking.CareStation
       BuildCareReport();
       BuildComplete();
       BuildDistanceSafetyWarning();
+      BuildToast();
+      // Modal scrims must never cover the persistent bottom navigation.
+      _navigationRoot.SetAsLastSibling();
       HideAllModals();
     }
 
@@ -170,7 +206,14 @@ namespace KeepBlinking.CareStation
     {
       if (save == null) return;
       _stationSave = save;
-      for (var i = 0; i < _crew.Count; i++) _crew[i].gameObject.SetActive(i < save.crewCount);
+      var visibleWorkerCount = CareStationWorkerVisualRules.VisibleCountForLevel(save.workerLevel);
+      var workerExpression = CareStationWorkerVisualRules.ExpressionForLevel(save.workerLevel);
+      for (var i = 0; i < _crew.Count; i++)
+      {
+        _crew[i].gameObject.SetActive(i < visibleWorkerCount);
+        _crew[i].SetExpression(workerExpression);
+      }
+      if (_filterArt != null) _filterArt.SetLevel(Mathf.Clamp(save.stationLevel, 1, 3), true);
       var constructionScale = 1f + Mathf.Min(3, save.stationConstructionState) * 0.04f;
       var storageScale = save.storageLevel == 2 ? new Vector3(1.16f, 1.08f, 1f)
         : save.storageLevel == 3 ? new Vector3(1.34f, 1.14f, 1f)
@@ -190,12 +233,15 @@ namespace KeepBlinking.CareStation
         _carts[i].localScale = cartScale;
       }
       RefreshResourceHud();
+      SetUpgradeOpportunity(save.upgradeOffered);
     }
 
     public void SetCrewState(CareCrewState state)
     {
+      var workTargets = new[] { "FILTER", "TANK", "PRESS" };
       for (var i = 0; i < _crew.Count; i++)
-        if (_crew[i].gameObject.activeSelf) _crew[i].SetState(state);
+        if (_crew[i].gameObject.activeSelf)
+          _crew[i].SetState(state, state == CareCrewState.Work ? workTargets[i % workTargets.Length] : string.Empty);
     }
 
     public void ShowWelcome(CareStationOfflineResult result)
@@ -273,7 +319,9 @@ namespace KeepBlinking.CareStation
           : KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.TextPrimary, 0.2f);
       }
       RefreshRoutineDock(save.currentRecipe);
-      if (_filterBody != null) _filterBody.color = (save.inspectionCompletedMask & CareStationInspectionRules.FilterCheck) != 0
+      var filterCheckComplete = (save.inspectionCompletedMask & CareStationInspectionRules.FilterCheck) != 0;
+      if (_filterArt != null) _filterArt.SetPipelineHighlighted(filterCheckComplete);
+      if (_filterBody != null) _filterBody.color = filterCheckComplete
         ? KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.AccentPrimary, 0.72f)
         : KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.TextSecondary, 0.22f);
       if (_tankBody != null) _tankBody.color = (save.inspectionCompletedMask & CareStationInspectionRules.FlowCheck) != 0
@@ -322,6 +370,7 @@ namespace KeepBlinking.CareStation
 
     public void ShowAction(string prompt, float progress, bool dimmed, string status = "")
     {
+      ExitEyeMovementGuidance(true);
       _renderedCareActionType = CareActionType.None;
       _welcomeRoot.gameObject.SetActive(false);
       _upgradeRoot.gameObject.SetActive(false);
@@ -329,14 +378,16 @@ namespace KeepBlinking.CareStation
       _incidentRoot.gameObject.SetActive(false);
       _actionRoot.gameObject.SetActive(true);
       _actionPrompt.text = ResolveActionLabel(prompt, status);
+      if (_actionPurpose != null) _actionPurpose.text = string.Empty;
       SetRoutinePrimary(_actionPrompt.text);
       SetProductionAnimation(false);
       _statusText.text = string.Empty;
       _actionProgress.fillAmount = Mathf.Clamp01(progress);
       _actionGroup.alpha = dimmed ? 0.48f : 1f;
       _careDimmer.color = KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.BackdropClosedEye, dimmed ? 0.52f : 0f);
-      _phoneIcon.gameObject.SetActive(prompt == "SCREEN DOWN" || prompt == "SEND BOTTLES");
+      _phoneIcon.gameObject.SetActive(prompt == "SEND BOTTLES");
       _restIcon.gameObject.SetActive(prompt == "REST" || prompt == "OPEN YOUR EYES" || status == "CLOSE YOUR EYES");
+      if (_pilotRoot != null) _pilotRoot.gameObject.SetActive(false);
     }
 
     public void ConfigureRecipe(CareRecipeSaveData recipe)
@@ -354,7 +405,7 @@ namespace KeepBlinking.CareStation
       var training = CareRecipeGenerator.TrainingIndex(recipe);
       _recipeTitle.text = recipe.recipeType == CareRecipeType.Training && training >= 0
         ? $"TRAINING {training + 1} / 4"
-        : "CARE ROUTINE";
+        : "TODAY'S EYE CARE";
       var visibleStep = recipe.recipeCompleted
         ? recipe.ActionCount
         : Mathf.Clamp(recipe.currentActionIndex + 1, 1, recipe.ActionCount);
@@ -373,11 +424,50 @@ namespace KeepBlinking.CareStation
       RefreshRoutineDock(recipe);
     }
 
-    public void PlayRecipePipelineStep(int completedStepIndex, int actionCount)
+    public void ShowCareRoutineIntro(CareRecipeSaveData recipe)
     {
-      _pipelineMask |= CareRecipePipeline.StageMaskForCompletion(completedStepIndex, actionCount);
+      var training = recipe != null && recipe.recipeType == CareRecipeType.Training;
+      ShowAction(training ? "EYE CARE TRAINING" : "EYE CARE ROUTINE", 0f, false);
+      if (_actionPurpose != null)
+        _actionPurpose.text = training
+          ? "REST YOUR EYES. RESTORE THE STATION."
+          : "2–3 MINUTES\nREST YOUR EYES. RESTORE THE STATION.";
+      ConfigureRecipe(recipe);
+      SetRoutinePrimary(training ? "EYE CARE TRAINING" : "EYE CARE ROUTINE");
+      if (_careCoreInner != null)
+        _careCoreInner.color = KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.AccentPrimary, 0.42f);
+    }
+
+    public void PlayRecipePipelineStep(
+      int completedStepIndex,
+      int actionCount,
+      CareActionType action = CareActionType.None)
+    {
+      _pipelineMask |= action == CareActionType.None
+        ? CareRecipePipeline.StageMaskForCompletion(completedStepIndex, actionCount)
+        : CareRecipePipeline.StageMaskForAction(action);
       _pipelinePulseUntil = Time.unscaledTime + 0.55f;
       ApplyPipelineVisuals();
+    }
+
+    public void PlayFocusLegFeedback(CareDistanceDirection direction)
+    {
+      if (direction != CareDistanceDirection.Closer && direction != CareDistanceDirection.Away) return;
+      _focusLegPulseDirection = direction;
+      _focusLegPulseUntil = Time.unscaledTime + 0.65f;
+      _focusLegPulseActive = true;
+      var on = KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.AccentPrimary, 0.86f);
+      if (direction == CareDistanceDirection.Closer)
+      {
+        for (var i = 0; i < _pressLayers.Count; i++) _pressLayers[i].color = on;
+      }
+      else
+      {
+        if (_tankBody != null) _tankBody.color = on;
+        if (_tankLevel != null) _tankLevel.color = KeepBlinkingTheme.AccentPrimary;
+      }
+      if (_careCoreInner != null)
+        _careCoreInner.color = KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.AccentPrimary, 0.5f);
     }
 
     public void RestoreRecipePipeline(CareRecipeSaveData recipe)
@@ -387,17 +477,33 @@ namespace KeepBlinking.CareStation
       {
         for (var index = 0; index < recipe.ActionCount; index++)
           if (recipe.IsStepCompleted(index))
-            _pipelineMask |= CareRecipePipeline.StageMaskForCompletion(index, recipe.ActionCount);
+            _pipelineMask |= CareRecipePipeline.StageMaskForAction(recipe.actionList[index]);
       }
       ApplyPipelineVisuals();
     }
 
-    public void ShowRecipeStepFeedback(CareRecipeSaveData recipe)
+    public void ShowRecipeStepFeedback(CareRecipeSaveData recipe, CareActionType completedAction = CareActionType.None)
     {
+      var continueToGuided = completedAction == CareActionType.PilotEyeRoutine && recipe != null &&
+                             !recipe.recipeCompleted && recipe.CurrentAction == CareActionType.GuidedEyeCircles;
+      if (continueToGuided)
+      {
+        EnterEyeMovementGuidance();
+        _eyeMovementGuidance.PresentPilotToGuidedHold();
+        _actionRoot.gameObject.SetActive(false);
+        _incidentRoot.gameObject.SetActive(false);
+        ConfigureRecipe(recipe);
+        return;
+      }
+      ExitEyeMovementGuidance(false);
       _actionRoot.gameObject.SetActive(false);
       _incidentRoot.gameObject.SetActive(false);
       _careDimmer.color = Color.clear;
-      _statusText.text = "CARE ROUTINE";
+      _statusText.text = completedAction == CareActionType.ClosedEyeRest
+          ? "REST COMPLETE"
+          : recipe != null && recipe.recipeCompleted
+            ? "EYE CARE COMPLETE  ·  STATION RESTORED"
+            : "CARE ROUTINE";
       SetCrewState(CareCrewState.Work);
       ConfigureRecipe(recipe);
       SetRoutinePrimary("CONTINUE");
@@ -408,7 +514,9 @@ namespace KeepBlinking.CareStation
     {
       var off = KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.TextSecondary, 0.34f);
       var on = KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.AccentPrimary, 0.78f);
-      if (_filterBody != null) _filterBody.color = (_pipelineMask & CareRecipePipeline.Filter) != 0 ? on : off;
+      var filterActive = (_pipelineMask & CareRecipePipeline.Filter) != 0;
+      if (_filterArt != null) _filterArt.SetPipelineHighlighted(filterActive);
+      if (_filterBody != null) _filterBody.color = filterActive ? on : off;
       if (_tankBody != null) _tankBody.color = (_pipelineMask & CareRecipePipeline.Tank) != 0 ? on : off;
       if (_tankLevel != null) _tankLevel.color = (_pipelineMask & CareRecipePipeline.Tank) != 0
         ? KeepBlinkingTheme.AccentPrimary
@@ -417,22 +525,16 @@ namespace KeepBlinking.CareStation
         _pressLayers[i].color = (_pipelineMask & CareRecipePipeline.Press) != 0
           ? on
           : KeepBlinkingTheme.WithAlpha(i == 0 ? KeepBlinkingTheme.TextSecondary : KeepBlinkingTheme.AccentSoft, 0.36f);
-      if (_careCoreInner != null) _careCoreInner.color = (_pipelineMask & CareRecipePipeline.Press) != 0
+      if (_careCoreInner != null) _careCoreInner.color = (_pipelineMask & CareRecipePipeline.CareCore) != 0
         ? KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.AccentPrimary, 0.42f)
         : KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.SurfaceElevated, 0.96f);
       for (var i = 0; i < _stationTracks.Count; i++)
       {
         var bit = i == 0 ? CareRecipePipeline.Filter : i == 1 ? CareRecipePipeline.Tank : CareRecipePipeline.Press;
-        _stationTracks[i].color = (_pipelineMask & bit) != 0
+        _stationTracks[i].color = (_pipelineMask & (bit | CareRecipePipeline.Rail)) != 0
           ? KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.AccentPrimary, 0.68f)
           : KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.BorderSubtle, 0.22f);
       }
-    }
-
-    public void ShowScreenDownDemo(bool showText)
-    {
-      ShowAction("SCREEN DOWN", 0f, false);
-      if (!showText) _actionPrompt.text = string.Empty;
     }
 
     public void SetActionProgress(float progress, string status = null)
@@ -453,29 +555,57 @@ namespace KeepBlinking.CareStation
       float distanceRatio,
       float directionProgress,
       CareDistanceDirection direction,
-      int completedDistanceSteps)
+      int completedDistanceSteps,
+      bool showIntroPurpose = false)
     {
-      ShowAction(prompt, progress, type == CareActionType.ClosedEyeRest ||
-                                  (type == CareActionType.GuidedEyeCircles &&
-                                   (int)phase >= (int)CareActionInternalPhase.GuidedPromptClose));
+      if (type == CareActionType.PilotEyeRoutine || type == CareActionType.GuidedEyeCircles)
+      {
+        EnterEyeMovementGuidance();
+        _eyeMovementGuidance.Present(type, phase, prompt);
+        _actionRoot.gameObject.SetActive(false);
+        _incidentRoot.gameObject.SetActive(false);
+        _changeStepButton.gameObject.SetActive(false);
+        _fallbackButton.gameObject.SetActive(false);
+        _returnFallbackButton.gameObject.SetActive(false);
+        _statusText.text = string.Empty;
+        _renderedCareActionType = type;
+        _renderedCareActionPhase = phase;
+        return;
+      }
+
+      ExitEyeMovementGuidance(true);
+      var guidedEyesClosed = type == CareActionType.GuidedEyeCircles &&
+                             (phase == CareActionInternalPhase.GuidedPromptClose ||
+                              phase == CareActionInternalPhase.GuidedClosedRest ||
+                              phase == CareActionInternalPhase.GuidedWaitReopen);
+      ShowAction(prompt, progress, type == CareActionType.ClosedEyeRest || guidedEyesClosed);
       if (type == CareActionType.FocusShift && _renderedCareActionPhase != phase)
         _actionStepPulseUntil = Time.unscaledTime + 0.35f;
       _renderedCareActionType = type;
       _renderedCareActionPhase = phase;
-      _phoneIcon.gameObject.SetActive(type == CareActionType.ScreenDown);
-      _restIcon.gameObject.SetActive(type == CareActionType.ClosedEyeRest || type == CareActionType.GuidedEyeCircles);
+      if (_actionPurpose != null)
+      {
+        var intro = phase == CareActionInternalPhase.FocusIntro ||
+                    phase == CareActionInternalPhase.ClosedEyeIntro ||
+                    phase == CareActionInternalPhase.PilotIntro ||
+                    showIntroPurpose && type == CareActionType.GuidedEyeCircles &&
+                    (phase == CareActionInternalPhase.GuidedPreviewClockwise ||
+                     phase == CareActionInternalPhase.GuidedPreviewCounterClockwise);
+        var safety = type == CareActionType.GuidedEyeCircles || type == CareActionType.PilotEyeRoutine
+          ? "\nMOVE GENTLY. STOP IF UNCOMFORTABLE."
+          : string.Empty;
+        _actionPurpose.text = intro
+          ? CareActionLibrary.Purpose(type) + safety + "\n" + CareActionLibrary.StationPurpose(type)
+          : CareActionLibrary.StationPurpose(type);
+      }
+      _phoneIcon.gameObject.SetActive(false);
+      _restIcon.gameObject.SetActive(type == CareActionType.ClosedEyeRest ||
+                                     guidedEyesClosed || type == CareActionType.GuidedEyeCircles);
+      if (_pilotRoot != null) _pilotRoot.gameObject.SetActive(type == CareActionType.PilotEyeRoutine);
       if (_guidedOrbitDot != null)
       {
-        var preview = type == CareActionType.GuidedEyeCircles &&
-                      (phase == CareActionInternalPhase.GuidedPreviewClockwise ||
-                       phase == CareActionInternalPhase.GuidedPreviewCounterClockwise);
-        _guidedOrbitDot.gameObject.SetActive(preview);
-        if (preview)
-        {
-          var orbitDirection = phase == CareActionInternalPhase.GuidedPreviewClockwise ? -1f : 1f;
-          var angle = orbitDirection * Time.unscaledTime * Mathf.PI * 0.5f;
-          _guidedOrbitDot.anchoredPosition = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * 96f;
-        }
+        var circles = type == CareActionType.GuidedEyeCircles && !guidedEyesClosed;
+        _guidedOrbitDot.gameObject.SetActive(circles);
       }
       if (_actionVisualRing != null)
       {
@@ -496,6 +626,245 @@ namespace KeepBlinking.CareStation
         direction,
         directionProgress,
         completedDistanceSteps);
+    }
+
+    public void RenderCareActionMotionData(CareActionSaveData data)
+    {
+      if (data == null) return;
+      if (data.actionType == CareActionType.PilotEyeRoutine || data.actionType == CareActionType.GuidedEyeCircles)
+      {
+        _eyeMovementGuidance?.Render(data);
+        return;
+      }
+      if (data.actionType == CareActionType.GuidedEyeCircles && _guidedOrbitDot != null &&
+          _guidedOrbitDot.gameObject.activeSelf)
+      {
+        var counter = data.internalPhase == CareActionInternalPhase.GuidedCounterClockwise;
+        var turns = data.guidedLapCount + Mathf.Clamp01(data.guidedNormalizedProgress);
+        var angle = (counter ? 1f : -1f) * turns * Mathf.PI * 2f + Mathf.PI * 0.5f;
+        _guidedOrbitDot.anchoredPosition = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * 76f;
+        var lap = Mathf.Clamp(data.guidedLapCount + 1, 1, 3);
+        if (data.internalPhase == CareActionInternalPhase.GuidedClockwise)
+          _actionPrompt.text = $"CLOCKWISE\n{lap} / 3";
+        else if (data.internalPhase == CareActionInternalPhase.GuidedCounterClockwise)
+          _actionPrompt.text = $"COUNTERCLOCKWISE\n{lap} / 3";
+      }
+      if (data.actionType != CareActionType.PilotEyeRoutine || _pilotRoot == null) return;
+      RenderPilot(data);
+    }
+
+    public void AdjustPilotPupilRangeDevelopment()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      _eyeMovementGuidance?.AdjustPupilRangeDevelopment();
+#endif
+    }
+
+    public void AdjustPilotAxisRangeDevelopment()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      _eyeMovementGuidance?.AdjustGuideSizeDevelopment();
+#endif
+    }
+
+    public void PreviewFullscreenPilotDevelopment(int axis = 0)
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      Build();
+      axis = Mathf.Clamp(axis, 0, 3);
+      var data = new CareActionSaveData
+      {
+        actionType = CareActionType.PilotEyeRoutine,
+        stage = CareActionStage.Active,
+        internalPhase = axis == 0 ? CareActionInternalPhase.PilotVertical :
+          axis == 1 ? CareActionInternalPhase.PilotHorizontal :
+          axis == 2 ? CareActionInternalPhase.PilotDiagonalA : CareActionInternalPhase.PilotDiagonalB,
+        pilotCurrentAxis = axis,
+        pilotCurrentRound = axis == 0 ? 1 : 2,
+        pilotCurrentEndpoint = 1,
+        pilotNormalizedMoveProgress = 0.25f,
+      };
+      RenderCareAction(data.actionType, data.internalPhase, CareActionRuntimePromptForPilot(axis),
+        0.4f, 1f, 0f, CareDistanceDirection.None, 0);
+      RenderCareActionMotionData(data);
+#endif
+    }
+
+    public void PreviewPilotToGuidedTransitionDevelopment()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      Build();
+      EnterEyeMovementGuidance();
+      _eyeMovementGuidance?.PresentPilotToGuidedHold();
+#endif
+    }
+
+    public void ToggleStationHudDuringGuidanceDevelopment()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      _guidanceHudDebugVisible = !_guidanceHudDebugVisible;
+      if (_guidanceMode) SetStationHudForGuidance(_guidanceHudDebugVisible);
+#endif
+    }
+
+    public void AdjustGuidanceWorkerSizeDevelopment()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      _eyeMovementGuidance?.AdjustWorkerSizeDevelopment();
+#endif
+    }
+
+    public void AdjustGuidanceEyeSizeDevelopment()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      _eyeMovementGuidance?.AdjustEyeSizeDevelopment();
+#endif
+    }
+
+    public void ToggleGuidanceSafeAreaDevelopment()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      _eyeMovementGuidance?.ToggleSafeAreaDevelopment();
+#endif
+    }
+
+    public void CapturePilotLayoutDevelopment()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      PreviewFullscreenPilotDevelopment();
+      StartCoroutine(CapturePilotLayoutAfterFrame());
+#endif
+    }
+
+    private IEnumerator CapturePilotLayoutAfterFrame()
+    {
+      yield return new WaitForEndOfFrame();
+      var folder = Path.Combine(Application.persistentDataPath, "KeepBlinking", "Captures");
+      Directory.CreateDirectory(folder);
+      var path = Path.Combine(folder, $"pilot-layout-{DateTime.UtcNow:yyyyMMdd-HHmmss}.png");
+      ScreenCapture.CaptureScreenshot(path);
+      Debug.Log($"[CareStation] Pilot layout captured: {path}");
+    }
+
+    private void EnterEyeMovementGuidance()
+    {
+      if (_guidanceMode) return;
+      _guidanceMode = true;
+      _hudWasVisible = _hudRoot != null && _hudRoot.gameObject.activeSelf;
+      _transportWasVisible = _transportRoot != null && _transportRoot.gameObject.activeSelf;
+      _routineWasVisible = _routineDock != null && _routineDock.gameObject.activeSelf;
+      _navigationWasVisible = _navigationRoot != null && _navigationRoot.gameObject.activeSelf;
+      _actionWasVisible = _actionRoot != null && _actionRoot.gameObject.activeSelf;
+      _incidentWasVisible = _incidentRoot != null && _incidentRoot.gameObject.activeSelf;
+      _crewVisibilityBeforeGuidance.Clear();
+      for (var index = 0; index < _crew.Count; index++)
+        _crewVisibilityBeforeGuidance.Add(_crew[index].gameObject.activeSelf);
+      SetStationHudForGuidance(false);
+      if (_contentGroup != null)
+      {
+        _contentGroup.alpha = 1f;
+        _contentGroup.interactable = false;
+        _contentGroup.blocksRaycasts = false;
+      }
+      SetProductionAnimation(false);
+    }
+
+    private void ExitEyeMovementGuidance(bool immediate)
+    {
+      if (!_guidanceMode && (_eyeMovementGuidance == null || !_eyeMovementGuidance.IsVisible)) return;
+      _guidanceMode = false;
+      RestoreStationHudAfterGuidance();
+      if (_contentGroup != null)
+      {
+        _contentGroup.alpha = 1f;
+        _contentGroup.interactable = true;
+        _contentGroup.blocksRaycasts = true;
+      }
+      if (_eyeMovementGuidance == null) return;
+      if (immediate) _eyeMovementGuidance.HideImmediate();
+      else _eyeMovementGuidance.HideAnimated();
+    }
+
+    private void SetStationHudForGuidance(bool visible)
+    {
+      if (_hudRoot != null) _hudRoot.gameObject.SetActive(visible);
+      if (_transportRoot != null) _transportRoot.gameObject.SetActive(visible);
+      if (_routineDock != null) _routineDock.gameObject.SetActive(visible);
+      if (_navigationRoot != null) _navigationRoot.gameObject.SetActive(visible);
+      if (_actionRoot != null) _actionRoot.gameObject.SetActive(false);
+      if (_incidentRoot != null) _incidentRoot.gameObject.SetActive(false);
+      if (_stationStageGroup != null)
+      {
+        _stationStageGroup.alpha = visible ? 1f : 0.12f;
+        _stationStageGroup.interactable = false;
+        _stationStageGroup.blocksRaycasts = false;
+      }
+      for (var index = 0; index < _stationLabels.Count; index++)
+        _stationLabels[index].SetActive(visible);
+      for (var index = 0; index < _crew.Count; index++)
+        _crew[index].gameObject.SetActive(visible &&
+          (index >= _crewVisibilityBeforeGuidance.Count || _crewVisibilityBeforeGuidance[index]));
+    }
+
+    private void RestoreStationHudAfterGuidance()
+    {
+      if (_hudRoot != null) _hudRoot.gameObject.SetActive(_hudWasVisible);
+      if (_transportRoot != null) _transportRoot.gameObject.SetActive(_transportWasVisible);
+      if (_routineDock != null) _routineDock.gameObject.SetActive(_routineWasVisible);
+      if (_navigationRoot != null) _navigationRoot.gameObject.SetActive(_navigationWasVisible);
+      if (_actionRoot != null) _actionRoot.gameObject.SetActive(_actionWasVisible);
+      if (_incidentRoot != null) _incidentRoot.gameObject.SetActive(_incidentWasVisible);
+      if (_stationStageGroup != null)
+      {
+        _stationStageGroup.alpha = 1f;
+        _stationStageGroup.interactable = true;
+        _stationStageGroup.blocksRaycasts = true;
+      }
+      for (var index = 0; index < _stationLabels.Count; index++)
+        _stationLabels[index].SetActive(true);
+      for (var index = 0; index < _crew.Count; index++)
+        _crew[index].gameObject.SetActive(index < _crewVisibilityBeforeGuidance.Count &&
+          _crewVisibilityBeforeGuidance[index]);
+    }
+
+    private void RenderPilot(CareActionSaveData data)
+    {
+      var axis = Mathf.Clamp(data.pilotCurrentAxis, 0, 3);
+      for (var index = 0; index < _pilotAxes.Count; index++)
+        _pilotAxes[index].color = index < axis
+          ? KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.AccentPrimary, 0.34f)
+          : index == axis
+            ? KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.TextPrimary, 0.72f)
+            : KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.TextSecondary, 0.18f);
+      var target = PilotGuidePosition(axis, data.pilotNormalizedMoveProgress);
+      if (_pilotGuideDot != null) _pilotGuideDot.anchoredPosition = target;
+      var pupil = Vector2.ClampMagnitude(target / Mathf.Max(1f, _pilotAxisRange) * _pilotPupilRange,
+        _pilotPupilRange);
+      if (_pilotLeftPupil != null) _pilotLeftPupil.anchoredPosition = Vector2.Lerp(_pilotLeftPupil.anchoredPosition, pupil, 0.28f);
+      if (_pilotRightPupil != null) _pilotRightPupil.anchoredPosition = Vector2.Lerp(_pilotRightPupil.anchoredPosition, pupil, 0.28f);
+      if (data.internalPhase == CareActionInternalPhase.PilotTransition)
+      {
+        _actionPrompt.text = "AXES COMPLETE\nNEXT: SLOW CIRCLES";
+        return;
+      }
+      _actionPrompt.text = $"{CareActionRuntimePromptForPilot(axis)}\nAXIS {axis + 1} / 4   ROUND {Mathf.Clamp(data.pilotCurrentRound + 1, 1, 3)} / 3";
+    }
+
+    private static string CareActionRuntimePromptForPilot(int axis)
+    {
+      return axis == 0 ? "LOOK UP AND DOWN" : axis == 1 ? "LOOK LEFT AND RIGHT" : "FOLLOW THE DIAGONAL";
+    }
+
+    private Vector2 PilotGuidePosition(int axis, float progress)
+    {
+      var first = axis == 0 ? Vector2.up : axis == 1 ? Vector2.left : axis == 2
+        ? new Vector2(-0.707f, 0.707f) : new Vector2(0.707f, 0.707f);
+      var second = -first;
+      progress = Mathf.Clamp01(progress);
+      if (progress < 0.25f) return Vector2.Lerp(Vector2.zero, first * _pilotAxisRange, progress * 4f);
+      if (progress < 0.5f) return Vector2.Lerp(first * _pilotAxisRange, Vector2.zero, (progress - 0.25f) * 4f);
+      if (progress < 0.75f) return Vector2.Lerp(Vector2.zero, second * _pilotAxisRange, (progress - 0.5f) * 4f);
+      return Vector2.Lerp(second * _pilotAxisRange, Vector2.zero, (progress - 0.75f) * 4f);
     }
 
     public void ShowDistanceCollection(
@@ -668,12 +1037,6 @@ namespace KeepBlinking.CareStation
       }
     }
 
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-    public void SetCareActionSkipAvailable(bool available)
-    {
-      if (_skipCareStepButton != null) _skipCareStepButton.gameObject.SetActive(available);
-    }
-#endif
 
     public void SetDistanceSafetyWarning(bool visible)
     {
@@ -714,10 +1077,12 @@ namespace KeepBlinking.CareStation
         var level = CareStationShiftRules.GetUpgradeLevel(save, pair.Key);
         var availability = CareStationShiftRules.EvaluateUpgrade(save, pair.Key, configuration);
         var maximum = availability.IsMaximum;
-        pair.Value.interactable = availability.CanPurchase;
+        // Keep unavailable cards clickable so the authoritative purchase path
+        // can explain exactly what is missing instead of silently doing nothing.
+        pair.Value.interactable = true;
         var group = pair.Value.GetComponent<CanvasGroup>();
         if (group == null) group = pair.Value.gameObject.AddComponent<CanvasGroup>();
-        group.alpha = pair.Value.interactable ? 1f : maximum ? 0.42f : 0.68f;
+        group.alpha = availability.CanPurchase ? 1f : maximum ? 0.42f : 0.68f;
         if (maximum && _upgradeCardTexts.TryGetValue(pair.Key, out var text))
         {
           var title = pair.Key == CareStationUpgradeId.MoreWorkers ? "MORE WORKERS"
@@ -756,9 +1121,25 @@ namespace KeepBlinking.CareStation
           : $"{cost.fullBottles} FULL";
         var reasonLine = string.IsNullOrEmpty(availability.PlayerReason)
           ? string.Empty
-          : "\n" + availability.PlayerReason;
+          : $"\n<color=#{ColorUtility.ToHtmlStringRGB(KeepBlinkingTheme.AccentWarm)}>{availability.PlayerReason}</color>";
         pair.Value.text = $"{title}\nLEVEL {level}\n{effect}\n{configuration.Value(pair.Key, level)} -> {configuration.Value(pair.Key, level + 1)}   {costText}{reasonLine}";
+        pair.Value.color = KeepBlinkingTheme.TextPrimary;
       }
+      SetUpgradeOpportunity(save != null && save.upgradeOffered);
+    }
+
+    public void ShowUpgradeFeedback(CareStationUpgradeId upgrade, string reason)
+    {
+      if (string.IsNullOrEmpty(reason) || !_upgradeCardTexts.TryGetValue(upgrade, out var text)) return;
+      text.color = KeepBlinkingTheme.AccentWarm;
+      if (text.text.IndexOf(reason, StringComparison.Ordinal) < 0) text.text += "\n" + reason;
+      _upgradeFeedbackCard = upgrade;
+      _upgradeFeedbackUntil = Time.unscaledTime + 1.15f;
+    }
+
+    public void SetUpgradeOpportunity(bool visible)
+    {
+      if (_upgradeOpportunityDot != null) _upgradeOpportunityDot.gameObject.SetActive(visible);
     }
 
     public void ShowSubjectiveCheck(bool post, CareSubjectiveScores scores)
@@ -802,9 +1183,61 @@ namespace KeepBlinking.CareStation
       SetProductionAnimation(false);
     }
 
+    public void ShowStorageFullStation(CareStationSaveData save)
+    {
+      HideAllModals();
+      ApplyStation(save);
+      _statusText.text = "STORAGE FULL\nPRODUCTION PAUSED";
+      SetCrewState(CareCrewState.Rest);
+      SetRoutinePrimary("START CARE");
+      SetProductionAnimation(false);
+    }
+
+    public void ShowStationUpgradeResult(string title, int previousValue, int currentValue)
+    {
+      if (_toastText == null) return;
+      _toastText.text = $"{title}\n{previousValue} -> {currentValue}";
+      _toastText.gameObject.SetActive(true);
+      _toastUntil = Time.unscaledTime + 2.2f;
+    }
+
+    public bool IsUpgradeVisible => _upgradeRoot != null && _upgradeRoot.gameObject.activeSelf;
+
+    internal bool ClearStaleUiInputLock(bool legitimateGuidanceLock)
+    {
+      if (legitimateGuidanceLock && _eyeMovementGuidance != null && _eyeMovementGuidance.IsVisible)
+        return false;
+
+      _guidanceMode = false;
+      _eyeMovementGuidance?.HideImmediate();
+      if (_contentGroup != null)
+      {
+        _contentGroup.alpha = 1f;
+        _contentGroup.interactable = true;
+        _contentGroup.blocksRaycasts = true;
+      }
+      if (_stationStageGroup != null)
+      {
+        _stationStageGroup.alpha = 1f;
+        _stationStageGroup.interactable = true;
+        _stationStageGroup.blocksRaycasts = true;
+      }
+      if (_navigationRoot != null)
+      {
+        _navigationRoot.gameObject.SetActive(true);
+        _navigationRoot.SetAsLastSibling();
+      }
+      for (var index = 0; index < _navigationButtons.Count; index++)
+        if (_navigationButtons[index] != null) _navigationButtons[index].interactable = true;
+      return true;
+    }
+
     public bool IsUpgradeInteractable(CareStationUpgradeId upgrade)
     {
-      return _upgradeButtons.TryGetValue(upgrade, out var button) && button.interactable;
+      return _stationSave != null && CareStationShiftRules.CanPurchaseUpgrade(
+        _stationSave,
+        upgrade,
+        new CareStationUpgradeConfiguration());
     }
 
     public void ShowShiftComplete(CareStationSaveData save)
@@ -838,6 +1271,7 @@ namespace KeepBlinking.CareStation
 
     public void HideAllModals()
     {
+      ExitEyeMovementGuidance(true);
       if (_welcomeRoot != null) _welcomeRoot.gameObject.SetActive(false);
       if (_incidentRoot != null) _incidentRoot.gameObject.SetActive(false);
       if (_actionRoot != null) _actionRoot.gameObject.SetActive(false);
@@ -854,15 +1288,13 @@ namespace KeepBlinking.CareStation
       if (_changeStepButton != null) _changeStepButton.gameObject.SetActive(false);
       if (_fallbackButton != null) _fallbackButton.gameObject.SetActive(false);
       if (_returnFallbackButton != null) _returnFallbackButton.gameObject.SetActive(false);
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-      if (_skipCareStepButton != null) _skipCareStepButton.gameObject.SetActive(false);
-#endif
       RenderDistanceFeedback(false, CareDistanceDirection.None, 0f, -1);
       ResetTransportDistanceResponse();
       if (_careDimmer != null) _careDimmer.color = Color.clear;
       _incidentSelectable = false;
       _statusText.text = string.Empty;
       SetNavigationSelection(0);
+      if (_navigationRoot != null) _navigationRoot.SetAsLastSibling();
     }
 
     private void Update()
@@ -874,18 +1306,44 @@ namespace KeepBlinking.CareStation
         if (_repairPulseUntil > Time.unscaledTime)
           _incidentCore.rectTransform.localScale = Vector3.one * Mathf.Lerp(0.85f, 1.25f, 1f - (_repairPulseUntil - Time.unscaledTime) / 1.4f);
       }
-      if (_phoneIcon != null && _phoneIcon.gameObject.activeSelf &&
-          (_actionPrompt.text == "SCREEN DOWN" || _renderedCareActionType == CareActionType.ScreenDown))
-        _phoneIcon.localRotation = Quaternion.Euler(0f, 0f, Mathf.Lerp(0f, 180f, 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 0.8f)));
       if (_storageTank != null && _storageFull)
         _storageTank.localScale = _storageBaseScale * Mathf.Lerp(0.985f, 1.025f, pulse);
       var pipelinePulse = _pipelinePulseUntil > Time.unscaledTime
         ? 1f + Mathf.Sin((1f - (_pipelinePulseUntil - Time.unscaledTime) / 0.55f) * Mathf.PI) * 0.08f
         : 1f;
+      var focusLegPulse = _focusLegPulseUntil > Time.unscaledTime
+        ? 1f + Mathf.Sin((1f - (_focusLegPulseUntil - Time.unscaledTime) / 0.65f) * Mathf.PI) * 0.1f
+        : 1f;
+      if (_focusLegPulseActive && _focusLegPulseUntil <= Time.unscaledTime)
+      {
+        _focusLegPulseActive = false;
+        ApplyPipelineVisuals();
+      }
+      if (_upgradeFeedbackUntil > 0f && Time.unscaledTime >= _upgradeFeedbackUntil)
+      {
+        if (_upgradeCardTexts.TryGetValue(_upgradeFeedbackCard, out var feedbackText))
+          feedbackText.color = KeepBlinkingTheme.TextPrimary;
+        _upgradeFeedbackUntil = 0f;
+        _upgradeFeedbackCard = CareStationUpgradeId.None;
+      }
+      if (_toastUntil > 0f && Time.unscaledTime >= _toastUntil)
+      {
+        if (_toastText != null) _toastText.gameObject.SetActive(false);
+        _toastUntil = 0f;
+      }
       if (_filterBody != null) _filterBody.rectTransform.localScale = Vector3.one * (((_pipelineMask & CareRecipePipeline.Filter) != 0) ? pipelinePulse : 1f);
-      if (_tankBody != null) _tankBody.rectTransform.localScale = Vector3.one * (((_pipelineMask & CareRecipePipeline.Tank) != 0) ? pipelinePulse : 1f);
+      if (_tankBody != null)
+        _tankBody.rectTransform.localScale = Vector3.one * (_focusLegPulseActive && _focusLegPulseDirection == CareDistanceDirection.Away
+          ? focusLegPulse
+          : ((_pipelineMask & CareRecipePipeline.Tank) != 0) ? pipelinePulse : 1f);
       for (var i = 0; i < _pressLayers.Count; i++)
-        _pressLayers[i].rectTransform.localScale = Vector3.one * (((_pipelineMask & CareRecipePipeline.Press) != 0) ? pipelinePulse : 1f);
+        _pressLayers[i].rectTransform.localScale = Vector3.one * (_focusLegPulseActive && _focusLegPulseDirection == CareDistanceDirection.Closer
+          ? focusLegPulse
+          : ((_pipelineMask & CareRecipePipeline.Press) != 0) ? pipelinePulse : 1f);
+      if (_careCoreInner != null)
+        _careCoreInner.rectTransform.localScale = Vector3.one * (((_pipelineMask & CareRecipePipeline.CareCore) != 0)
+          ? pipelinePulse
+          : 1f);
       UpdateProductionAnimation();
       PollIncidentTouch();
     }
@@ -924,6 +1382,7 @@ namespace KeepBlinking.CareStation
     private void BuildStationStage()
     {
       _stationStage = FirstLevelUiFactory.CreateObject("Station Stage", _content).GetComponent<RectTransform>();
+      _stationStageGroup = _stationStage.gameObject.AddComponent<CanvasGroup>();
       FirstLevelUiFactory.SetRect(_stationStage, new Vector2(0.03f, 0.31f), new Vector2(0.97f, 0.88f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
       var stage = FirstLevelUiFactory.CreateImage("Stage Surface", _stationStage, KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.SurfaceBase, 0.18f), FirstLevelUiFactory.RoundedSprite);
       FirstLevelUiFactory.Stretch(stage.rectTransform);
@@ -943,16 +1402,22 @@ namespace KeepBlinking.CareStation
     private void BuildFilterDevice()
     {
       var root = FirstLevelUiFactory.CreateObject("Filter Device", _stationStage).GetComponent<RectTransform>();
-      FirstLevelUiFactory.SetRect(root, new Vector2(0.22f, 0.76f), new Vector2(0.22f, 0.76f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(230f, 142f));
-      var frame = FirstLevelUiFactory.CreateImage("Wide Filter Body", root, KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.TextSecondary, 0.34f), FirstLevelUiFactory.RoundedSprite);
-      _filterBody = frame;
-      FirstLevelUiFactory.SetRect(frame.rectTransform, new Vector2(0.5f, 0.57f), new Vector2(0.5f, 0.57f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(210f, 88f));
-      var intake = FirstLevelUiFactory.CreateImage("Filter Intake", root, KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.BackgroundPrimary, 0.92f), FirstLevelUiFactory.CircleSprite);
-      FirstLevelUiFactory.SetRect(intake.rectTransform, new Vector2(0.2f, 0.57f), new Vector2(0.2f, 0.57f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(52f, 52f));
-      for (var i = 0; i < 3; i++)
+      FirstLevelUiFactory.SetRect(root, new Vector2(0.22f, 0.76f), new Vector2(0.22f, 0.76f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(230f, 230f));
+      var filterCatalog = Resources.Load<CareStationFilterArtCatalog>("CareStation/Filter/CareStationFilterArtCatalog");
+      if (filterCatalog != null)
       {
-        var slat = FirstLevelUiFactory.CreateImage("Filter Slat", root, KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.AccentPrimary, 0.4f), FirstLevelUiFactory.RoundedSprite);
-        FirstLevelUiFactory.SetRect(slat.rectTransform, new Vector2(0.62f, 0.57f), new Vector2(0.62f, 0.57f), new Vector2(0.5f, 0.5f), new Vector2(i * 24f - 24f, 0f), new Vector2(8f, 54f));
+        _filterArt = CareStationFilterArtView.Create(root, filterCatalog);
+        _filterArt.name = "FILTER Art";
+        var artRect = _filterArt.GetComponent<RectTransform>();
+        FirstLevelUiFactory.SetRect(artRect, new Vector2(0.5f, 0.56f), new Vector2(0.5f, 0.56f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(250f, 375f));
+        _filterArt.SetHitTestEnabled(false);
+      }
+      else
+      {
+        // The former procedural FILTER silhouette is intentionally not a
+        // fallback for authored art. A missing catalog should be obvious in
+        // development instead of silently restoring the obsolete L1 shape.
+        Debug.LogWarning("Care Station FILTER art catalog is missing; authored FILTER art was not created.");
       }
       CreateDeviceLabel(root, "FILTER");
     }
@@ -1009,6 +1474,7 @@ namespace KeepBlinking.CareStation
       FirstLevelUiFactory.SetRect(seam.rectTransform, new Vector2(0.5f, 0.56f), new Vector2(0.5f, 0.56f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(275f, 4f));
       var label = FirstLevelUiFactory.CreateText("Care Core Label", root, "CARE CORE", 21f, FontStyles.Bold, TextAlignmentOptions.Center, KeepBlinkingTheme.TextMuted);
       FirstLevelUiFactory.SetRect(label.rectTransform, new Vector2(0.2f, 0f), new Vector2(0.8f, 0.2f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
+      _stationLabels.Add(label.gameObject);
     }
 
     private void CreateTrack(string name, Vector2 from, Vector2 to)
@@ -1021,10 +1487,11 @@ namespace KeepBlinking.CareStation
       line.rectTransform.localRotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg);
     }
 
-    private static void CreateDeviceLabel(Transform root, string label)
+    private void CreateDeviceLabel(Transform root, string label)
     {
       var text = FirstLevelUiFactory.CreateText(label + " Label", root, label, 18f, FontStyles.Bold, TextAlignmentOptions.Center, KeepBlinkingTheme.TextMuted);
       FirstLevelUiFactory.SetRect(text.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0.18f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
+      _stationLabels.Add(text.gameObject);
     }
 
     private void BuildStorage()
@@ -1113,17 +1580,16 @@ namespace KeepBlinking.CareStation
 
     private void BuildCrew()
     {
-      var positions = new[] { new Vector2(0.17f, 0.55f), new Vector2(0.83f, 0.55f), new Vector2(0.32f, 0.31f), new Vector2(0.68f, 0.31f), new Vector2(0.5f, 0.24f) };
+      var positions = new[]
+      {
+        new Vector2(0.20f, 0.49f),
+        new Vector2(0.80f, 0.49f),
+        new Vector2(0.50f, 0.30f),
+      };
       for (var i = 0; i < positions.Length; i++)
       {
-        var root = FirstLevelUiFactory.CreateObject($"Care Crew {i + 1}", _stationStage).GetComponent<RectTransform>();
-        FirstLevelUiFactory.SetRect(root, positions[i], positions[i], new Vector2(0.5f, 0f), Vector2.zero, new Vector2(76f, 108f));
-        var body = FirstLevelUiFactory.CreateImage("Body", root, KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.TextPrimary, 0.82f), FirstLevelUiFactory.RoundedSprite);
-        FirstLevelUiFactory.SetRect(body.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 4f), new Vector2(56f, 62f));
-        var head = FirstLevelUiFactory.CreateImage("Head", root, KeepBlinkingTheme.TextPrimary, FirstLevelUiFactory.CircleSprite);
-        FirstLevelUiFactory.SetRect(head.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 62f), new Vector2(44f, 44f));
-        var crew = root.gameObject.AddComponent<CareCrewPlaceholderView>();
-        crew.gameObject.SetActive(i < 2);
+        var crew = CareStationWorkerArtView.Create(_stationStage, i, positions[i]);
+        crew.gameObject.SetActive(i == 0);
         _crew.Add(crew);
       }
     }
@@ -1174,17 +1640,26 @@ namespace KeepBlinking.CareStation
         var min = new Vector2(index / 3f + 0.008f, 0.04f);
         var max = new Vector2((index + 1) / 3f - 0.008f, 0.96f);
         var selected = index == 0;
-        var tab = FirstLevelUiFactory.CreateImage(labels[index] + " Tab", _navigationRoot,
-          KeepBlinkingTheme.WithAlpha(selected ? KeepBlinkingTheme.AccentPrimary : KeepBlinkingTheme.SurfaceElevated, selected ? 0.38f : 0.42f),
-          FirstLevelUiFactory.RoundedSprite);
-        FirstLevelUiFactory.SetRect(tab.rectTransform, min, max, new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
-        tab.raycastTarget = false;
+        var captured = index;
+        var button = FirstLevelUiFactory.CreateButton(labels[index] + " Tab", _navigationRoot, string.Empty,
+          KeepBlinkingTheme.WithAlpha(selected ? KeepBlinkingTheme.AccentPrimary : KeepBlinkingTheme.SurfaceElevated, selected ? 0.38f : 0.42f));
+        var tab = button.targetGraphic as Image;
+        FirstLevelUiFactory.SetRect((RectTransform)button.transform, min, max, new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
+        button.onClick.AddListener(() => NavigationSelected?.Invoke(captured));
+        _navigationButtons.Add(button);
         _navigationTabs.Add(tab);
         var text = FirstLevelUiFactory.CreateText(labels[index] + " Label", tab.transform, labels[index], 16f, FontStyles.Bold, TextAlignmentOptions.Center,
           selected ? KeepBlinkingTheme.TextPrimary : KeepBlinkingTheme.TextMuted);
         FirstLevelUiFactory.Stretch(text.rectTransform, new Vector2(4f, 3f), new Vector2(-4f, -3f));
         text.raycastTarget = false;
         _navigationLabels.Add(text);
+        if (index == 1)
+        {
+          _upgradeOpportunityDot = FirstLevelUiFactory.CreateImage("Upgrade Opportunity", tab.transform, KeepBlinkingTheme.AccentWarm, FirstLevelUiFactory.CircleSprite);
+          FirstLevelUiFactory.SetRect(_upgradeOpportunityDot.rectTransform, new Vector2(0.88f, 0.74f), new Vector2(0.88f, 0.74f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(18f, 18f));
+          _upgradeOpportunityDot.raycastTarget = false;
+          _upgradeOpportunityDot.gameObject.SetActive(false);
+        }
       }
     }
 
@@ -1207,7 +1682,7 @@ namespace KeepBlinking.CareStation
       var training = recipe == null ? -1 : CareRecipeGenerator.TrainingIndex(recipe);
       _routineDockTitle.text = recipe != null && recipe.recipeType == CareRecipeType.Training && training >= 0
         ? $"TRAINING {training + 1} / 4"
-        : "CARE ROUTINE";
+        : recipe != null ? "TODAY'S EYE CARE" : "CARE ROUTINE";
       for (var index = 0; index < _routineDockDots.Count; index++)
       {
         var visible = recipe != null && index < recipe.ActionCount;
@@ -1234,6 +1709,10 @@ namespace KeepBlinking.CareStation
       if (_productionAnimating == active) return;
       _productionAnimating = active;
       _productionAnimationStartedAt = Time.unscaledTime;
+      if (_filterArt != null)
+        _filterArt.SetProductionVisual(
+          active && !_storageFull ? FilterProductionVisualState.Filtering : FilterProductionVisualState.Idle,
+          0f);
       if (!active)
       {
         if (_productionBottle != null) _productionBottle.gameObject.SetActive(false);
@@ -1249,6 +1728,8 @@ namespace KeepBlinking.CareStation
       if (_productionBottle == null || !_productionAnimating || _storageFull)
       {
         if (_productionBottle != null) _productionBottle.gameObject.SetActive(false);
+        if (_filterArt != null)
+          _filterArt.SetProductionVisual(FilterProductionVisualState.Idle, 0f);
         return;
       }
 
@@ -1260,6 +1741,8 @@ namespace KeepBlinking.CareStation
       {
         _productionBottle.gameObject.SetActive(false);
         if (_cart != null) _cart.anchoredPosition = _productionCartHome;
+        if (_filterArt != null)
+          _filterArt.SetProductionVisual(FilterProductionVisualState.Idle, 0f);
         return;
       }
 
@@ -1267,6 +1750,15 @@ namespace KeepBlinking.CareStation
       var route = Mathf.Clamp(cycle / 9f, 0f, 0.9999f) * (_productionRoute.Length - 1);
       var segment = Mathf.Clamp(Mathf.FloorToInt(route), 0, _productionRoute.Length - 2);
       var local = Mathf.SmoothStep(0f, 1f, route - segment);
+      if (_filterArt != null)
+      {
+        if (segment == 0)
+          _filterArt.SetProductionVisual(FilterProductionVisualState.Filtering, local);
+        else if (segment == 1 && local <= 0.38f)
+          _filterArt.SetProductionVisual(FilterProductionVisualState.BottleComplete, 1f);
+        else
+          _filterArt.SetProductionVisual(FilterProductionVisualState.Idle, 0f);
+      }
       var anchor = Vector2.Lerp(_productionRoute[segment], _productionRoute[segment + 1], local);
       _productionBottle.anchorMin = anchor;
       _productionBottle.anchorMax = anchor;
@@ -1293,10 +1785,10 @@ namespace KeepBlinking.CareStation
     {
       switch (action)
       {
-        case CareActionType.ScreenDown: return "SCREEN\nDOWN";
-        case CareActionType.ClosedEyeRest: return "REST\nEYES";
+        case CareActionType.ClosedEyeRest: return "CLOSED-EYE\nREST";
         case CareActionType.FocusShift: return "FOCUS\nSHIFT";
-        case CareActionType.GuidedEyeCircles: return "GUIDED\nCIRCLES";
+        case CareActionType.GuidedEyeCircles: return "GUIDED\nMOVEMENT";
+        case CareActionType.PilotEyeRoutine: return "PILOT EYE\nROUTINE";
         default: return string.Empty;
       }
     }
@@ -1359,14 +1851,14 @@ namespace KeepBlinking.CareStation
       FirstLevelUiFactory.SetRect(_distanceCoreFill.rectTransform, new Vector2(0.5f, 0.57f), new Vector2(0.5f, 0.57f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(150f, 150f));
       _distanceWave = FirstLevelUiFactory.CreateImage("Distance Wave", _actionRoot, KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.AccentPrimary, 0.2f), FirstLevelUiFactory.RingSprite);
       FirstLevelUiFactory.SetRect(_distanceWave.rectTransform, new Vector2(0.5f, 0.57f), new Vector2(0.5f, 0.57f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(260f, 260f));
-      for (var i = 0; i < 4; i++)
+      for (var i = 0; i < 6; i++)
       {
         var dot = FirstLevelUiFactory.CreateImage("Distance Guide Dot", _actionRoot, KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.AccentPrimary, 0.5f), FirstLevelUiFactory.CircleSprite);
         FirstLevelUiFactory.SetRect(dot.rectTransform, new Vector2(0.5f, 0.57f), new Vector2(0.5f, 0.57f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(13f, 13f));
         _distanceGuideDots.Add(dot.rectTransform);
 
         var step = FirstLevelUiFactory.CreateImage("Focus Step", _actionRoot, KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.TextPrimary, 0.18f), FirstLevelUiFactory.CircleSprite);
-        FirstLevelUiFactory.SetRect(step.rectTransform, new Vector2(0.5f, 0.34f), new Vector2(0.5f, 0.34f), new Vector2(0.5f, 0.5f), new Vector2((i - 1.5f) * 42f, 0f), new Vector2(18f, 18f));
+        FirstLevelUiFactory.SetRect(step.rectTransform, new Vector2(0.5f, 0.34f), new Vector2(0.5f, 0.34f), new Vector2(0.5f, 0.5f), new Vector2((i - 2.5f) * 38f, 0f), new Vector2(18f, 18f));
         _distanceStepLights.Add(step);
       }
       RenderDistanceFeedback(false, CareDistanceDirection.None, 0f, -1);
@@ -1390,8 +1882,69 @@ namespace KeepBlinking.CareStation
       FirstLevelUiFactory.Stretch(guidedDot.rectTransform);
       _guidedOrbitDot.gameObject.SetActive(false);
       _restIcon.gameObject.SetActive(false);
+      _pilotRoot = FirstLevelUiFactory.CreateObject("Pilot Eye Guide", _actionRoot).GetComponent<RectTransform>();
+      FirstLevelUiFactory.SetRect(_pilotRoot, new Vector2(0.5f, 0.57f), new Vector2(0.5f, 0.57f),
+        new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(360f, 360f));
+      var axisRotations = new[] { 90f, 0f, -45f, 45f };
+      for (var index = 0; index < axisRotations.Length; index++)
+      {
+        var axis = FirstLevelUiFactory.CreateImage($"Pilot Axis {index + 1}", _pilotRoot,
+          KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.TextSecondary, 0.18f), FirstLevelUiFactory.RoundedSprite);
+        FirstLevelUiFactory.SetRect(axis.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+          new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(270f, 5f));
+        axis.rectTransform.localRotation = Quaternion.Euler(0f, 0f, axisRotations[index]);
+        axis.raycastTarget = false;
+        _pilotAxes.Add(axis);
+      }
+      var endpointDirections = new[]
+      {
+        Vector2.up, Vector2.down, Vector2.left, Vector2.right,
+        new Vector2(-0.707f, 0.707f), new Vector2(0.707f, -0.707f),
+        new Vector2(0.707f, 0.707f), new Vector2(-0.707f, -0.707f),
+      };
+      for (var index = 0; index < endpointDirections.Length; index++)
+      {
+        var endpoint = FirstLevelUiFactory.CreateImage($"Pilot Endpoint {index + 1}", _pilotRoot,
+          KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.TextSecondary, 0.32f), FirstLevelUiFactory.CircleSprite);
+        FirstLevelUiFactory.SetRect(endpoint.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+          new Vector2(0.5f, 0.5f), endpointDirections[index] * 135f, new Vector2(17f, 17f));
+        endpoint.raycastTarget = false;
+        _pilotEndpoints.Add(endpoint);
+      }
+      var pilotBody = FirstLevelUiFactory.CreateImage("Worker Body", _pilotRoot,
+        KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.AccentSoft, 0.94f), FirstLevelUiFactory.RoundedSprite);
+      FirstLevelUiFactory.SetRect(pilotBody.rectTransform, new Vector2(0.5f, 0.24f), new Vector2(0.5f, 0.24f),
+        new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(116f, 86f));
+      var pilotHead = FirstLevelUiFactory.CreateImage("Worker Head", _pilotRoot,
+        KeepBlinkingTheme.TextPrimary, FirstLevelUiFactory.CircleSprite);
+      FirstLevelUiFactory.SetRect(pilotHead.rectTransform, new Vector2(0.5f, 0.53f), new Vector2(0.5f, 0.53f),
+        new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(172f, 150f));
+      var leftEye = FirstLevelUiFactory.CreateImage("Left Eye", pilotHead.rectTransform,
+        KeepBlinkingTheme.SurfaceOverlay, FirstLevelUiFactory.CircleSprite);
+      FirstLevelUiFactory.SetRect(leftEye.rectTransform, new Vector2(0.32f, 0.54f), new Vector2(0.32f, 0.54f),
+        new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(54f, 38f));
+      var rightEye = FirstLevelUiFactory.CreateImage("Right Eye", pilotHead.rectTransform,
+        KeepBlinkingTheme.SurfaceOverlay, FirstLevelUiFactory.CircleSprite);
+      FirstLevelUiFactory.SetRect(rightEye.rectTransform, new Vector2(0.68f, 0.54f), new Vector2(0.68f, 0.54f),
+        new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(54f, 38f));
+      _pilotLeftPupil = FirstLevelUiFactory.CreateImage("Left Pupil", leftEye.rectTransform,
+        KeepBlinkingTheme.BackgroundPrimary, FirstLevelUiFactory.CircleSprite).rectTransform;
+      FirstLevelUiFactory.SetRect(_pilotLeftPupil, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+        new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(20f, 20f));
+      _pilotRightPupil = FirstLevelUiFactory.CreateImage("Right Pupil", rightEye.rectTransform,
+        KeepBlinkingTheme.BackgroundPrimary, FirstLevelUiFactory.CircleSprite).rectTransform;
+      FirstLevelUiFactory.SetRect(_pilotRightPupil, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+        new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(20f, 20f));
+      _pilotGuideDot = FirstLevelUiFactory.CreateImage("Pilot Guide Dot", _pilotRoot,
+        KeepBlinkingTheme.AccentPrimary, FirstLevelUiFactory.CircleSprite).rectTransform;
+      FirstLevelUiFactory.SetRect(_pilotGuideDot, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+        new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(24f, 24f));
+      _pilotRoot.gameObject.SetActive(false);
       _actionPrompt = FirstLevelUiFactory.CreateText("Action Prompt", _actionRoot, "REST", 38f, FontStyles.Bold, TextAlignmentOptions.Center, KeepBlinkingTheme.TextPrimary);
       FirstLevelUiFactory.SetRect(_actionPrompt.rectTransform, new Vector2(0f, 0.12f), new Vector2(1f, 0.28f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
+      _actionPurpose = FirstLevelUiFactory.CreateText("Action Purpose", _actionRoot, string.Empty, 18f, FontStyles.Bold, TextAlignmentOptions.Center, KeepBlinkingTheme.TextSecondary, true);
+      FirstLevelUiFactory.SetRect(_actionPurpose.rectTransform, new Vector2(0.08f, 0.28f), new Vector2(0.92f, 0.38f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
+      _actionPurpose.raycastTarget = false;
       _fallbackButton = FirstLevelUiFactory.CreateButton("Collect Fallback", _actionRoot, "COLLECT", KeepBlinkingTheme.AccentPrimary);
       FirstLevelUiFactory.SetRect((RectTransform)_fallbackButton.transform, new Vector2(0.5f, 0.08f), new Vector2(0.5f, 0.08f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(300f, 92f));
       _fallbackButton.onClick.AddListener(() => FallbackCollectSelected?.Invoke());
@@ -1403,12 +1956,6 @@ namespace KeepBlinking.CareStation
       FirstLevelUiFactory.SetRect((RectTransform)_changeStepButton.transform, new Vector2(0.18f, 0.055f), new Vector2(0.18f, 0.055f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(190f, 70f));
       _changeStepButton.onClick.AddListener(() => ChangeStepSelected?.Invoke());
       _changeStepButton.gameObject.SetActive(false);
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-      _skipCareStepButton = FirstLevelUiFactory.CreateButton("Skip Care Step", _actionRoot, "SKIP STEP", KeepBlinkingTheme.AccentPrimary);
-      FirstLevelUiFactory.SetRect((RectTransform)_skipCareStepButton.transform, new Vector2(0.5f, 0.07f), new Vector2(0.5f, 0.07f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(300f, 82f));
-      _skipCareStepButton.onClick.AddListener(() => SkipCareStepSelected?.Invoke());
-      _skipCareStepButton.gameObject.SetActive(false);
-#endif
     }
 
     private void BuildWelcome()
@@ -1451,6 +1998,25 @@ namespace KeepBlinking.CareStation
       CreateUpgradeCard(CareStationUpgradeId.MoreWorkers, 0.66f);
       CreateUpgradeCard(CareStationUpgradeId.LargerStorage, 0.47f);
       CreateUpgradeCard(CareStationUpgradeId.BiggerCart, 0.28f);
+      var back = FirstLevelUiFactory.CreateButton("Back To Station", _upgradeRoot, "BACK TO STATION", KeepBlinkingTheme.SurfaceElevated);
+      FirstLevelUiFactory.SetRect((RectTransform)back.transform, new Vector2(0.22f, 0.105f), new Vector2(0.78f, 0.195f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
+      back.onClick.AddListener(() => UpgradeBackSelected?.Invoke());
+    }
+
+    private void BuildToast()
+    {
+      _toastText = FirstLevelUiFactory.CreateText(
+        "Station Toast",
+        _content,
+        string.Empty,
+        24f,
+        FontStyles.Bold,
+        TextAlignmentOptions.Center,
+        KeepBlinkingTheme.AccentWarm,
+        true);
+      FirstLevelUiFactory.SetRect(_toastText.rectTransform, new Vector2(0.23f, 0.72f), new Vector2(0.77f, 0.81f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
+      _toastText.raycastTarget = false;
+      _toastText.gameObject.SetActive(false);
     }
 
     private void CreateUpgradeCard(CareStationUpgradeId id, float y)
@@ -1580,7 +2146,9 @@ namespace KeepBlinking.CareStation
 
     private void BuildHud()
     {
-      var top = FirstLevelUiFactory.CreateImage("Station Status Bar", _content, KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.SurfaceBase, 0.72f), FirstLevelUiFactory.RoundedSprite);
+      _hudRoot = FirstLevelUiFactory.CreateObject("Station HUD", _content).GetComponent<RectTransform>();
+      FirstLevelUiFactory.Stretch(_hudRoot);
+      var top = FirstLevelUiFactory.CreateImage("Station Status Bar", _hudRoot, KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.SurfaceBase, 0.72f), FirstLevelUiFactory.RoundedSprite);
       FirstLevelUiFactory.SetRect(top.rectTransform, new Vector2(0.03f, 0.89f), new Vector2(0.97f, 0.98f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
       _stationText = FirstLevelUiFactory.CreateText("Station Number", top.transform, "STATION 1", 22f, FontStyles.Bold, TextAlignmentOptions.MidlineLeft, KeepBlinkingTheme.TextPrimary);
       FirstLevelUiFactory.SetRect(_stationText.rectTransform, new Vector2(0.035f, 0.08f), new Vector2(0.28f, 0.92f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
@@ -1589,9 +2157,9 @@ namespace KeepBlinking.CareStation
       _storageText = FirstLevelUiFactory.CreateText("Storage Capacity", top.transform, "0 / 24", 21f, FontStyles.Bold, TextAlignmentOptions.MidlineRight, KeepBlinkingTheme.TextSecondary);
       FirstLevelUiFactory.SetRect(_storageText.rectTransform, new Vector2(0.75f, 0.08f), new Vector2(0.96f, 0.92f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
 
-      _xpReady = FirstLevelUiFactory.CreateText("Bottles Ready Compatibility", _content, string.Empty, 20f, FontStyles.Bold, TextAlignmentOptions.Center, KeepBlinkingTheme.AccentWarm);
+      _xpReady = FirstLevelUiFactory.CreateText("Bottles Ready Compatibility", _hudRoot, string.Empty, 20f, FontStyles.Bold, TextAlignmentOptions.Center, KeepBlinkingTheme.AccentWarm);
       FirstLevelUiFactory.SetRect(_xpReady.rectTransform, new Vector2(0.3f, 0.205f), new Vector2(0.7f, 0.235f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
-      _statusText = FirstLevelUiFactory.CreateText("Primary Station Prompt", _content, string.Empty, 25f, FontStyles.Bold, TextAlignmentOptions.Center, KeepBlinkingTheme.TextSecondary, false);
+      _statusText = FirstLevelUiFactory.CreateText("Primary Station Prompt", _hudRoot, string.Empty, 25f, FontStyles.Bold, TextAlignmentOptions.Center, KeepBlinkingTheme.TextSecondary, false);
       FirstLevelUiFactory.SetRect(_statusText.rectTransform, new Vector2(0.1f, 0.205f), new Vector2(0.9f, 0.245f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
     }
 
@@ -1627,9 +2195,11 @@ namespace KeepBlinking.CareStation
     private void RefreshResourceHud()
     {
       if (_fullBottleText == null) return;
-      var stored = _stationSave == null ? 0 : Mathf.Max(0, _stationSave.storedFullBottles + _stationSave.storedGoldBottles);
+      var stored = _stationSave == null ? 0 : CareStationStorageRules.Stored(_stationSave);
       var capacity = _stationSave == null ? 24 : Mathf.Max(1, _stationSave.storageHours);
       _storageFull = stored >= capacity;
+      if (_filterArt != null && (_storageFull || !_productionAnimating))
+        _filterArt.SetProductionVisual(FilterProductionVisualState.Idle, 0f);
       _stationText.text = $"STATION {(_stationSave == null ? 1 : Mathf.Max(1, _stationSave.stationLevel))}";
       _fullBottleText.text = (_stationSave == null ? 0 : Mathf.Max(0, _stationSave.storedFullBottles)).ToString();
       _goldBottleText.text = (_stationSave == null ? 0 : Mathf.Max(0, _stationSave.storedGoldBottles)).ToString();
@@ -1657,7 +2227,6 @@ namespace KeepBlinking.CareStation
         if (!status.StartsWith("BOTTLES READY", StringComparison.Ordinal)) return status;
       }
       if (prompt == "REST") return "CLOSE YOUR EYES";
-      if (prompt == "OPEN YOUR EYES") return "RETURN";
       return prompt ?? string.Empty;
     }
   }

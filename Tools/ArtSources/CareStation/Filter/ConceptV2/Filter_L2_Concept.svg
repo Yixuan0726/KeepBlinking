@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <title>Care Station Filter Level 2 static visual study</title>
+  <desc>Rebuilt olive care-fluid filter with two independently drawn filter beds and a connected hand crank.</desc>
+  <g stroke="#34251F" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M160 922 C280 896 752 897 872 924 C806 961 248 963 160 922 Z" fill="#34251F" opacity="0.18" stroke="none"/>
+
+    <!-- Restored olive chassis; still plain, but structurally complete. -->
+    <path d="M197 738 C240 700 284 685 329 676 C420 658 622 661 708 681 C759 692 805 718 835 755 L873 908 C704 938 311 939 151 904 Z" fill="#77724A" stroke-width="16"/>
+    <path d="M186 817 C339 790 699 790 847 819 L864 894 C703 921 311 924 165 897 Z" fill="#696541" stroke-width="10"/>
+    <path d="M226 752 C352 724 678 722 810 757 L829 819 C674 798 356 800 200 821 Z" fill="#858054" stroke-width="8"/>
+    <path d="M191 860 C346 842 691 841 848 861" fill="none" stroke="#9A9464" stroke-width="6"/>
+    <path d="M222 885 C375 902 653 899 813 880" fill="none" stroke="#514A43" stroke-width="5"/>
+
+    <!-- Broad glass chamber with individually irregular rails. -->
+    <path d="M272 244 C370 226 639 229 740 249 L730 707 C622 731 376 730 270 703 C257 568 258 380 272 244 Z" fill="#C6DED2" fill-opacity="0.66" stroke-width="13"/>
+    <path d="M292 264 C305 374 302 555 294 676" fill="none" stroke="#E8F1E7" stroke-width="7" opacity="0.7"/>
+    <path d="M710 269 C698 405 708 565 704 681" fill="none" stroke="#55727A" stroke-width="6" opacity="0.58"/>
+    <path d="M228 229 C254 216 281 220 299 242 L296 705 C274 727 245 727 225 707 C214 553 216 378 228 229 Z" fill="#77724A" stroke-width="14"/>
+    <path d="M734 237 C757 216 789 218 807 243 L805 698 C787 723 757 729 733 708 Z" fill="#696541" stroke-width="14"/>
+    <path d="M246 263 C252 383 249 570 244 680" fill="none" stroke="#96905E" stroke-width="6"/>
+    <path d="M782 271 C773 401 782 554 778 672" fill="none" stroke="#8A865A" stroke-width="5"/>
+
+    <!-- Stable narrow care-fluid stream, visibly clarifying through each bed. -->
+    <path d="M472 251 C463 303 468 344 476 381 C482 409 473 439 467 466 C460 499 468 533 478 559 C487 585 479 614 476 649 C473 673 487 689 509 687 C530 686 541 670 538 648 C534 613 529 585 539 558 C549 527 544 495 536 468 C527 439 535 411 542 382 C551 340 548 300 538 252 Z" fill="#9BCDB6" fill-opacity="0.77" stroke="#6EA990" stroke-width="5"/>
+    <path d="M493 262 C484 307 495 349 490 391 C486 424 477 446 484 475 C491 509 501 536 498 563 C494 600 495 644 503 670" fill="none" stroke="#D9EFE3" stroke-width="6" opacity="0.79"/>
+
+    <!-- Upper bed: hand-shaped and distinct. -->
+    <path d="M308 370 C375 344 630 343 699 369 C722 380 719 404 695 415 C603 445 395 443 310 415 C286 406 285 381 308 370 Z" fill="#E8D8B6" stroke-width="12"/>
+    <path d="M310 393 C410 411 600 410 697 390 C675 431 338 433 310 393 Z" fill="#C39A5C" stroke-width="6"/>
+    <path d="M342 371 C351 355 372 355 380 372 C386 386 373 398 359 396 C345 394 335 384 342 371 Z" fill="#65472F" stroke-width="5"/>
+    <path d="M399 368 C410 354 432 359 436 376 C439 390 424 399 410 395 C397 392 392 378 399 368 Z" fill="#785338" stroke-width="5"/>
+    <path d="M459 371 C468 353 492 356 500 373 C505 389 489 399 474 397 C459 395 452 382 459 371 Z" fill="#60432E" stroke-width="5"/>
+    <path d="M530 370 C539 357 559 357 567 374 C572 389 558 399 544 397 C529 394 522 382 530 370 Z" fill="#795339" stroke-width="5"/>
+    <path d="M592 371 C605 356 628 361 631 379 C634 393 618 401 604 396 C591 392 585 382 592 371 Z" fill="#674830" stroke-width="5"/>
+    <path d="M649 374 C658 360 679 366 682 381 C684 394 670 401 658 397 C646 393 642 383 649 374 Z" fill="#7C5839" stroke-width="5"/>
+
+    <!-- Lower bed is redrawn rather than copied. -->
+    <path d="M301 543 C383 517 622 516 704 542 C727 552 727 579 701 590 C608 620 389 617 305 590 C279 581 278 554 301 543 Z" fill="#E8D8B6" stroke-width="12"/>
+    <path d="M306 569 C408 585 604 587 701 565 C676 608 334 610 306 569 Z" fill="#BE9255" stroke-width="6"/>
+    <path d="M337 544 C346 528 367 530 374 547 C379 561 367 571 353 569 C339 567 330 556 337 544 Z" fill="#785137" stroke-width="5"/>
+    <path d="M391 543 C403 527 423 531 429 548 C433 562 418 573 405 569 C392 566 384 554 391 543 Z" fill="#62442E" stroke-width="5"/>
+    <path d="M453 541 C463 527 486 531 491 548 C495 563 481 573 467 570 C452 568 446 552 453 541 Z" fill="#7D593A" stroke-width="5"/>
+    <path d="M518 544 C528 529 548 531 555 547 C560 563 546 573 532 571 C518 569 511 556 518 544 Z" fill="#684A31" stroke-width="5"/>
+    <path d="M579 543 C590 530 614 533 618 551 C621 565 605 574 591 570 C577 567 572 554 579 543 Z" fill="#7A5537" stroke-width="5"/>
+    <path d="M645 546 C653 531 675 536 679 552 C681 566 667 574 655 570 C643 566 639 555 645 546 Z" fill="#61432D" stroke-width="5"/>
+
+    <!-- Rebuilt top and inlet preserve the same cylindrical lineage. -->
+    <path d="M190 175 C321 139 694 143 830 184 L815 273 C641 246 362 245 205 272 Z" fill="#77724A" stroke-width="16"/>
+    <path d="M223 250 C355 227 671 231 800 259 L792 314 C650 294 361 292 224 311 Z" fill="#625F40" stroke-width="10"/>
+    <path d="M428 84 C462 70 555 73 586 91 L578 177 C537 189 460 186 421 173 Z" fill="#514A43" stroke-width="14"/>
+    <path d="M434 91 C469 77 552 81 579 94 C555 115 463 116 434 91 Z" fill="#77716A" stroke-width="7"/>
+    <path d="M223 202 C362 170 691 176 806 207" fill="none" stroke="#96905E" stroke-width="7"/>
+    <path d="M240 285 C380 267 661 270 786 290" fill="none" stroke="#8B865A" stroke-width="5"/>
+
+    <!-- Crank and bearing form one attached mechanism. -->
+    <path d="M789 426 C812 409 844 413 858 437 C871 461 858 491 832 498 C808 504 783 486 780 460 C778 447 781 435 789 426 Z" fill="#514A43" stroke-width="12"/>
+    <path d="M850 471 C875 490 892 512 913 531 L955 529" fill="none" stroke="#514A43" stroke-width="20"/>
+    <path d="M941 514 C964 506 989 519 997 539 C988 558 965 569 940 558 Z" fill="#69635B" stroke-width="11"/>
+    <path d="M805 438 C817 426 838 431 843 448" fill="none" stroke="#77716A" stroke-width="5"/>
+
+    <!-- Shared FILTER function badge, inset into the front chassis. -->
+    <path d="M413 720 C449 696 571 697 606 719 L601 850 C566 869 449 868 414 848 Z" fill="#514A43" stroke-width="13"/>
+    <path d="M436 737 C469 722 550 724 582 739 L578 830 C546 845 471 844 438 828 Z" fill="#E8D8B6" stroke-width="7"/>
+    <path d="M451 759 C456 749 469 750 473 759 C477 768 468 774 460 772 C452 769 447 765 451 759 Z M480 752 C486 743 500 745 503 756 C506 765 497 772 489 769 C481 767 477 759 480 752 Z M514 762 C520 751 534 753 537 763 C540 773 531 779 522 777 C514 774 510 768 514 762 Z M545 754 C551 746 563 749 566 758 C569 767 560 773 553 771 C545 768 541 761 545 754 Z M563 773 C568 767 578 769 580 777 C581 784 574 788 568 786 C562 784 559 778 563 773 Z" fill="#6B4B32" stroke-width="3.5"/>
+    <path d="M452 787 C482 781 537 782 567 788 L565 805 C535 810 481 809 453 804 Z" fill="#C39A4A" stroke-width="5"/>
+    <path d="M469 787 L468 805 M488 785 L488 807 M508 785 L508 807 M529 785 L529 808 M549 787 L549 806" fill="none" stroke-width="3.5"/>
+    <path d="M457 814 C480 802 497 826 517 814 C537 802 549 823 565 811" fill="none" stroke="#75B89D" stroke-width="6"/>
+    <path d="M461 827 C483 817 500 836 518 826 C537 813 549 833 562 824" fill="none" stroke="#9BCDB6" stroke-width="5"/>
+
+    <!-- Deliberate hand re-connections, not global aging/noise. -->
+    <path d="M249 351 L258 362 M248 490 L258 479 M776 357 L787 347 M780 611 L790 621" fill="none" stroke-width="5"/>
+    <path d="M259 758 C283 749 304 746 326 744 M702 744 C726 746 748 751 769 761" fill="none" stroke="#5C593B" stroke-width="5"/>
+  </g>
+</svg>

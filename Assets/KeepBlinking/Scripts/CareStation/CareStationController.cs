@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using KeepBlinking.Gameplay;
 using KeepBlinking.Input;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 
 namespace KeepBlinking.CareStation
@@ -39,12 +40,14 @@ namespace KeepBlinking.CareStation
     [SerializeField, Range(0f, 1f)] private float _tripleRecipeWeight = 0.20f;
     [SerializeField, Range(1, 128)] private int _recipeGenerationMaximumAttempts = 32;
     [SerializeField, Range(0.1f, 2f)] private float _recipeStepFeedbackSeconds = 0.65f;
+    [SerializeField, Range(2f, 4f)] private float _routineIntroSeconds = CareActionLibrary.RoutineIntroSeconds;
+    [SerializeField, Range(1f, 3f)] private float _recipeCompletionFeedbackSeconds = CareActionLibrary.RecipeCompletionFeedbackSeconds;
 
     [Header("Station Upgrades")]
     [SerializeField] private CareStationUpgradeConfiguration _upgradeConfiguration = new CareStationUpgradeConfiguration();
 
     [Header("Station Inspection")]
-    [SerializeField, Range(45f, 180f)] private float _inspectionClosedEyeRestSeconds = 60f;
+    [SerializeField, Range(45f, 60f)] private float _inspectionClosedEyeRestSeconds = 45f;
     [SerializeField, Min(1)] private int _inspectionFullBottleReward = 24;
     [SerializeField, Min(1)] private int _inspectionGoldBottleReward = 1;
 
@@ -108,6 +111,7 @@ namespace KeepBlinking.CareStation
     private CareRecipeRuntime _developmentRecipe;
     private bool _developmentRecipeAdvancePending;
     private float _developmentRecipeAdvanceAt;
+    private CareStationUiInputDiagnostics _uiInputDiagnostics;
 #endif
 
     public static CareStationController Instance { get; private set; }
@@ -153,6 +157,8 @@ namespace KeepBlinking.CareStation
       _view.FallbackCollectSelected += HandleFallbackCollect;
       _view.ReturnFallbackSelected += HandleReturnFallback;
       _view.UpgradeSelected += HandleUpgradeSelected;
+      _view.NavigationSelected += HandleNavigationSelected;
+      _view.UpgradeBackSelected += HandleUpgradeBackSelected;
       _view.ChangeStepSelected += HandleChangeStepRequested;
       _view.UseRestSelected += HandleUseRestSelected;
       _view.KeepStepSelected += HandleKeepStepSelected;
@@ -163,6 +169,8 @@ namespace KeepBlinking.CareStation
       _view.CareReportDoneSelected += HandleCareReportDone;
       _saveService = new CareStationSaveService();
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
+      _uiInputDiagnostics = gameObject.AddComponent<CareStationUiInputDiagnostics>();
+      _uiInputDiagnostics.Bind(this);
       gameObject.AddComponent<CareStationDevelopmentOverlay>().Bind(this);
 #endif
     }
@@ -182,6 +190,9 @@ namespace KeepBlinking.CareStation
         _reopenHoldSeconds);
       Subscribe();
       InitializeStation();
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      _uiInputDiagnostics?.DumpCurrentPointer("POST LOAD UI INPUT SNAPSHOT");
+#endif
     }
 
     private void InitializeStation()
@@ -246,6 +257,12 @@ namespace KeepBlinking.CareStation
           _view.ShowStationWorking();
           break;
         case CareStationState.PromptCareAction:
+          EnsureCurrentRecipe();
+          if (_save.currentRecipe != null && !_save.currentRecipe.routineIntroCompleted)
+            _view.ShowCareRoutineIntro(_save.currentRecipe);
+          else
+            RestoreCareAction();
+          break;
         case CareStationState.CareActionInProgress:
         case CareStationState.CareActionPaused:
         case CareStationState.WaitCareActionStart:
@@ -305,6 +322,13 @@ namespace KeepBlinking.CareStation
     private void Update()
     {
       if (_gameplay == null || _save == null) return;
+#if UNITY_EDITOR || UNITY_STANDALONE
+      if (_view.IsUpgradeVisible && Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
+      {
+        HandleUpgradeBackSelected();
+        return;
+      }
+#endif
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
       if (_developmentRecipe != null && !_developmentRecipe.Data.recipeCompleted)
       {
@@ -345,6 +369,13 @@ namespace KeepBlinking.CareStation
           UpdateReturnToNeutral(delta);
           break;
         case CareStationState.PromptCareAction:
+          EnsureCurrentRecipe();
+          if (_save.currentRecipe == null) break;
+          _save.currentRecipe.routineIntroElapsedSeconds += delta;
+          if (_save.currentRecipe.routineIntroElapsedSeconds < _routineIntroSeconds) break;
+          _save.currentRecipe.routineIntroCompleted = true;
+          _save.currentRecipe.routineIntroElapsedSeconds = _routineIntroSeconds;
+          StartStationCareAction(_recipe.CurrentAction, false);
           break;
         case CareStationState.PresentIncident:
           if (StateElapsed >= _incidentWorkPreviewSeconds)
@@ -385,7 +416,8 @@ namespace KeepBlinking.CareStation
           if (MaintainCurrentCollection()) _view.ShowCollecting(CurrentRemainingBottleValue);
           break;
         case CareStationState.WaitStorageSpace:
-          _view.ShowStorageFull(_save, _upgradeConfiguration);
+          // The player may close the upgrade page and continue viewing the
+          // station or reports. Do not reopen the modal every frame.
           break;
         case CareStationState.InspectionPreparing:
           if (StateElapsed >= 1.2f) StartInspectionCurrentAction(false);
@@ -406,8 +438,9 @@ namespace KeepBlinking.CareStation
 
     public void NotifyDistanceBaselineReady()
     {
-      // Retained for the legacy prototype. Care Station gestures use their own
-      // silent, per-action references and do not depend on this notification.
+      // Retained for the legacy prototype. Focus Shift reads the immutable
+      // Session baseline directly from gameplay when its runner starts; this
+      // notification is not allowed to overwrite that baseline mid-routine.
     }
 
     public void SimulateOffline(TimeSpan duration)
@@ -459,7 +492,6 @@ namespace KeepBlinking.CareStation
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
       if (_save == null) return;
       if (_save.storedFullBottles > 0) _save.storedFullBottles--;
-      else if (_save.storedGoldBottles > 0) _save.storedGoldBottles--;
       _save.offlineProductionPausedByFullStorage = CareStationStorageRules.Remaining(_save) <= 0;
       CareStationShiftRules.SynchronizeUpgradeValues(_save, _upgradeConfiguration);
       _view.ApplyStation(_save);
@@ -549,6 +581,52 @@ namespace KeepBlinking.CareStation
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
       _developmentEyesClosed = closed;
       _careActions?.SimulateEyesClosed(closed);
+#endif
+    }
+
+    public void AddOneGoldDevelopment()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      if (_save == null) return;
+      _save.storedGoldBottles++;
+      _view.ApplyStation(_save);
+      SaveNow();
+#endif
+    }
+
+    public void FreeFourStorageSlotsDevelopment()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      if (_save == null) return;
+      _save.storedFullBottles = Mathf.Max(0, _save.storedFullBottles - 4);
+      _save.offlineProductionPausedByFullStorage = CareStationStorageRules.Remaining(_save) <= 0;
+      _view.ApplyStation(_save);
+      if (State == CareStationState.WaitStorageSpace) ResumeAfterStorageSpaceAvailable();
+      SaveNow();
+#endif
+    }
+
+    public void ForceUpgradeCheckDevelopment()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      if (_save == null) return;
+      _save.upgradeOffered = true;
+      EnterUpgradeSelection();
+#endif
+    }
+
+    public void TestNoAffordableUpgradeDevelopment()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      if (_save == null) return;
+      var probe = new CareStationSaveData
+      {
+        workerLevel = _save.workerLevel,
+        storageLevel = _save.storageLevel,
+        cartLevel = _save.cartLevel,
+        storageHours = _save.storageHours,
+      };
+      Debug.Log($"No-affordable-upgrade guard: {!CareStationShiftRules.CanPurchaseAnyUpgrade(probe, _upgradeConfiguration)}", this);
 #endif
     }
 
@@ -682,12 +760,25 @@ namespace KeepBlinking.CareStation
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
       if (_save == null || IsFormalCareActionState(State)) return;
       _save.trainingProgress = 0;
+      _save.completedTrainingActionMask = 0;
       _save.formalRecipesCreated = 0;
       _save.recentRecipeHistory = Array.Empty<string>();
       _save.focusShiftCooldownUntilShiftId = 0;
       _save.guidedEyeCirclesCooldownUntilShiftId = 0;
       _save.currentRecipe?.Reset();
       _recipe = null;
+      SaveNow();
+#endif
+    }
+
+    public void ResetCareIntrosDevelopment()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      if (_save == null) return;
+      _save.hasSeenFocusShiftIntro = false;
+      _save.hasSeenClosedEyeRestIntro = false;
+      _save.hasSeenGuidedMovementIntro = false;
+      _save.hasSeenPilotEyeRoutineIntro = false;
       SaveNow();
 #endif
     }
@@ -746,7 +837,158 @@ namespace KeepBlinking.CareStation
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
       // Audio preview only: never touches the action runner, recipe, save, or
       // station resources.
-      CareAudioFeedbackController.EnsureExists().PlayGuidedCompletion();
+      CareAudioFeedbackController.EnsureExists().PlayRestOpen();
+#endif
+    }
+
+    public void TestGuidedOpenCueDevelopment()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      CareAudioFeedbackController.EnsureExists().PlayGuidedOpen();
+#endif
+    }
+
+    public void TestPilotVoiceDevelopment()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      CareVoiceService.EnsureExists().Speak("pilot-intro",
+        "KEEP YOUR HEAD STILL. MOVE ONLY YOUR EYES.", 3.8f);
+#endif
+    }
+
+    public void TestPilotCompletionDevelopment()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      CareAudioFeedbackController.EnsureExists().PlayPilotCompletion();
+#endif
+    }
+
+    public void TestVoiceDuckingDevelopment()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      CareAudioFeedbackController.EnsureExists().StartActionAmbience(CareActionType.ClosedEyeRest);
+      CareVoiceService.EnsureExists().Speak("voice-ducking-preview", "VOICE DUCKING PREVIEW.", 2.2f);
+#endif
+    }
+
+    public void PreviewGuidedDirectionDevelopment(bool counterClockwise)
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      if (!StartCareActionDevelopmentTest(CareActionType.GuidedEyeCircles)) return;
+      if (!counterClockwise) return;
+      _careActions.CompleteCurrentStepForDevelopment();
+      _careActions.CompleteCurrentStepForDevelopment();
+#endif
+    }
+
+    public void PreviewPilotAxisDevelopment(int axis)
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      _view?.PreviewFullscreenPilotDevelopment(axis);
+#endif
+    }
+
+    public void PreviewFullscreenPilotDevelopment()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      _view?.PreviewFullscreenPilotDevelopment();
+#endif
+    }
+
+    public void PreviewPilotToGuidedTransitionDevelopment()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      _view?.PreviewPilotToGuidedTransitionDevelopment();
+#endif
+    }
+
+    public void ToggleStationHudDuringGuidanceDevelopment()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      _view?.ToggleStationHudDuringGuidanceDevelopment();
+#endif
+    }
+
+    public void AdjustGuidanceWorkerSizeDevelopment()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      _view?.AdjustGuidanceWorkerSizeDevelopment();
+#endif
+    }
+
+    public void AdjustGuidanceEyeSizeDevelopment()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      _view?.AdjustGuidanceEyeSizeDevelopment();
+#endif
+    }
+
+    public void ToggleGuidanceSafeAreaDevelopment()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      _view?.ToggleGuidanceSafeAreaDevelopment();
+#endif
+    }
+
+    public void CapturePilotLayoutDevelopment()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      _view?.CapturePilotLayoutDevelopment();
+#endif
+    }
+
+    public void AdjustPilotPupilRangeDevelopment()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      _view?.AdjustPilotPupilRangeDevelopment();
+#endif
+    }
+
+    public void AdjustPilotAxisRangeDevelopment()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      _view?.AdjustPilotAxisRangeDevelopment();
+#endif
+    }
+
+    public void TestRestMusicDevelopment()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      TestActionAmbienceDevelopment(CareActionType.ClosedEyeRest);
+#endif
+    }
+
+    public void TestActionAmbienceDevelopment(CareActionType action)
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      if (action != CareActionType.FocusShift && action != CareActionType.PilotEyeRoutine &&
+          action != CareActionType.GuidedEyeCircles && action != CareActionType.ClosedEyeRest) return;
+      Debug.Log($"[CareAudio] Previewing formal {CareActionLibrary.DisplayName(action)} ambience.");
+      CareAudioFeedbackController.EnsureExists().StartActionAmbience(action);
+#endif
+    }
+
+    public void TestBenefitVoiceDevelopment()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      CareVoiceService.EnsureExists().Speak("rest-benefit",
+        "LET YOUR EYES REST FROM THE SCREEN.", 3.2f);
+#endif
+    }
+
+    public void TestAlmostCompleteVoiceDevelopment()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      CareVoiceService.EnsureExists().Speak("rest-almost", "YOU ARE ALMOST DONE.", 2.4f);
+#endif
+    }
+
+    public void StopAllCareAudioDevelopment()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      CareAudioFeedbackController.EnsureExists().StopGuidedCue();
+      CareAudioFeedbackController.EnsureExists().StopActionAmbience(true);
+      CareVoiceService.EnsureExists().Stop();
 #endif
     }
 
@@ -964,16 +1206,27 @@ namespace KeepBlinking.CareStation
             : (1f - ratio) * 100f;
         var distanceState = focusReturn ? _careActions.CurrentDistanceState : CurrentPushDistanceState;
         var focusStep = _careActions != null ? _careActions.FocusStep : 0;
+        var focusCycle = _careActions != null ? _careActions.FocusCycle : 0;
+        var focusRearmed = _careActions != null && _careActions.FocusRearmed;
+        var sessionBaseline = focusReturn && _careActions.GestureReferenceValid
+          ? _careActions.GestureReferenceScale
+          : _gameplay != null ? _gameplay.BaselineFaceScale : 0f;
         return
           $"Current State: {State}\n" +
           $"Tracking Valid: {EffectiveTracking}\n" +
+          $"Session Baseline: {sessionBaseline:F6}\n" +
           $"Raw Face Scale: {rawScale:F6}\n" +
-          $"Smoothed Face Scale: {currentScale:F6}\n" +
-          $"Step Reference Scale: {(referenceValid ? referenceScale : 0f):F6}\n" +
+          $"Current Face Scale: {currentScale:F6}\n" +
+          $"Reference Scale: {(referenceValid ? referenceScale : 0f):F6}\n" +
+          $"Distance Ratio: {ratio:F3}\n" +
           $"Delta Percent: {deltaPercent:+0.0;-0.0;0.0}%\n" +
           $"Expected Direction: {expected}\n" +
           $"Direction Progress: {progress:P0}\n" +
-          $"Stable Time: {stable:F2}\n" +
+          $"Hold Time: {stable:F2}\n" +
+          $"Near Peak: {(focusReturn ? _careActions.FocusNearPeakRatio : 0f):F3}\n" +
+          $"Far Peak: {(focusReturn ? _careActions.FocusFarPeakRatio : 0f):F3}\n" +
+          $"Current Cycle: {focusCycle} / 6\n" +
+          $"Neutral/Rearm: {focusRearmed}\n" +
           $"Current Distance State: {distanceState}\n" +
           $"Return Source: {source}\n" +
           $"Push Armed: {(_gameplay != null && _gameplay.IsCareCollectionArmed)}\n" +
@@ -1008,6 +1261,34 @@ namespace KeepBlinking.CareStation
         return string.Empty;
 #endif
       }
+    }
+
+    public void DumpUiInputDevelopment()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      _uiInputDiagnostics?.DumpCurrentPointer();
+#endif
+    }
+
+    public void ClearStaleUiLockDevelopment()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      if (_view == null) return;
+      var action = _careActions != null ? _careActions.ActionType : CareActionType.None;
+      var legitimateGuidanceLock =
+        (action == CareActionType.PilotEyeRoutine || action == CareActionType.GuidedEyeCircles) &&
+        (State == CareStationState.WaitCareActionStart ||
+         State == CareStationState.CareActionInProgress ||
+         State == CareStationState.CareActionPaused);
+      if (!_view.ClearStaleUiInputLock(legitimateGuidanceLock))
+      {
+        Debug.Log("[UI INPUT] CLEAR STALE UI LOCK skipped: a visible care guidance surface still owns input.", this);
+        _uiInputDiagnostics?.DumpCurrentPointer("CLEAR STALE UI LOCK SKIPPED");
+        return;
+      }
+      RestoreCurrentPresentation();
+      _uiInputDiagnostics?.DumpCurrentPointer("CLEAR STALE UI LOCK COMPLETE");
+#endif
     }
 
     public void ClearStationSave()
@@ -1251,6 +1532,14 @@ namespace KeepBlinking.CareStation
       if (_recipe == null || _recipe.CurrentAction == CareActionType.None) return;
       SetState(CareStationState.PromptCareAction);
       _view.SetCrewState(CareCrewState.Rest);
+      if (!_save.currentRecipe.routineIntroCompleted)
+      {
+        _save.currentRecipe.routineIntroElapsedSeconds = 0f;
+        _view.ShowCareRoutineIntro(_save.currentRecipe);
+        CareAudioFeedbackController.EnsureExists().PlayStepComplete();
+        SaveNow();
+        return;
+      }
       StartStationCareAction(_recipe.CurrentAction, false);
     }
 
@@ -1263,7 +1552,7 @@ namespace KeepBlinking.CareStation
       EnsureCurrentRecipe();
       var original = _recipe?.CurrentAction ?? CareActionType.None;
       if (original == CareActionType.None || original == CareActionType.ClosedEyeRest ||
-          _save.careStepChangePending) return;
+          _save.careStepChangePending || !_careActions.ChangeStepAllowed) return;
 
       var reason = _careActions.PauseReason;
       _save.careStepChangePending = true;
@@ -1359,7 +1648,18 @@ namespace KeepBlinking.CareStation
     {
       if (_careActions == null || type == CareActionType.None) return false;
       if (_careActions.IsRunning) _careActions.CancelAction();
-      var restored = restore ? _save.careAction : null;
+      var canRestore = restore && _save.careAction != null &&
+                       _save.careAction.actionType == type &&
+                       _save.careAction.internalPhase != CareActionInternalPhase.None;
+      var restored = canRestore ? _save.careAction : null;
+      if (!canRestore && _save.currentRecipe?.deferredActionSnapshot != null &&
+          _save.currentRecipe.deferredActionSnapshot.actionType == type &&
+          _save.currentRecipe.deferredActionSnapshot.internalPhase != CareActionInternalPhase.None)
+      {
+        restored = _save.currentRecipe.deferredActionSnapshot;
+        canRestore = true;
+        _save.currentRecipe.deferredActionSnapshot = new CareActionSaveData();
+      }
       if (type == CareActionType.FocusShift && restored != null)
       {
         restored.gestureReferenceScale = _save.careActionGestureReferenceScale;
@@ -1367,8 +1667,20 @@ namespace KeepBlinking.CareStation
       }
       var inspectionRestSeconds = _save.inspectionActive && type == CareActionType.ClosedEyeRest
         ? _inspectionClosedEyeRestSeconds
-        : 0f;
-      if (!_careActions.StartAction(type, restored, false, inspectionRestSeconds)) return false;
+        : _save.currentRecipe != null && _save.currentRecipe.deepRest && type == CareActionType.ClosedEyeRest
+          ? CareActionLibrary.DeepRestSeconds
+          : 0f;
+      var showIntro = !canRestore && !HasSeenCareActionIntro(type);
+      if (!_careActions.StartAction(type, restored, false, inspectionRestSeconds, showIntro)) return false;
+      var guidedBoundToPilot = type == CareActionType.GuidedEyeCircles &&
+                               _save.currentRecipe != null &&
+                               _save.currentRecipe.currentActionIndex > 0 &&
+                               _save.currentRecipe.actionList != null &&
+                               _save.currentRecipe.currentActionIndex < _save.currentRecipe.actionList.Length &&
+                               _save.currentRecipe.actionList[_save.currentRecipe.currentActionIndex - 1] ==
+                               CareActionType.PilotEyeRoutine;
+      _careActions.SetChangeStepAllowed(!guidedBoundToPilot);
+      if (showIntro) MarkCareActionIntroSeen(type);
       _save.careAction = _careActions.SaveData;
       SyncCareActionReferenceToSave();
       _save.careActionElapsed = _save.careAction.elapsedSeconds;
@@ -1456,7 +1768,7 @@ namespace KeepBlinking.CareStation
         _save.sessionFocusShiftCompletions++;
       _save.careActionCompleted = result.RecipeCompleted;
       if (!_save.inspectionActive)
-        _view.PlayRecipePipelineStep(result.CompletedStepIndex, _save.currentRecipe.ActionCount);
+        _view.PlayRecipePipelineStep(result.CompletedStepIndex, _save.currentRecipe.ActionCount, result.ActionType);
       _view.ConfigureRecipe(_save.currentRecipe);
       if (_save.inspectionActive) _view.ConfigureInspection(_save);
       RecipeStepCompleted?.Invoke(result.CompletedStepIndex, result.ActionType);
@@ -1476,11 +1788,36 @@ namespace KeepBlinking.CareStation
       _save.careActionReferenceValid = _save.careAction.gestureReferenceValid;
     }
 
+    private bool HasSeenCareActionIntro(CareActionType type)
+    {
+      if (_save == null) return false;
+      switch (type)
+      {
+        case CareActionType.FocusShift: return _save.hasSeenFocusShiftIntro;
+        case CareActionType.ClosedEyeRest: return _save.hasSeenClosedEyeRestIntro;
+        case CareActionType.GuidedEyeCircles: return _save.hasSeenGuidedMovementIntro;
+        case CareActionType.PilotEyeRoutine: return _save.hasSeenPilotEyeRoutineIntro;
+        default: return true;
+      }
+    }
+
+    private void MarkCareActionIntroSeen(CareActionType type)
+    {
+      if (_save == null) return;
+      switch (type)
+      {
+        case CareActionType.FocusShift: _save.hasSeenFocusShiftIntro = true; break;
+        case CareActionType.ClosedEyeRest: _save.hasSeenClosedEyeRestIntro = true; break;
+        case CareActionType.GuidedEyeCircles: _save.hasSeenGuidedMovementIntro = true; break;
+        case CareActionType.PilotEyeRoutine: _save.hasSeenPilotEyeRoutineIntro = true; break;
+      }
+    }
+
     private static CareActionType ActionForIncident(CareStationIncidentType incident)
     {
       return incident == CareStationIncidentType.DrySpot
         ? CareActionType.ClosedEyeRest
-        : CareActionType.ScreenDown;
+        : CareActionType.FocusShift;
     }
 
     private void RestoreRecipeRuntime()
@@ -1565,13 +1902,26 @@ namespace KeepBlinking.CareStation
       SetState(CareStationState.CareActionCompleted);
       _view.ConfigureRecipe(_save.currentRecipe);
       _view.RestoreRecipePipeline(_save.currentRecipe);
-      _view.ShowRecipeStepFeedback(_save.currentRecipe);
+      var completedIndex = Mathf.Clamp(_save.currentRecipe.currentActionIndex - 1, 0,
+        Mathf.Max(0, _save.currentRecipe.ActionCount - 1));
+      var completedType = _save.currentRecipe.ActionCount > 0
+        ? _save.currentRecipe.actionList[completedIndex]
+        : CareActionType.None;
+      _view.ShowRecipeStepFeedback(_save.currentRecipe, completedType);
+      if (_save.currentRecipe.recipeCompleted && !_save.currentRecipe.completionFeedbackPlayed)
+      {
+        _save.currentRecipe.completionFeedbackPlayed = true;
+        CareAudioFeedbackController.EnsureExists().PlayCareComplete();
+      }
       SaveNow();
     }
 
     private void UpdateCareActionCompleted(float delta)
     {
-      if (StateElapsed < _recipeStepFeedbackSeconds) return;
+      var feedbackSeconds = _save.currentRecipe != null && _save.currentRecipe.recipeCompleted
+        ? _recipeCompletionFeedbackSeconds
+        : IsPilotGuidedTransition(_save.currentRecipe) ? 0.05f : _recipeStepFeedbackSeconds;
+      if (StateElapsed < feedbackSeconds) return;
       EnsureCurrentRecipe();
       if (_recipe != null && !_recipe.Data.recipeCompleted && _recipe.CurrentAction != CareActionType.None)
       {
@@ -1583,6 +1933,15 @@ namespace KeepBlinking.CareStation
         return;
       }
       EnterRepairReveal();
+    }
+
+    private static bool IsPilotGuidedTransition(CareRecipeSaveData recipe)
+    {
+      if (recipe == null || recipe.recipeCompleted || recipe.actionList == null) return false;
+      var completed = recipe.currentActionIndex - 1;
+      return completed >= 0 && completed + 1 < recipe.ActionCount &&
+             recipe.actionList[completed] == CareActionType.PilotEyeRoutine &&
+             recipe.actionList[completed + 1] == CareActionType.GuidedEyeCircles;
     }
 
     private void EnterInspectionPreparing(bool createIfNeeded)
@@ -1650,6 +2009,7 @@ namespace KeepBlinking.CareStation
       _gameplay.SetCareActionActive(true);
       SetState(CareStationState.RepairReveal);
       if (CurrentIncident == CareStationIncidentType.EyeGunk) _save.pendingGoldBottleCount = 1;
+      GuaranteeFirstFormalGoldBottle();
       _view.ShowRepairReveal(CurrentIncident);
       _view.SetPendingXp(PendingCareBottleValue, _save.pendingGoldBottleCount);
       _view.SetCrewState(CareCrewState.Cheer);
@@ -1813,7 +2173,7 @@ namespace KeepBlinking.CareStation
     {
       _save.activeCollectionPhase = CareStationCollectionPhase.Care;
       ResetCollectionRuntimeTracking();
-      if (RemainingCareBottleValue > 0 && CareStationStorageRules.Remaining(_save) <= 0)
+      if (RemainingCareBottleValue > 0 && !CanCollectAnyCareBottleNow())
       {
         EnterStorageFullGate(CareStationCollectionPhase.Care);
         return;
@@ -1826,7 +2186,9 @@ namespace KeepBlinking.CareStation
     private void EnterWaitForPushAway(CareStationCollectionPhase phase)
     {
       _save.activeCollectionPhase = phase;
-      if (CurrentRemainingBottleValue > 0 && CareStationStorageRules.Remaining(_save) <= 0)
+      if (CurrentRemainingBottleValue > 0 &&
+          (phase != CareStationCollectionPhase.Care || !CanCollectAnyCareBottleNow()) &&
+          CareStationStorageRules.Remaining(_save) <= 0)
       {
         EnterStorageFullGate(phase);
         return;
@@ -2136,7 +2498,7 @@ namespace KeepBlinking.CareStation
       // the push gate or treat the rebuilt flight as a new reward.
       if (!EnsureXpBundles())
       {
-        if (CareStationStorageRules.Remaining(_save) <= 0)
+        if (CareStationStorageRules.Remaining(_save) <= 0 && !CanCollectAnyCareBottleNow())
         {
           EnterStorageFullGate(_save.activeCollectionPhase);
           return;
@@ -2579,6 +2941,12 @@ namespace KeepBlinking.CareStation
     private void EnterUpgradeSelection()
     {
       _save.upgradeOffered = true;
+      if (!CareStationShiftRules.CanEnterUpgradeSelection(_save, _upgradeConfiguration))
+      {
+        DeferUpgradeOpportunity();
+        return;
+      }
+      _save.upgradeDeferred = false;
       SetState(CareStationState.UpgradeSelection);
       _gameplay.SetCareActionActive(true);
       _view.ShowUpgrade(_save, _upgradeConfiguration);
@@ -2588,18 +2956,104 @@ namespace KeepBlinking.CareStation
     private void HandleUpgradeSelected(CareStationUpgradeId upgrade)
     {
       var storageRecovery = State == CareStationState.WaitStorageSpace;
-      if (State != CareStationState.UpgradeSelection && !storageRecovery) return;
+      var formalSelection = State == CareStationState.UpgradeSelection;
+      var pendingOpportunity = _save.upgradeOffered;
+      if (!_view.IsUpgradeVisible || (!pendingOpportunity && !storageRecovery)) return;
+      var availability = CareStationShiftRules.EvaluateUpgrade(_save, upgrade, _upgradeConfiguration);
+      if (!availability.CanPurchase)
+      {
+        _view.ShowUpgradeFeedback(upgrade, availability.PlayerReason);
+        CareAudioFeedbackController.EnsureExists().PlayUpgradeUnavailable();
+        return;
+      }
+      var previousValue = _upgradeConfiguration.Value(upgrade, CareStationShiftRules.GetUpgradeLevel(_save, upgrade));
       if (!CareStationShiftRules.TryPurchaseUpgrade(_save, upgrade, _upgradeConfiguration)) return;
       _save.upgradeOffered = false;
+      _save.upgradeDeferred = false;
       _save.offlineProductionPausedByFullStorage = CareStationStorageRules.Remaining(_save) <= 0;
       _view.ApplyStation(_save);
       CareAudioFeedbackController.EnsureExists().PlayStepComplete();
+      var currentValue = _upgradeConfiguration.Value(upgrade, CareStationShiftRules.GetUpgradeLevel(_save, upgrade));
+      var resultTitle = upgrade == CareStationUpgradeId.LargerStorage ? "STORAGE EXPANDED"
+        : upgrade == CareStationUpgradeId.MoreWorkers ? "CREW EXPANDED" : "CART EXPANDED";
+      _view.ShowStationUpgradeResult(resultTitle, previousValue, currentValue);
       if (storageRecovery)
       {
         ResumeAfterStorageSpaceAvailable();
         return;
       }
+      if (formalSelection) EnterShiftComplete();
+      else RestoreCurrentPresentation();
+    }
+
+    private void HandleNavigationSelected(int index)
+    {
+      if (_save == null) return;
+      if (index == 0)
+      {
+        HandleUpgradeBackSelected();
+        return;
+      }
+      if (index == 1)
+      {
+        _view.ShowUpgrade(_save, _upgradeConfiguration);
+        return;
+      }
+      if (index == 2)
+      {
+        _view.ShowCareReport(_save);
+      }
+    }
+
+    private void HandleUpgradeBackSelected()
+    {
+      if (_save == null) return;
+      if (State == CareStationState.UpgradeSelection)
+      {
+        DeferUpgradeOpportunity();
+        return;
+      }
+      if (State == CareStationState.WaitStorageSpace)
+      {
+        _view.ShowStorageFullStation(_save);
+        return;
+      }
+      RestoreCurrentPresentation();
+    }
+
+    private void DeferUpgradeOpportunity()
+    {
+      if (_save == null) return;
+      CareStationShiftRules.MarkUpgradeDeferred(_save, DateTime.UtcNow);
+      _view.SetUpgradeOpportunity(true);
       EnterShiftComplete();
+    }
+
+    private void RestoreCurrentPresentation()
+    {
+      switch (State)
+      {
+        case CareStationState.AutoShift:
+          _view.ShowAutoShift();
+          break;
+        case CareStationState.ShiftComplete:
+          _view.ShowShiftComplete(_save);
+          break;
+        case CareStationState.WaitStorageSpace:
+          _view.ShowStorageFullStation(_save);
+          break;
+        case CareStationState.CareReport:
+          _view.ShowCareReport(_save);
+          break;
+        case CareStationState.WaitIncidentSelection:
+        case CareStationState.PresentIncident:
+          _view.ShowIncident(CurrentIncident, State == CareStationState.WaitIncidentSelection);
+          break;
+        default:
+          _view.HideAllModals();
+          _view.ApplyStation(_save);
+          break;
+      }
     }
 
     private void EnterStorageFullGate(CareStationCollectionPhase phase)
@@ -2617,7 +3071,7 @@ namespace KeepBlinking.CareStation
 
     private void RestoreStorageFullGate()
     {
-      if (CareStationStorageRules.Remaining(_save) > 0)
+      if (CareStationStorageRules.Remaining(_save) > 0 || CanCollectAnyCareBottleNow())
       {
         ResumeAfterStorageSpaceAvailable();
         return;
@@ -2629,7 +3083,7 @@ namespace KeepBlinking.CareStation
 
     private void ResumeAfterStorageSpaceAvailable()
     {
-      if (_save == null || CareStationStorageRules.Remaining(_save) <= 0) return;
+      if (_save == null || (CareStationStorageRules.Remaining(_save) <= 0 && !CanCollectAnyCareBottleNow())) return;
       _save.offlineProductionPausedByFullStorage = false;
       _xpBundlesSpawned = false;
       var phase = _save.activeCollectionPhase;
@@ -2720,7 +3174,8 @@ namespace KeepBlinking.CareStation
       _save.collectedCareBottleValue = 0;
       _save.activeCollectionPhase = CareStationCollectionPhase.None;
       _save.careCollectionReleased = false;
-      _save.upgradeOffered = false;
+      // A deferred opportunity remains available from the persistent UPGRADES
+      // tab until a route is actually purchased.
       _save.careShiftCompleted = false;
       _save.autoShiftEntered = false;
       _save.shiftCompleteRewardsShown = false;
@@ -2825,7 +3280,8 @@ namespace KeepBlinking.CareStation
       var plan = CareStationCollectionRecoveryRules.Plan(
         _save,
         CurrentRemainingBottleValue,
-        _gameplay.PendingUnsettledExperienceValue);
+        _gameplay.PendingUnsettledExperienceValue,
+        CurrentGoldBottleCount);
       if (plan.StorageBlocked)
       {
         _collectionPausedReason = "STORAGE FULL";
@@ -2865,7 +3321,8 @@ namespace KeepBlinking.CareStation
       var plan = CareStationCollectionRecoveryRules.Plan(
         _save,
         CurrentRemainingBottleValue,
-        _gameplay.PendingUnsettledExperienceValue);
+        _gameplay.PendingUnsettledExperienceValue,
+        CurrentGoldBottleCount);
       if (plan.StorageBlocked)
       {
         _collectionPausedReason = "STORAGE FULL";
@@ -2891,7 +3348,10 @@ namespace KeepBlinking.CareStation
 
       var remaining = plan.MissingRuntimeValue;
       var preferredSize = Mathf.Max(1, _save.cartCapacity);
-      var count = Mathf.Clamp(Mathf.CeilToInt(remaining / (float)preferredSize), 1, _maximumXpBundleVisuals);
+      var count = Mathf.Clamp(
+        Mathf.Max(Mathf.CeilToInt(remaining / (float)preferredSize), plan.CollectibleGoldValue),
+        1,
+        _maximumXpBundleVisuals);
       var existingGoldBundles = _gameplay.CountPendingCareExperience(CareExperienceState.Rested, true);
       var goldCount = _save.activeCollectionPhase == CareStationCollectionPhase.Care
         ? Mathf.Min(Mathf.Max(0, _save.pendingGoldBottleCount - existingGoldBundles), count)
@@ -2915,6 +3375,17 @@ namespace KeepBlinking.CareStation
       _collectionPausedReason = _xpBundlesSpawned ? "NONE" : "BUNDLE SPAWN FAILED";
       _view.SetPendingXp(CurrentRemainingBottleValue, CurrentGoldBottleCount);
       return plan.ExistingRuntimeValue + spawnedValue > 0;
+    }
+
+    private bool CanCollectAnyCareBottleNow()
+    {
+      if (_save == null || RemainingCareBottleValue <= 0) return false;
+      return CareStationStorageRules.Remaining(_save) > 0 || _save.pendingGoldBottleCount > 0;
+    }
+
+    private void GuaranteeFirstFormalGoldBottle()
+    {
+      CareStationShiftRules.EnsureFirstFormalGoldBottle(_save);
     }
 
     private void SetState(CareStationState state)
@@ -3111,6 +3582,8 @@ namespace KeepBlinking.CareStation
         _view.FallbackCollectSelected -= HandleFallbackCollect;
         _view.ReturnFallbackSelected -= HandleReturnFallback;
         _view.UpgradeSelected -= HandleUpgradeSelected;
+        _view.NavigationSelected -= HandleNavigationSelected;
+        _view.UpgradeBackSelected -= HandleUpgradeBackSelected;
         _view.ChangeStepSelected -= HandleChangeStepRequested;
         _view.UseRestSelected -= HandleUseRestSelected;
         _view.KeepStepSelected -= HandleKeepStepSelected;

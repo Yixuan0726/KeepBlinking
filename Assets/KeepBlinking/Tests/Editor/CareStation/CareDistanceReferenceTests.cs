@@ -118,35 +118,29 @@ namespace KeepBlinking.Tests
     }
 
     [Test]
-    public void FocusUsesNewReferenceForEachOfFourStepsAndHasNoReturnPhase()
+    public void FocusUsesOneSessionBaselineForSixCyclesAndFinalNeutral()
     {
-      var configuration = CareActionConfiguration.Default;
-      configuration.distanceStepHoldSeconds = 0.1f;
-      configuration.focusStepTransitionSeconds = 0f;
+      var configuration = FocusTestConfiguration();
       var action = new CareActionRuntime();
       action.Begin(CareActionType.FocusShift, configuration);
-
-      var references = new[] { 0.10f, 0.12f, 0.09f, 0.11f };
-      for (var step = 0; step < 4; step++)
+      const float sessionBaseline = 0.11f;
+      action.Data.gestureReferenceScale = sessionBaseline;
+      action.Data.gestureReferenceValid = true;
+      EnterInitialLeg(action);
+      for (var step = 0; step < 12; step++)
       {
-        Assert.That(action.Phase, Is.EqualTo(CareActionInternalPhase.FocusReference));
-        action.Data.gestureReferenceScale = references[step];
-        action.Data.gestureReferenceValid = true;
-        action.Advance(0.01f, FreshFrame(1f, 0.01f));
         Assert.That(action.ExpectedDistanceDirection,
           Is.EqualTo((step & 1) == 0 ? CareDistanceDirection.Closer : CareDistanceDirection.Away));
-        var ratio = (step & 1) == 0 ? 1.221f : 0.779f;
-        action.Advance(0.1f, FreshFrame(ratio, 0.1f));
-        if (step < 3)
-        {
-          Assert.That(action.Phase, Is.EqualTo(CareActionInternalPhase.FocusReference));
-          Assert.That(action.Data.gestureReferenceValid, Is.False);
-        }
+        CompleteLeg(action, (step & 1) == 0 ? 1.25f : 0.78f);
+        Assert.That(action.Data.gestureReferenceScale, Is.EqualTo(sessionBaseline),
+          "Focus Shift must never recapture its Session baseline.");
+        if (step < 11) EnterNextLeg(action);
       }
-
+      Assert.That(action.Phase, Is.EqualTo(CareActionInternalPhase.FocusNeutralFinish));
+      for (var index = 0; index < 3; index++)
+        action.Advance(0.25f, FreshFrame(1f, 0.25f));
       Assert.That(action.Stage, Is.EqualTo(CareActionStage.Completed));
-      Assert.That(action.Phase, Is.EqualTo(CareActionInternalPhase.FocusFarTwo));
-      Assert.That(action.Prompt, Is.Empty);
+      Assert.That(action.Data.focusCycleCount, Is.EqualTo(6));
       Assert.That(typeof(CareActionRuntime).GetEvent("PushAwayTriggered"), Is.Null);
     }
 
@@ -180,36 +174,54 @@ namespace KeepBlinking.Tests
     }
 
     [Test]
-    public void SimulatedF6SequenceReportsContinuousProgressForAllFourSteps()
+    public void FocusThresholdsRejectSmallMovementAndRequireStableTargets()
     {
-      var configuration = CareActionConfiguration.Default;
-      configuration.distanceStepHoldSeconds = 0.1f;
-      configuration.focusStepTransitionSeconds = 0f;
+      var configuration = FocusTestConfiguration();
       var action = new CareActionRuntime();
       action.Begin(CareActionType.FocusShift, configuration);
+      action.Data.gestureReferenceScale = 0.1f;
+      action.Data.gestureReferenceValid = true;
+      EnterInitialLeg(action);
+      for (var index = 0; index < 16; index++)
+        action.Advance(0.25f, FreshFrame(1.06f, 0.25f));
+      Assert.That(action.Data.focusTargetStep, Is.Zero, "2%-6% movement is not a valid target.");
 
-      var references = new[] { 0.10f, 0.13f, 0.09f, 0.115f };
-      for (var stepIndex = 0; stepIndex < references.Length; stepIndex++)
-      {
-        action.Data.gestureReferenceScale = references[stepIndex];
-        action.Data.gestureReferenceValid = true;
-        action.Advance(0.01f, FreshFrame(1f, 0.01f));
-        var closer = (stepIndex & 1) == 0;
+      for (var index = 0; index < 2; index++)
+        action.Advance(0.25f, FreshFrame(1.25f, 0.25f));
+      Assert.That(action.Data.focusTargetStep, Is.Zero, "The target must remain stable for 0.7 seconds.");
+      action.Advance(0.25f, FreshFrame(1.25f, 0.25f));
+      Assert.That(action.Data.focusTargetStep, Is.EqualTo(1));
+    }
 
-        action.Advance(0.02f, FreshFrame(closer ? 1.06f : 0.94f, 0.02f));
-        Assert.That(action.DirectionProgress, Is.GreaterThan(0f),
-          $"Step {stepIndex + 1} must react just past the 5% dead zone.");
-        Assert.That(action.DirectionProgress, Is.LessThan(0.1f));
+    private static CareActionConfiguration FocusTestConfiguration()
+    {
+      var configuration = CareActionConfiguration.Default;
+      configuration.focusTargetHoldSeconds = 0.7f;
+      configuration.focusMinimumLegSeconds = 2.5f;
+      configuration.focusDirectionIntervalSeconds = 1.2f;
+      configuration.focusCycleCount = 6;
+      return configuration;
+    }
 
-        action.Advance(0.03f, FreshFrame(closer ? 1.135f : 0.865f, 0.03f));
-        Assert.That(action.DirectionProgress, Is.EqualTo(0.5f).Within(0.02f));
+    private static void EnterInitialLeg(CareActionRuntime action)
+    {
+      action.Advance(0.01f, FreshFrame(1f, 0.01f));
+      for (var index = 0; index < 3; index++)
+        action.Advance(0.25f, FreshFrame(1f, 0.25f));
+    }
 
-        action.Advance(0.1f, FreshFrame(closer ? 1.221f : 0.779f, 0.1f));
-        Assert.That(action.Data.focusTargetStep, Is.EqualTo(stepIndex + 1));
-      }
+    private static void EnterNextLeg(CareActionRuntime action)
+    {
+      for (var index = 0; index < 6 && action.Phase == CareActionInternalPhase.FocusReference; index++)
+        action.Advance(0.25f, FreshFrame(1f, 0.25f));
+      action.Advance(0.01f, FreshFrame(1f, 0.01f));
+    }
 
-      Assert.That(action.Stage, Is.EqualTo(CareActionStage.Completed));
-      Assert.That(action.Prompt, Is.Empty, "Focus Shift must finish without a hidden Return gate.");
+    private static void CompleteLeg(CareActionRuntime action, float ratio)
+    {
+      for (var index = 0; index < 12 && action.Phase != CareActionInternalPhase.FocusReference &&
+                          action.Phase != CareActionInternalPhase.FocusNeutralFinish; index++)
+        action.Advance(0.25f, FreshFrame(ratio, 0.25f));
     }
 
     private static CareActionInputFrame FreshFrame(float ratio, float sampleDelta)

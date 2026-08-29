@@ -227,11 +227,11 @@ namespace KeepBlinking.Tests
         Assert.That(controller.FocusShiftCycles, Is.EqualTo(2));
         Assert.That(GetFloat(controller, "_neutralMin"), Is.EqualTo(0.95f));
         Assert.That(GetFloat(controller, "_neutralMax"), Is.EqualTo(1.05f));
-        Assert.That(GetFloat(controller, "_nearMin"), Is.EqualTo(1.10f));
-        Assert.That(GetFloat(controller, "_nearMax"), Is.EqualTo(1.14f));
-        Assert.That(GetFloat(controller, "_farMin"), Is.EqualTo(0.84f));
-        Assert.That(GetFloat(controller, "_farMax"), Is.EqualTo(0.88f));
-        Assert.That(GetFloat(controller, "_tooCloseRatio"), Is.EqualTo(1.18f));
+        Assert.That(GetFloat(controller, "_nearMin"), Is.EqualTo(1.25f));
+        Assert.That(GetFloat(controller, "_nearMax"), Is.EqualTo(1.43f));
+        Assert.That(GetFloat(controller, "_farMin"), Is.EqualTo(0.69f));
+        Assert.That(GetFloat(controller, "_farMax"), Is.EqualTo(0.80f));
+        Assert.That(GetFloat(controller, "_tooCloseRatio"), Is.EqualTo(1.60f));
         Assert.That(GetFloat(controller, "_minimumTransitionSeconds"), Is.GreaterThanOrEqualTo(1f));
         Assert.That(GetFloat(controller, "_localBaselineCaptureSeconds"), Is.GreaterThanOrEqualTo(0.5f));
         Assert.That(GetInt(controller, "_minimumLocalBaselineSamples"), Is.GreaterThanOrEqualTo(8));

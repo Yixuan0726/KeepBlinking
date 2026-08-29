@@ -23,6 +23,12 @@ namespace KeepBlinking.CareStation
     ClosedEyeRest,
     FocusShift,
     GuidedEyeCircles,
+    // Retained only so v16 JSON can be migrated without changing serialized
+    // enum values. Runtime action libraries, recipes and UI must reject it.
+    BlinkReset,
+    // v19+ authored action. Legacy values above must never be reordered because
+    // older JSON saves serialize these enums numerically.
+    PilotEyeRoutine,
   }
 
   public enum CareRecipeType
@@ -52,6 +58,14 @@ namespace KeepBlinking.CareStation
     public bool recipeCompleted;
     public bool completionSignalSent;
     public bool completionConsumed;
+    public bool routineIntroCompleted;
+    public float routineIntroElapsedSeconds;
+    public bool deepRest;
+    public bool completionFeedbackPlayed;
+    // A v19 migration can move the currently running real action later in a
+    // repaired recipe (for example Rest after the new Pilot -> Guided pair).
+    // Keep that one action snapshot until its turn so real progress is not lost.
+    public CareActionSaveData deferredActionSnapshot = new CareActionSaveData();
 
     public int ActionCount => actionList?.Length ?? 0;
     public CareActionType CurrentAction => !recipeCompleted && actionList != null &&
@@ -98,6 +112,11 @@ namespace KeepBlinking.CareStation
       recipeCompleted = false;
       completionSignalSent = false;
       completionConsumed = false;
+      routineIntroCompleted = false;
+      routineIntroElapsedSeconds = 0f;
+      deepRest = false;
+      completionFeedbackPlayed = false;
+      deferredActionSnapshot = new CareActionSaveData();
     }
   }
 
@@ -172,6 +191,18 @@ namespace KeepBlinking.CareStation
     GuidedCounterClockwise,
     GuidedRelax,
     GuidedWaitReopen,
+    BlinkResetIntro,
+    BlinkResetWaiting,
+    BlinkResetClosed,
+    FocusIntro,
+    ClosedEyeIntro,
+    GuidedClosedRest,
+    PilotIntro,
+    PilotVertical,
+    PilotHorizontal,
+    PilotDiagonalA,
+    PilotDiagonalB,
+    PilotTransition,
   }
 
   [Serializable]
@@ -193,6 +224,26 @@ namespace KeepBlinking.CareStation
     public bool closeRequestCuePlayed;
     public bool completionSignalEmitted;
     public CareActionCompletionSource completionSource;
+    public int focusCycleCount;
+    public bool focusRearmed;
+    public bool focusTrackingRecoveryGuard;
+    public bool introWasRequested;
+    public int guidedLapCount;
+    public float guidedNormalizedProgress;
+    public bool guidedClosedPhase;
+    public bool guidedOpenCuePlayed;
+    public int pilotCurrentAxis;
+    public int pilotCurrentRound;
+    public int pilotCurrentEndpoint;
+    public float pilotNormalizedMoveProgress;
+    public bool pilotCompletionConsumed;
+    public bool readyToOpenCuePlayed;
+    public bool restBenefitVoicePlayed;
+    public bool restAlmostCompleteVoicePlayed;
+    public bool restCompletionVoicePlayed;
+    public float restEarlyOpenVoiceCooldown;
+    public int consumedVoiceCueMask;
+    public int lastVoiceEventId = -1;
 
     public bool CountsAsVerifiedCareAction => completionSource == CareActionCompletionSource.SensorCompleted;
 
@@ -214,6 +265,26 @@ namespace KeepBlinking.CareStation
       closeRequestCuePlayed = false;
       completionSignalEmitted = false;
       completionSource = CareActionCompletionSource.None;
+      focusCycleCount = 0;
+      focusRearmed = false;
+      focusTrackingRecoveryGuard = false;
+      introWasRequested = false;
+      guidedLapCount = 0;
+      guidedNormalizedProgress = 0f;
+      guidedClosedPhase = false;
+      guidedOpenCuePlayed = false;
+      pilotCurrentAxis = 0;
+      pilotCurrentRound = 0;
+      pilotCurrentEndpoint = 0;
+      pilotNormalizedMoveProgress = 0f;
+      pilotCompletionConsumed = false;
+      readyToOpenCuePlayed = false;
+      restBenefitVoicePlayed = false;
+      restAlmostCompleteVoicePlayed = false;
+      restCompletionVoicePlayed = false;
+      restEarlyOpenVoiceCooldown = 0f;
+      consumedVoiceCueMask = 0;
+      lastVoiceEventId = -1;
     }
   }
 
@@ -438,7 +509,7 @@ namespace KeepBlinking.CareStation
     public CareStationUpgradeCost[] storageCosts =
     {
       new CareStationUpgradeCost(10, 0),
-      new CareStationUpgradeCost(20, 1),
+      new CareStationUpgradeCost(20, 0),
       new CareStationUpgradeCost(36, 2),
     };
     public CareStationUpgradeCost[] cartCosts =
@@ -477,7 +548,7 @@ namespace KeepBlinking.CareStation
       var defaults = upgrade == CareStationUpgradeId.MoreWorkers
         ? new[] { new CareStationUpgradeCost(12, 0), new CareStationUpgradeCost(24, 1), new CareStationUpgradeCost(40, 2) }
         : upgrade == CareStationUpgradeId.LargerStorage
-          ? new[] { new CareStationUpgradeCost(10, 0), new CareStationUpgradeCost(20, 1), new CareStationUpgradeCost(36, 2) }
+          ? new[] { new CareStationUpgradeCost(10, 0), new CareStationUpgradeCost(20, 0), new CareStationUpgradeCost(36, 2) }
           : new[] { new CareStationUpgradeCost(10, 0), new CareStationUpgradeCost(22, 1), new CareStationUpgradeCost(36, 2) };
       return defaults[currentLevel - 1];
     }
@@ -504,6 +575,7 @@ namespace KeepBlinking.CareStation
     ShiftEnded,
     CareStepChangeRequested,
     CareStepReplaced,
+    UpgradeDeferred,
   }
 
   [Serializable]
@@ -586,7 +658,7 @@ namespace KeepBlinking.CareStation
   [Serializable]
   public sealed class CareStationSaveData
   {
-    public int saveVersion = 15;
+    public int saveVersion = 20;
     public int currentShift = 1;
     public int careShiftId = 1;
     public CareStationState currentState = CareStationState.Dormant;
@@ -624,6 +696,8 @@ namespace KeepBlinking.CareStation
     public bool inspectionCompletionSignalSent;
     public int stationLevel = 1;
     public bool upgradeOffered;
+    public bool upgradeDeferred;
+    public bool firstFormalGoldBottleGenerated;
     public bool shiftIncidentGenerated;
     public int completedShifts;
     public int unlockedUpgradeMask;
@@ -652,6 +726,9 @@ namespace KeepBlinking.CareStation
     public CareDistanceFallbackReason careCloserFallbackReason;
     public CareActionSaveData careAction = new CareActionSaveData();
     public int trainingProgress;
+    // Independent v17 training completion bits. This prevents removal of the
+    // former first training step from erasing completion of later actions.
+    public int completedTrainingActionMask;
     public int formalRecipesCreated;
     public CareRecipeSaveData currentRecipe = new CareRecipeSaveData();
     public string[] recentRecipeHistory = Array.Empty<string>();
@@ -695,6 +772,12 @@ namespace KeepBlinking.CareStation
     public float distanceResetAwayScale;
     public bool distanceResetAwayCompleted;
     public bool distanceResetCompleted;
+    public bool hasSeenFocusShiftIntro;
+    // Legacy-only v18 flag. ScreenDown is no longer an authored care action.
+    public bool hasSeenScreenBreakIntro;
+    public bool hasSeenClosedEyeRestIntro;
+    public bool hasSeenGuidedMovementIntro;
+    public bool hasSeenPilotEyeRoutineIntro;
 
     public DateTime ReadLastActiveUtc(DateTime fallback)
     {
@@ -792,7 +875,9 @@ namespace KeepBlinking.CareStation
 
     public static int Stored(CareStationSaveData save)
     {
-      return save == null ? 0 : Math.Max(0, save.storedFullBottles) + Math.Max(0, save.storedGoldBottles);
+      // Gold is a separate rare-resource wallet. Only Full Bottles consume the
+      // physical storage capacity shown by the station rack.
+      return save == null ? 0 : Math.Max(0, save.storedFullBottles);
     }
 
     public static int Remaining(CareStationSaveData save)
@@ -814,7 +899,7 @@ namespace KeepBlinking.CareStation
       // displaced by legacy/offline output during migration or foreground
       // settlement. The offline queue may wait; the care flight may not vanish.
       var pendingCare = save.careActionCompleted
-        ? Math.Max(0, save.pendingIncidentXP - save.collectedCareBottleValue)
+        ? Math.Max(0, save.pendingIncidentXP - save.collectedCareBottleValue - save.pendingGoldBottleCount)
         : 0;
       return Math.Max(0, Remaining(save) - pendingCare);
     }
@@ -846,22 +931,25 @@ namespace KeepBlinking.CareStation
     public readonly int RemainingValue;
     public readonly int AvailableStorage;
     public readonly int CollectibleValue;
+    public readonly int CollectibleGoldValue;
     public readonly int ExistingRuntimeValue;
     public readonly int MissingRuntimeValue;
 
-    public bool StorageBlocked => RemainingValue > 0 && AvailableStorage <= 0;
+    public bool StorageBlocked => RemainingValue > 0 && CollectibleValue <= 0;
     public bool RequiresRuntimeRebuild => MissingRuntimeValue > 0 && !StorageBlocked;
 
     public CareStationCollectionRecoveryPlan(
       int remainingValue,
       int availableStorage,
       int collectibleValue,
+      int collectibleGoldValue,
       int existingRuntimeValue,
       int missingRuntimeValue)
     {
       RemainingValue = Math.Max(0, remainingValue);
       AvailableStorage = Math.Max(0, availableStorage);
       CollectibleValue = Math.Max(0, collectibleValue);
+      CollectibleGoldValue = Math.Max(0, Math.Min(CollectibleValue, collectibleGoldValue));
       ExistingRuntimeValue = Math.Max(0, existingRuntimeValue);
       MissingRuntimeValue = Math.Max(0, missingRuntimeValue);
     }
@@ -872,16 +960,20 @@ namespace KeepBlinking.CareStation
     public static CareStationCollectionRecoveryPlan Plan(
       CareStationSaveData save,
       int remainingValue,
-      int runtimeUnsettledValue)
+      int runtimeUnsettledValue,
+      int pendingGoldValue = 0)
     {
       var remaining = Math.Max(0, remainingValue);
       var available = CareStationStorageRules.Remaining(save);
-      var collectible = Math.Min(remaining, available);
+      var collectibleGold = Math.Min(remaining, Math.Max(0, pendingGoldValue));
+      var remainingFull = Math.Max(0, remaining - collectibleGold);
+      var collectible = collectibleGold + Math.Min(remainingFull, available);
       var existing = Math.Min(collectible, Math.Max(0, runtimeUnsettledValue));
       return new CareStationCollectionRecoveryPlan(
         remaining,
         available,
         collectible,
+        collectibleGold,
         existing,
         Math.Max(0, collectible - existing));
     }
@@ -897,7 +989,7 @@ namespace KeepBlinking.CareStation
     public static bool CanSchedule(CareStationSaveData save)
     {
       return save != null && !save.inspectionTriggered && !save.inspectionCompleted &&
-             save.trainingProgress >= 4 && save.workerLevel >= 2 &&
+             CareRecipeGenerator.HasCompletedTraining(save) && save.workerLevel >= 2 &&
              save.storageLevel >= 2 && save.cartLevel >= 2 &&
              save.pendingOfflineXP <= 0 && save.queuedOfflineXP <= 0 &&
              save.pendingIncidentXP <= 0 && save.pendingGoldBottleCount <= 0 &&
@@ -909,8 +1001,7 @@ namespace KeepBlinking.CareStation
     {
       var actions = new[]
       {
-        CareActionType.ScreenDown,
-        CareActionType.FocusShift,
+        CareActionType.PilotEyeRoutine,
         CareActionType.GuidedEyeCircles,
         CareActionType.ClosedEyeRest,
       };
@@ -922,6 +1013,7 @@ namespace KeepBlinking.CareStation
         actionList = actions,
         originalActionList = (CareActionType[])actions.Clone(),
         createdShiftId = Math.Max(1, shiftId),
+        deepRest = true,
       };
     }
 
@@ -1068,6 +1160,43 @@ namespace KeepBlinking.CareStation
       return EvaluateUpgrade(save, upgrade, configuration).CanPurchase;
     }
 
+    public static bool CanPurchaseAnyUpgrade(
+      CareStationSaveData save,
+      CareStationUpgradeConfiguration configuration)
+    {
+      return CanPurchaseUpgrade(save, CareStationUpgradeId.MoreWorkers, configuration) ||
+             CanPurchaseUpgrade(save, CareStationUpgradeId.LargerStorage, configuration) ||
+             CanPurchaseUpgrade(save, CareStationUpgradeId.BiggerCart, configuration);
+    }
+
+    public static bool CanEnterUpgradeSelection(
+      CareStationSaveData save,
+      CareStationUpgradeConfiguration configuration)
+    {
+      return CanPurchaseAnyUpgrade(save, configuration);
+    }
+
+    public static void MarkUpgradeDeferred(CareStationSaveData save, DateTime utcNow)
+    {
+      if (save == null) return;
+      if (!save.upgradeDeferred)
+        CareStationEventLog.Append(save, CareStationEventType.UpgradeDeferred, utcNow);
+      save.upgradeOffered = true;
+      save.upgradeDeferred = true;
+    }
+
+    public static bool EnsureFirstFormalGoldBottle(CareStationSaveData save)
+    {
+      if (save == null || save.firstFormalGoldBottleGenerated || save.inspectionActive ||
+          save.currentRecipe == null) return false;
+      var type = save.currentRecipe.recipeType;
+      if (type != CareRecipeType.Double && type != CareRecipeType.Triple) return false;
+      save.pendingIncidentXP = Math.Max(1, save.pendingIncidentXP);
+      save.pendingGoldBottleCount = Math.Max(1, save.pendingGoldBottleCount);
+      save.firstFormalGoldBottleGenerated = true;
+      return true;
+    }
+
     public static CareStationUpgradeAvailability EvaluateUpgrade(
       CareStationSaveData save,
       CareStationUpgradeId upgrade,
@@ -1088,7 +1217,7 @@ namespace KeepBlinking.CareStation
           0,
           0);
       var cost = configuration.Cost(upgrade, level);
-      if (cost.fullBottles + cost.goldBottles > CareStationStorageRules.Capacity(save))
+      if (cost.fullBottles > CareStationStorageRules.Capacity(save))
         return new CareStationUpgradeAvailability(
           CareStationUpgradeAvailabilityReason.StorageCapacityTooSmall,
           cost,
@@ -1118,6 +1247,7 @@ namespace KeepBlinking.CareStation
       save.storedFullBottles -= cost.fullBottles;
       save.storedGoldBottles -= cost.goldBottles;
       ApplyUpgradeWithoutCost(save, upgrade, configuration);
+      save.offlineProductionPausedByFullStorage = CareStationStorageRules.Remaining(save) <= 0;
       return true;
     }
 

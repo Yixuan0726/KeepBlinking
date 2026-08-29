@@ -1,0 +1,43 @@
+{
+  "generator": "CareAmbienceSynthesis",
+  "version": 1,
+  "sampleRate": 48000,
+  "channels": 2,
+  "durationSeconds": 12,
+  "format": "PCM16 WAV",
+  "loopMethod": "cyclic FIR noise plus integer-cycle tonal components",
+  "profiles": [
+    {
+      "name": "Focus_Ambience",
+      "seed": 22432273,
+      "character": "soft air with a slow low-frequency breathing pulse",
+      "targetPeak": 0.275,
+      "smoothingRadii": [8, 37, 181],
+      "smoothingWeights": [0.52, 0.31, 0.17]
+    },
+    {
+      "name": "Pilot_Ambience",
+      "seed": 38214441,
+      "character": "filtered pink wind with a very light wooden navigation pulse",
+      "targetPeak": 0.255,
+      "smoothingRadii": [5, 23, 97, 389],
+      "smoothingWeights": [0.34, 0.29, 0.23, 0.14]
+    },
+    {
+      "name": "Guided_Ambience",
+      "seed": 56372535,
+      "character": "rounded pink air with a slow stereo orbit and sustained soft partials",
+      "targetPeak": 0.265,
+      "smoothingRadii": [11, 53, 257],
+      "smoothingWeights": [0.42, 0.34, 0.24]
+    },
+    {
+      "name": "Rest_Ambience",
+      "seed": 74268227,
+      "character": "very soft brown air with a quiet low chord",
+      "targetPeak": 0.140,
+      "smoothingRadii": [31, 151, 751, 1801],
+      "smoothingWeights": [0.24, 0.31, 0.29, 0.16]
+    }
+  ]
+}

@@ -382,7 +382,7 @@ namespace KeepBlinking.Tests
     [TestCase(CareStationUpgradeId.MoreWorkers, 2, 24, 1)]
     [TestCase(CareStationUpgradeId.MoreWorkers, 3, 40, 2)]
     [TestCase(CareStationUpgradeId.LargerStorage, 1, 10, 0)]
-    [TestCase(CareStationUpgradeId.LargerStorage, 2, 20, 1)]
+    [TestCase(CareStationUpgradeId.LargerStorage, 2, 20, 0)]
     [TestCase(CareStationUpgradeId.LargerStorage, 3, 36, 2)]
     [TestCase(CareStationUpgradeId.BiggerCart, 1, 10, 0)]
     [TestCase(CareStationUpgradeId.BiggerCart, 2, 22, 1)]
@@ -466,7 +466,7 @@ namespace KeepBlinking.Tests
       var save = new CareStationSaveData
       {
         storageHours = 24,
-        storedFullBottles = 23,
+        storedFullBottles = 24,
         storedGoldBottles = 1,
         pendingIncidentXP = 12,
         careActionCompleted = true,
@@ -576,8 +576,7 @@ namespace KeepBlinking.Tests
       var recipe = CareStationInspectionRules.CreateRecipe(18);
       Assert.That(recipe.actionList, Is.EqualTo(new[]
       {
-        CareActionType.ScreenDown,
-        CareActionType.FocusShift,
+        CareActionType.PilotEyeRoutine,
         CareActionType.GuidedEyeCircles,
         CareActionType.ClosedEyeRest,
       }));
@@ -589,11 +588,13 @@ namespace KeepBlinking.Tests
         var mask = CareStationInspectionRules.CompletedCheckMask(index, result.RecipeCompleted);
         if (index == 0) Assert.That(mask, Is.EqualTo(CareStationInspectionRules.FilterCheck));
         if (index == 1) Assert.That(mask, Is.EqualTo(CareStationInspectionRules.FilterCheck | CareStationInspectionRules.FlowCheck));
-        if (index == 2) Assert.That(mask, Is.EqualTo(CareStationInspectionRules.FilterCheck | CareStationInspectionRules.FlowCheck));
-        if (index == 3) Assert.That(mask, Is.EqualTo(CareStationInspectionRules.AllChecks));
+        if (index == 2) Assert.That(mask, Is.EqualTo(CareStationInspectionRules.AllChecks));
       }
       Assert.That(runtime.TryConsumeCompletionSignal(), Is.True);
       Assert.That(runtime.TryConsumeCompletionSignal(), Is.False);
+      Assert.That(CareActionLibrary.EstimatedRecipeSeconds(recipe.actionList, recipe.deepRest),
+        Is.InRange(145f, 170f),
+        "The fixed inspection must remain a complete but sub-three-minute routine.");
     }
 
     [Test]
@@ -662,8 +663,8 @@ namespace KeepBlinking.Tests
 
       var settlement = production.Settle(save, 8);
 
-      Assert.That(settlement.ProducedStored, Is.EqualTo(1));
-      Assert.That(settlement.ProducedDiscarded, Is.EqualTo(7));
+      Assert.That(settlement.ProducedStored, Is.EqualTo(2));
+      Assert.That(settlement.ProducedDiscarded, Is.EqualTo(6));
       Assert.That(CareStationStorageRules.Stored(save), Is.EqualTo(24));
       Assert.That(save.queuedOfflineXP, Is.Zero,
         "New offline overflow is production that could not occur, not a deferred reward.");
@@ -716,6 +717,139 @@ namespace KeepBlinking.Tests
       var recovery = CareStationCollectionRecoveryRules.Plan(save, 14, 0);
       Assert.That(recovery.MissingRuntimeValue, Is.EqualTo(14));
       Assert.That(recovery.StorageBlocked, Is.False);
+    }
+
+    [Test]
+    public void FullLevelTwoStorageCanPurchaseLevelThreeForTwentyFullWithoutGold()
+    {
+      var configuration = new CareStationUpgradeConfiguration();
+      var save = new CareStationSaveData
+      {
+        storageLevel = 2,
+        storageHours = 36,
+        storedFullBottles = 36,
+        storedGoldBottles = 0,
+        offlineProductionPausedByFullStorage = true,
+      };
+
+      var availability = CareStationShiftRules.EvaluateUpgrade(
+        save,
+        CareStationUpgradeId.LargerStorage,
+        configuration);
+      Assert.That(availability.CanPurchase, Is.True);
+      Assert.That(availability.Cost.fullBottles, Is.EqualTo(20));
+      Assert.That(availability.Cost.goldBottles, Is.Zero);
+      Assert.That(CareStationShiftRules.TryPurchaseUpgrade(
+        save,
+        CareStationUpgradeId.LargerStorage,
+        configuration), Is.True);
+      Assert.That(save.storageLevel, Is.EqualTo(3));
+      Assert.That(save.storageHours, Is.EqualTo(48));
+      Assert.That(save.storedFullBottles, Is.EqualTo(16));
+      Assert.That(save.storedGoldBottles, Is.Zero);
+      Assert.That(save.offlineProductionPausedByFullStorage, Is.False);
+    }
+
+    [Test]
+    public void UnaffordableUpgradeOpportunityDefersWithoutBeingDeleted()
+    {
+      var save = new CareStationSaveData
+      {
+        storedFullBottles = 0,
+        storedGoldBottles = 0,
+        upgradeOffered = true,
+      };
+      var configuration = new CareStationUpgradeConfiguration();
+
+      Assert.That(CareStationShiftRules.CanEnterUpgradeSelection(save, configuration), Is.False);
+      CareStationShiftRules.MarkUpgradeDeferred(save, Start);
+
+      Assert.That(save.upgradeOffered, Is.True);
+      Assert.That(save.upgradeDeferred, Is.True);
+      Assert.That(save.eventHistory, Has.Length.EqualTo(1));
+      Assert.That(save.eventHistory[0].eventType, Is.EqualTo(CareStationEventType.UpgradeDeferred));
+    }
+
+    [Test]
+    public void FirstFormalRecipeGuaranteesExactlyOneGoldMarkerAndNeverRepeats()
+    {
+      var save = new CareStationSaveData
+      {
+        pendingIncidentXP = 24,
+        currentRecipe = new CareRecipeSaveData
+        {
+          recipeType = CareRecipeType.Double,
+          actionList = new[] { CareActionType.FocusShift, CareActionType.ClosedEyeRest },
+        },
+      };
+
+      Assert.That(CareStationShiftRules.EnsureFirstFormalGoldBottle(save), Is.True);
+      Assert.That(save.pendingGoldBottleCount, Is.EqualTo(1));
+      Assert.That(save.firstFormalGoldBottleGenerated, Is.True);
+      Assert.That(CareStationShiftRules.EnsureFirstFormalGoldBottle(save), Is.False);
+      Assert.That(save.pendingGoldBottleCount, Is.EqualTo(1));
+      Assert.That(save.pendingIncidentXP, Is.EqualTo(24));
+    }
+
+    [Test]
+    public void GoldDoesNotConsumeFullBottleStorageCapacity()
+    {
+      var save = new CareStationSaveData
+      {
+        storageHours = 36,
+        storedFullBottles = 35,
+        storedGoldBottles = 9,
+      };
+
+      Assert.That(CareStationStorageRules.Stored(save), Is.EqualTo(35));
+      Assert.That(CareStationStorageRules.Remaining(save), Is.EqualTo(1));
+    }
+
+    [Test]
+    public void FullStorageKeepsCareRewardPendingButAllowsGoldToSettle()
+    {
+      var save = new CareStationSaveData
+      {
+        storageHours = 36,
+        storedFullBottles = 36,
+        pendingIncidentXP = 12,
+        pendingGoldBottleCount = 1,
+        careActionCompleted = true,
+      };
+
+      var goldPlan = CareStationCollectionRecoveryRules.Plan(save, 12, 0, 1);
+      Assert.That(goldPlan.CollectibleValue, Is.EqualTo(1));
+      Assert.That(goldPlan.CollectibleGoldValue, Is.EqualTo(1));
+      Assert.That(goldPlan.StorageBlocked, Is.False);
+
+      var fullOnlyPlan = CareStationCollectionRecoveryRules.Plan(save, 11, 0, 0);
+      Assert.That(fullOnlyPlan.CollectibleValue, Is.Zero);
+      Assert.That(fullOnlyPlan.StorageBlocked, Is.True);
+      Assert.That(save.pendingIncidentXP, Is.EqualTo(12));
+    }
+
+    [Test]
+    public void ExpandingStorageMakesPendingCareRewardCollectibleWithoutRegeneration()
+    {
+      var save = new CareStationSaveData
+      {
+        storageLevel = 2,
+        storageHours = 36,
+        storedFullBottles = 36,
+        pendingIncidentXP = 12,
+        careActionCompleted = true,
+      };
+      Assert.That(CareStationCollectionRecoveryRules.Plan(save, 12, 0).StorageBlocked, Is.True);
+
+      Assert.That(CareStationShiftRules.TryPurchaseUpgrade(
+        save,
+        CareStationUpgradeId.LargerStorage,
+        new CareStationUpgradeConfiguration()), Is.True);
+      var resumed = CareStationCollectionRecoveryRules.Plan(save, 12, 0);
+
+      Assert.That(save.pendingIncidentXP, Is.EqualTo(12));
+      Assert.That(resumed.CollectibleValue, Is.EqualTo(12));
+      Assert.That(resumed.RequiresRuntimeRebuild, Is.True);
     }
 
     [Test]

@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <title>Care Station Filter Level 3 static visual study</title>
+  <desc>Automated brick-red care-fluid filter with three individual beds, restrained dark-gold trim, connected gauge and cleaning brush.</desc>
+  <g stroke="#34251F" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M96 930 C224 899 787 900 930 930 C850 970 191 974 96 930 Z" fill="#34251F" opacity="0.18" stroke="none"/>
+
+    <!-- Complete upgraded chassis, still recognizably the same cylindrical Filter. -->
+    <path d="M127 718 C203 684 277 672 349 665 C456 654 649 659 727 678 C800 696 853 720 887 760 L920 914 C730 946 274 948 91 910 Z" fill="#A64F3D" stroke-width="16"/>
+    <path d="M112 834 C316 803 715 807 902 839 L914 902 C716 932 291 933 101 904 Z" fill="#913F32" stroke-width="10"/>
+    <path d="M125 882 C333 902 714 901 901 879" fill="none" stroke="#C39A4A" stroke-width="14"/>
+    <path d="M156 743 C324 704 704 706 857 751 L873 828 C692 803 328 802 133 829 Z" fill="#B85A45" stroke-width="8"/>
+    <path d="M142 858 C322 839 712 841 891 862" fill="none" stroke="#C76A53" stroke-width="5"/>
+
+    <!-- Taller glass reservoir and solid brick-red pillars. -->
+    <path d="M236 203 C340 179 636 183 749 211 L738 708 C620 738 361 736 235 705 C221 560 222 360 236 203 Z" fill="#C6DED2" fill-opacity="0.67" stroke-width="13"/>
+    <path d="M257 224 C270 353 264 551 258 677" fill="none" stroke="#E8F1E7" stroke-width="7" opacity="0.7"/>
+    <path d="M714 230 C703 368 712 554 707 683" fill="none" stroke="#55727A" stroke-width="6" opacity="0.56"/>
+    <path d="M178 184 C205 166 236 173 255 202 L252 711 C231 736 197 737 176 712 C162 536 164 353 178 184 Z" fill="#A64F3D" stroke-width="15"/>
+    <path d="M742 199 C766 169 805 171 823 201 L820 699 C800 732 765 738 740 711 Z" fill="#994434" stroke-width="15"/>
+    <path d="M196 220 C203 348 201 552 195 682" fill="none" stroke="#C76A53" stroke-width="6"/>
+    <path d="M796 230 C786 372 798 540 790 670" fill="none" stroke="#BD5A46" stroke-width="5"/>
+
+    <!-- Wider yet restrained continuous stream; filters interrupt its silhouette naturally. -->
+    <path d="M456 202 C449 248 455 283 464 316 C473 344 464 372 457 395 C449 424 457 454 468 478 C478 502 470 531 463 553 C454 582 464 611 474 636 C483 657 478 682 477 701 C476 721 492 733 513 730 C535 727 546 712 542 690 C537 662 535 642 545 616 C556 586 549 557 540 533 C532 509 540 482 548 456 C557 427 550 399 542 374 C534 347 544 321 551 294 C560 260 555 228 545 201 Z" fill="#9BCDB6" fill-opacity="0.8" stroke="#6EA990" stroke-width="5"/>
+    <path d="M480 214 C472 255 483 289 479 321 C474 352 465 373 473 400 C483 432 491 454 486 481 C481 511 473 535 482 559 C493 588 501 613 496 638 C493 666 498 691 505 714" fill="none" stroke="#DBF0E5" stroke-width="6" opacity="0.8"/>
+
+    <!-- Three individually drawn beds; no copied geometry. -->
+    <path d="M276 300 C354 273 640 273 714 302 C738 313 735 338 709 349 C608 379 380 376 278 350 C254 342 252 313 276 300 Z" fill="#E8D8B6" stroke-width="12"/>
+    <path d="M280 327 C394 343 603 345 711 323 C688 365 312 370 280 327 Z" fill="#C39A5C" stroke-width="6"/>
+    <path d="M313 301 C323 284 344 286 351 303 C356 319 343 329 329 327 C315 324 306 314 313 301 Z M370 299 C382 284 403 289 407 306 C410 321 395 330 382 326 C369 323 363 310 370 299 Z M432 302 C441 284 466 287 472 304 C477 320 461 331 446 328 C432 325 425 313 432 302 Z M503 301 C513 287 535 288 542 306 C546 321 532 332 518 329 C503 326 496 313 503 301 Z M570 302 C582 287 605 292 609 309 C612 323 597 332 583 328 C569 325 563 313 570 302 Z M641 306 C650 291 673 295 676 312 C679 325 665 333 652 329 C640 325 635 315 641 306 Z" fill="#6B4B32" stroke-width="5"/>
+
+    <path d="M270 445 C354 418 642 419 720 447 C744 458 740 484 715 496 C612 526 372 523 274 496 C249 487 247 457 270 445 Z" fill="#E8D8B6" stroke-width="12"/>
+    <path d="M274 472 C391 489 615 488 716 469 C692 511 307 514 274 472 Z" fill="#BC8F54" stroke-width="6"/>
+    <path d="M309 447 C320 431 340 432 347 450 C352 465 339 476 325 472 C312 469 302 458 309 447 Z M365 445 C377 431 398 435 403 452 C406 466 391 476 378 472 C365 469 358 456 365 445 Z M429 447 C439 432 461 434 468 452 C472 467 458 477 444 474 C430 471 422 459 429 447 Z M497 448 C507 432 530 436 535 453 C539 468 524 478 510 474 C496 471 490 459 497 448 Z M563 447 C575 434 597 437 601 455 C604 469 588 477 575 473 C561 470 556 458 563 447 Z M632 450 C641 436 663 439 667 456 C669 470 655 478 642 474 C630 470 625 459 632 450 Z" fill="#735035" stroke-width="5"/>
+
+    <path d="M267 588 C352 561 641 563 721 590 C745 601 743 629 716 640 C610 669 373 667 271 640 C246 631 244 600 267 588 Z" fill="#E8D8B6" stroke-width="12"/>
+    <path d="M272 616 C391 632 615 632 717 613 C691 657 307 659 272 616 Z" fill="#B9884E" stroke-width="6"/>
+    <path d="M306 590 C315 574 338 577 344 594 C349 609 335 619 321 617 C307 614 300 602 306 590 Z M363 588 C374 574 395 578 400 595 C404 609 389 620 376 616 C362 613 356 599 363 588 Z M425 591 C435 576 458 578 464 596 C468 611 453 621 439 617 C425 614 419 603 425 591 Z M494 590 C503 576 526 578 532 597 C536 612 522 621 508 618 C494 615 487 603 494 590 Z M560 591 C572 577 595 581 598 598 C601 612 586 622 573 617 C559 614 553 602 560 591 Z M631 594 C640 579 662 584 666 600 C668 614 654 622 642 618 C629 614 625 603 631 594 Z" fill="#684930" stroke-width="5"/>
+
+    <!-- Dark-gold top rim is the single restrained premium trim ring. -->
+    <path d="M130 142 C286 100 706 106 867 151 L852 248 C653 215 345 213 146 246 Z" fill="#C39A4A" stroke-width="16"/>
+    <path d="M164 217 C334 190 676 194 833 225 L824 277 C653 254 344 252 163 277 Z" fill="#9B7538" stroke-width="9"/>
+    <path d="M287 67 C318 17 420 7 490 25 C558 5 666 25 692 75 C705 98 714 116 712 142 C602 129 357 124 274 141 C270 115 275 89 287 67 Z" fill="#A64F3D" stroke-width="15"/>
+    <path d="M417 18 C450 4 550 7 582 23 L575 84 C535 96 454 91 411 80 Z" fill="#913F32" stroke-width="13"/>
+    <path d="M427 26 C466 13 545 16 574 29 C548 48 457 50 427 26 Z" fill="#BA5C47" stroke-width="6"/>
+    <path d="M172 169 C345 131 704 139 836 176" fill="none" stroke="#D1AA5D" stroke-width="7"/>
+
+    <!-- Pressure gauge is plumbed into the upper chamber, not floating. -->
+    <path d="M814 269 C835 254 861 250 883 252 L885 302 C856 301 835 307 816 320 Z" fill="#514A43" stroke-width="11"/>
+    <path d="M874 269 C890 227 926 210 961 220 C997 231 1015 270 1004 305 C994 338 958 356 924 344 C891 332 869 302 874 269 Z" fill="#C39A4A" stroke-width="13"/>
+    <path d="M890 273 C904 242 930 232 955 240 C980 248 992 275 983 300 C974 326 947 337 923 327 C900 318 885 295 890 273 Z" fill="#E8D8B6" stroke-width="7"/>
+    <path d="M936 285 L963 262" fill="none" stroke="#A64F3D" stroke-width="7"/>
+    <path d="M919 250 L914 239 M966 316 L976 325 M895 304 L883 309" fill="none" stroke-width="4"/>
+
+    <!-- Cleaning brush rides a fixed guide on the right pillar. -->
+    <path d="M787 367 C812 353 831 356 844 373 L842 638 C824 654 806 653 788 640 Z" fill="#7F392D" stroke-width="10"/>
+    <path d="M812 385 C804 425 804 574 812 620" fill="none" stroke="#C39A4A" stroke-width="7"/>
+    <path d="M778 458 C794 439 835 439 850 458 L846 541 C827 559 797 557 780 541 Z" fill="#C39A4A" stroke-width="8"/>
+    <path d="M782 468 L765 457 M784 486 L762 481 M783 505 L760 506 M784 525 L765 534 M846 469 L864 459 M847 487 L869 482 M847 507 L870 510 M846 527 L866 537" fill="none" stroke-width="5"/>
+
+    <!-- Manual maintenance crank remains linked to the same side gearbox. -->
+    <path d="M812 561 C834 546 864 551 875 574 C886 597 872 624 848 630 C825 635 801 617 799 591 C798 580 803 569 812 561 Z" fill="#514A43" stroke-width="11"/>
+    <path d="M867 607 C889 623 907 642 925 660 L963 658" fill="none" stroke="#514A43" stroke-width="18"/>
+    <path d="M950 644 C973 638 993 648 1000 668 C992 687 972 697 949 688 Z" fill="#69635B" stroke-width="10"/>
+
+    <!-- The same unified FILTER function badge, now firmly inset. -->
+    <path d="M403 711 C442 684 575 685 615 709 L609 851 C568 875 446 873 406 850 Z" fill="#514A43" stroke-width="13"/>
+    <path d="M428 730 C465 713 555 715 590 733 L586 830 C549 848 468 847 431 829 Z" fill="#E8D8B6" stroke-width="7"/>
+    <path d="M449 757 C454 747 468 748 472 758 C476 767 467 774 459 771 C451 769 446 763 449 757 Z M479 750 C485 740 500 743 503 754 C506 764 497 771 488 768 C480 765 476 757 479 750 Z M514 760 C520 749 535 751 538 762 C541 772 532 779 523 776 C514 774 510 766 514 760 Z M547 752 C553 744 566 747 569 756 C572 766 563 772 555 770 C547 767 543 760 547 752 Z M566 771 C571 765 581 767 583 775 C584 782 577 787 571 784 C565 782 562 776 566 771 Z" fill="#6B4B32" stroke-width="3.5"/>
+    <path d="M450 786 C482 780 539 781 570 787 L568 805 C537 810 481 809 451 804 Z" fill="#C39A4A" stroke-width="5"/>
+    <path d="M468 786 L467 805 M488 784 L488 807 M509 784 L509 807 M531 784 L531 808 M551 786 L551 806" fill="none" stroke-width="3.5"/>
+    <path d="M454 814 C478 802 496 827 519 814 C541 801 553 823 571 809" fill="none" stroke="#75B89D" stroke-width="6"/>
+    <path d="M459 828 C482 816 500 838 520 827 C542 813 555 834 569 823" fill="none" stroke="#9BCDB6" stroke-width="5"/>
+
+    <!-- Select hand re-connections only; no procedural scratches or noise. -->
+    <path d="M199 333 L211 344 M196 526 L208 515 M782 327 L795 316 M786 687 L798 696" fill="none" stroke-width="5"/>
+    <path d="M191 770 C218 759 242 754 268 751 M745 753 C774 758 799 765 824 778" fill="none" stroke="#8D3C30" stroke-width="5"/>
+  </g>
+</svg>

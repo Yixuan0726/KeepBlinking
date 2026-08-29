@@ -1,0 +1,69 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6999122dfc3f49ce9f9d7f30f73e8da4, type: 3}
+  m_Name: CareStationFilterArtCatalog
+  m_EditorClassIdentifier:
+  _levels:
+  - level: 1
+    baseSprite: {fileID: 21300000, guid: 99f4d939583606fad69a2f8fed7eccb7, type: 3}
+    flowFrames:
+    - {fileID: 21300000, guid: 97287601dc61bb4492928f0f6a8006f8, type: 3}
+    - {fileID: 21300000, guid: 2afbf89e000047e288198c7ab1558afa, type: 3}
+    - {fileID: 21300000, guid: cff0ccd134e5fa6d9bd0ce8a21c4b518, type: 3}
+    - {fileID: 21300000, guid: c18be6cdf06880a5d6b38ce9a2445787, type: 3}
+    crankSprite: {fileID: 0}
+    brushSprite: {fileID: 0}
+    gaugeNeedleSprite: {fileID: 0}
+    badgeSprite: {fileID: 21300000, guid: efc06334bc38fd9abf3af26770da5658, type: 3}
+    crankPivot: {x: 0, y: 0}
+    gaugePivot: {x: 0, y: 0}
+    rawLiquidSprite: {fileID: 21300000, guid: 98fcde4dba02caaf1643d0ac83671e58, type: 3}
+    rawParticlesSprite: {fileID: 21300000, guid: b89ef8a5a72f580e0ace034e641f40cd, type: 3}
+    filterCartridgeSprite: {fileID: 21300000, guid: 7f79b5c3cc5d268c51d172677d06b20c, type: 3}
+    funnelAndPipeSprite: {fileID: 21300000, guid: 6b9b1f4e7e24a822f799b5b0b9e8bec8, type: 3}
+    bottleSprite: {fileID: 21300000, guid: 00a132d4f6125d93062ee84d52f1897d, type: 3}
+    bottleFillSprite: {fileID: 21300000, guid: 846482e3d0b389b6691e70d9d838c426, type: 3}
+    rawLiquidScalePivotY: 0.59
+    bottleFillScalePivotY: 0.06
+    displayScale: {x: 1, y: 1}
+    normalizedHitBounds:
+      serializedVersion: 2
+      x: 0.2
+      y: 0.03
+      width: 0.56
+      height: 0.95
+  - level: 2
+    baseSprite: {fileID: 21300000, guid: 17aae37019e843cee8bf0027790de4db, type: 3}
+    flowFrames:
+    - {fileID: 21300000, guid: aeb67da03f209290b74a1b83375149ac, type: 3}
+    - {fileID: 21300000, guid: 69c0e18bf4f537405ad376c16d6ee3c1, type: 3}
+    - {fileID: 21300000, guid: 7cc273f35ec76cc9829626edef848a7e, type: 3}
+    - {fileID: 21300000, guid: aacb2c763b921852a37a3d83b5194d26, type: 3}
+    crankSprite: {fileID: 21300000, guid: dd89e81d88973b5e5e9d10a7aea29043, type: 3}
+    brushSprite: {fileID: 0}
+    gaugeNeedleSprite: {fileID: 0}
+    badgeSprite: {fileID: 21300000, guid: 4eefc6656d489457f7e78e55c2de3c02, type: 3}
+    crankPivot: {x: 0.6617187, y: 0.478125}
+    gaugePivot: {x: 0, y: 0}
+  - level: 3
+    baseSprite: {fileID: 21300000, guid: 6769d375da4bf2bb0f0683c6da15aa4a, type: 3}
+    flowFrames:
+    - {fileID: 21300000, guid: 890afe12f723c54c23e2e5e6e89b9b9b, type: 3}
+    - {fileID: 21300000, guid: 1ab40b8c39dceaf00ea8ec326e39cee1, type: 3}
+    - {fileID: 21300000, guid: d1919f61cdef20c9aac98c622c186a2d, type: 3}
+    - {fileID: 21300000, guid: 5505d9c70d44eba4da0a5862cbe1176e, type: 3}
+    crankSprite: {fileID: 0}
+    brushSprite: {fileID: 21300000, guid: 3cb883b431bdc752d6ac26f9124f5281, type: 3}
+    gaugeNeedleSprite: {fileID: 21300000, guid: 128649b3475b04587b4b6ad2988c1ef4, type: 3}
+    badgeSprite: {fileID: 21300000, guid: f52ca2fa8691e4a3762010985170890f, type: 3}
+    crankPivot: {x: 0, y: 0}
+    gaugePivot: {x: 0.8570898, y: 0.7206055}

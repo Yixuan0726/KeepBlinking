@@ -28,10 +28,10 @@ namespace KeepBlinking.CareStation
     public int CloseRequestPlayCount { get; private set; }
     public int ReadyToOpenPlayCount { get; private set; }
 
-    public void Reset(bool closeRequestAlreadyPlayed = false)
+    public void Reset(bool closeRequestAlreadyPlayed = false, bool readyToOpenAlreadyPlayed = false)
     {
       _closeRequestPlayed = closeRequestAlreadyPlayed;
-      _readyToOpenPlayed = false;
+      _readyToOpenPlayed = readyToOpenAlreadyPlayed;
       _readyToOpenPending = false;
       CloseRequestPlayCount = 0;
       ReadyToOpenPlayCount = 0;
@@ -71,24 +71,28 @@ namespace KeepBlinking.CareStation
   /// </summary>
   public sealed class CareActionRunner : MonoBehaviour, ICareActionExecution
   {
-    [Header("Screen Down")]
-    [SerializeField, Min(0.1f)] private float _screenDownDemoSeconds = 1.2f;
-    [SerializeField, Min(1f)] private float _screenDownSeconds = 20f;
-    [SerializeField, Range(10f, 70f)] private float _groundAlignmentDegrees = 40f;
-    [SerializeField, Range(5f, 45f)] private float _returnAngleDegrees = 20f;
-    [SerializeField, Min(0.1f)] private float _screenDownHoldSeconds = 0.5f;
-    [SerializeField, Min(0.1f)] private float _returnHoldSeconds = 0.4f;
-    [SerializeField, Range(0.05f, 0.5f)] private float _accelerationTolerance = 0.2f;
-    [SerializeField, Min(0.1f)] private float _maximumGyroRadiansPerSecond = 0.8f;
+    private const int VoiceIntro = 1 << 0;
+    private const int VoiceReturn = 1 << 1;
+    private const int VoiceComplete = 1 << 2;
+    private const int VoiceClockwise = 1 << 3;
+    private const int VoiceCenter = 1 << 4;
+    private const int VoiceCounterClockwise = 1 << 5;
+    private const int VoiceClose = 1 << 6;
+    private const int VoiceBenefit = 1 << 7;
+    private const int VoiceMiddle = 1 << 8;
+    private const int VoiceAlmost = 1 << 9;
+    private const int VoiceReadyOpen = 1 << 10;
+    [Header("Care Action Introduction")]
+    [SerializeField, Range(2f, 4f)] private float _actionIntroSeconds = 2.5f;
 
     [Header("Closed-Eye Rest")]
     [SerializeField, Range(45f, 60f)] private float _closedEyeRestSeconds = 45f;
+    [SerializeField] private bool _enableRestAlmostCompleteVoice = true;
+    [SerializeField] private bool _enableCareVoice = true;
     [SerializeField, Min(0.1f)] private float _closeStartHoldSeconds = 1.5f;
     [SerializeField, Min(0.1f)] private float _reopenHoldSeconds = 0.5f;
 
     [Header("Focus Shift")]
-    [SerializeField, Range(0.25f, 0.4f)] private float _gestureReferenceCaptureSeconds = 0.3f;
-    [SerializeField, Range(3, 15)] private int _gestureReferenceMinimumSamples = 5;
     [SerializeField, Min(0.1f)] private float _gestureScaleSmoothingSpeed = 12f;
     // Linear distance fractions (see FaceDistanceRatio): 0.22 means the step completes once
     // the player has moved to 1/1.22 = 82% of the reference distance, about 8 cm from 45 cm.
@@ -96,37 +100,50 @@ namespace KeepBlinking.CareStation
     [SerializeField, Range(0.08f, 0.4f)] private float _distanceCompleteThreshold = 0.22f;
     [SerializeField, Range(0.05f, 1f)] private float _distanceStepHoldSeconds = 0.25f;
     [SerializeField, Range(0.05f, 1f)] private float _distanceProgressFallSeconds = 0.25f;
-    [SerializeField, Range(0f, 2f)] private float _focusStepTransitionSeconds = 0.4f;
+    [SerializeField, Range(0f, 2f)] private float _focusStepTransitionSeconds = 1.2f;
+    [SerializeField, Range(0.85f, 1f)] private float _focusNeutralMinimum = 0.94f;
+    [SerializeField, Range(1f, 1.15f)] private float _focusNeutralMaximum = 1.06f;
+    [SerializeField, Range(1.15f, 1.5f)] private float _focusCloserRatio = 1.25f;
+    [SerializeField, Range(0.55f, 0.9f)] private float _focusAwayRatio = 0.78f;
+    [SerializeField, Range(1.3f, 1.8f)] private float _focusTooCloseRatio = 1.45f;
+    [SerializeField, Range(0.2f, 1.5f)] private float _focusTargetHoldSeconds = 0.7f;
+    [SerializeField, Range(2.5f, 8f)] private float _focusMinimumLegSeconds = 3f;
+    [SerializeField, Range(1.2f, 3f)] private float _focusDirectionIntervalSeconds = 1.2f;
+    [SerializeField, Range(1, 8)] private int _focusCycleCount = 6;
     [SerializeField, Min(1f)] private float _distanceFallbackDelay = 8f;
 
-    [Header("Guided Eye Circles")]
-    [SerializeField, Min(1f)] private float _guidedPreviewSeconds = 4f;
-    [SerializeField, Min(1f)] private float _guidedClockwiseSeconds = 8f;
-    [SerializeField, Min(0.1f)] private float _guidedPauseSeconds = 2f;
-    [SerializeField, Min(1f)] private float _guidedCounterClockwiseSeconds = 8f;
-    [SerializeField, Min(0.1f)] private float _guidedRelaxSeconds = 5f;
+    [Header("Guided Eye Movement")]
+    [SerializeField, Range(2f, 4f)] private float _guidedPreviewSeconds = 2.5f;
+    [SerializeField, Range(4.5f, 5.5f)] private float _guidedClockwiseSeconds = 5f;
+    [SerializeField, Range(0.8f, 1f)] private float _guidedPauseSeconds = 0.9f;
+    [SerializeField, Range(4.5f, 5.5f)] private float _guidedCounterClockwiseSeconds = 5f;
+    [SerializeField, Range(10f, 15f)] private float _guidedRelaxSeconds = 12f;
+    [SerializeField, Range(1, 6)] private int _guidedLapsPerDirection = 3;
+
+    [Header("Pilot Eye Routine")]
+    [SerializeField, Range(2f, 4f)] private float _pilotIntroSeconds = 3f;
+    [SerializeField, Range(2.5f, 5f)] private float _pilotRoundSeconds = 3.5f;
+    [SerializeField, Range(1, 4)] private int _pilotRoundsPerAxis = 3;
+    [SerializeField, Range(1f, 1.5f)] private float _pilotTransitionSeconds = 1.25f;
 
     private CareActionRuntime _runtime;
     private EdgeOrbitHarvestMvp _gameplay;
     private CareStationView _view;
-    private GravitySensor _gravitySensor;
-    private Accelerometer _accelerometer;
-    private UnityEngine.InputSystem.Gyroscope _gyroscope;
-    private Vector3 _initialDeviceGravity = Vector3.back;
-    private Vector3 _deviceGravity = Vector3.back;
-    private Vector3 _previousDeviceGravity = Vector3.zero;
-    private float _accelerationMagnitude = 1f;
-    private float _angularSpeed;
-    private bool _orientationCaptured;
     private bool _applicationActive = true;
     private bool _hasFocus = true;
     private CareActionInternalPhase _lastPresentedPhase;
     private CareActionStage _lastPresentedStage;
     private int _lastGuidedNote = -1;
+    private int _lastGuidedLap = -1;
+    private int _lastPilotAxis = -1;
+    private int _lastPilotRound = -1;
+    private int _lastPilotEndpoint = -1;
+    private float _eyesOpenPausedSeconds;
+    private float _nextEarlyOpenVoiceAt;
     private bool _completionCuePlayed;
+    private bool _changeStepAllowed = true;
     private bool _restoredCompletionPending;
     private readonly CareActionCueGuard _cueGuard = new CareActionCueGuard();
-    private CareDistanceReferenceSampler _focusReferenceSampler;
     private long _lastGestureSampleSequence = long.MinValue;
     private float _smoothedGestureFaceScale;
     private bool _hasSmoothedGestureFaceScale;
@@ -140,8 +157,6 @@ namespace KeepBlinking.CareStation
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
     private bool? _simulatedEyesClosed;
-    private bool _simulateScreenDown;
-    private bool _simulateReturn;
     private bool? _simulatedTracking;
     private float? _simulatedDistanceRatio;
     private float _developmentTimeMultiplier = 1f;
@@ -160,14 +175,15 @@ namespace KeepBlinking.CareStation
     public bool RequiresDevicePose => _runtime != null && _runtime.RequiresDevicePose;
     public bool IsRunning => _runtime != null && _runtime.IsRunning;
     public bool IsDevelopmentTest { get; private set; }
+    public bool ChangeStepAllowed => _changeStepAllowed;
     public int CloseRequestCuePlayCount => _cueGuard.CloseRequestPlayCount;
     public int ReadyToOpenCuePlayCount => _cueGuard.ReadyToOpenPlayCount;
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-    public bool CanSkipUnavailableScreenDown => IsRunning &&
-      ActionType == CareActionType.ScreenDown &&
-      PauseReason == CareActionPauseReason.SensorUnavailable;
-#endif
     public CareActionSaveData SaveData => _runtime?.Data;
+
+    public void SetChangeStepAllowed(bool allowed)
+    {
+      _changeStepAllowed = allowed;
+    }
     public float GestureDistanceRatio => CurrentDistanceRatio;
     public float GestureReferenceScale => SaveData != null && SaveData.gestureReferenceValid ? SaveData.gestureReferenceScale : 0f;
     public bool GestureReferenceValid => SaveData != null && SaveData.gestureReferenceValid;
@@ -175,6 +191,16 @@ namespace KeepBlinking.CareStation
     public float RawGestureFaceScale => _rawGestureFaceScale;
     public float FocusStableSeconds => SaveData != null ? SaveData.holdElapsedSeconds : 0f;
     public int FocusStep => SaveData != null ? SaveData.focusTargetStep : 0;
+    public int FocusCycle => SaveData != null ? SaveData.focusCycleCount : 0;
+    public bool FocusRearmed => SaveData != null && SaveData.focusRearmed;
+    public float FocusNearPeakRatio => GestureReferenceValid &&
+                                       CareDistanceReferenceSampler.IsValidScale(_focusObservedMaximum)
+      ? FaceDistanceRatio.FromFaceScale(_focusObservedMaximum, GestureReferenceScale)
+      : 0f;
+    public float FocusFarPeakRatio => GestureReferenceValid &&
+                                      CareDistanceReferenceSampler.IsValidScale(_focusObservedMinimum)
+      ? FaceDistanceRatio.FromFaceScale(_focusObservedMinimum, GestureReferenceScale)
+      : 0f;
     public float DirectionProgress => _runtime?.DirectionProgress ?? 0f;
     public CareDistanceDirection ExpectedDistanceDirection => _runtime?.ExpectedDistanceDirection ?? CareDistanceDirection.None;
     public float DirectionDeltaPercent => ExpectedDistanceDirection == CareDistanceDirection.Closer
@@ -193,7 +219,7 @@ namespace KeepBlinking.CareStation
       {
         if (ActionType != CareActionType.FocusShift || !IsRunning) return "INACTIVE";
         if (PauseReason == CareActionPauseReason.TrackingLost) return "TRACKING LOST";
-        if (InternalPhase == CareActionInternalPhase.FocusReference) return "CAPTURING REFERENCE";
+        if (InternalPhase == CareActionInternalPhase.FocusReference) return "REARMING";
         if (DistanceSensorUnavailable) return "SENSOR UNAVAILABLE";
         if (FocusStableSeconds > 0f) return "STABILIZING";
         if (DirectionProgress <= 0f) return "DEAD ZONE";
@@ -203,14 +229,8 @@ namespace KeepBlinking.CareStation
 
     public void Bind(EdgeOrbitHarvestMvp gameplay, CareStationView view)
     {
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-      if (_view != null) _view.SkipCareStepSelected -= HandleSkipCareStepSelected;
-#endif
       _gameplay = gameplay;
       _view = view;
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-      if (_view != null) _view.SkipCareStepSelected += HandleSkipCareStepSelected;
-#endif
     }
 
     public void ConfigureStationDurations(
@@ -219,7 +239,6 @@ namespace KeepBlinking.CareStation
       float closeStartHoldSeconds,
       float reopenHoldSeconds)
     {
-      _screenDownSeconds = Mathf.Max(1f, screenDownSeconds);
       _closedEyeRestSeconds = Mathf.Clamp(closedEyeSeconds, 1f, 60f);
       _closeStartHoldSeconds = Mathf.Max(0.1f, closeStartHoldSeconds);
       _reopenHoldSeconds = Mathf.Max(0.1f, reopenHoldSeconds);
@@ -229,20 +248,31 @@ namespace KeepBlinking.CareStation
       CareActionType type,
       CareActionSaveData restore = null,
       bool developmentTest = false,
-      float closedEyeDurationOverride = 0f)
+      float closedEyeDurationOverride = 0f,
+      bool showIntro = false)
     {
-      if (type == CareActionType.None || IsRunning) return false;
+      if (type == CareActionType.None || CareActionLibrary.IsRetiredTask(type) || IsRunning) return false;
       IsDevelopmentTest = developmentTest;
       _runtime = new CareActionRuntime();
-      _runtime.Begin(type, BuildConfiguration(closedEyeDurationOverride), restore);
+      _runtime.Begin(type, BuildConfiguration(closedEyeDurationOverride, showIntro), restore);
       _lastPresentedPhase = CareActionInternalPhase.None;
       _lastPresentedStage = CareActionStage.Cancelled;
       _lastGuidedNote = -1;
-      _completionCuePlayed = false;
-      _cueGuard.Reset(restore != null && restore.closeRequestCuePlayed);
+      _lastGuidedLap = restore != null ? restore.guidedLapCount : -1;
+      _lastPilotAxis = restore != null ? restore.pilotCurrentAxis : -1;
+      _lastPilotRound = restore != null ? restore.pilotCurrentRound : -1;
+      _lastPilotEndpoint = restore != null ? restore.pilotCurrentEndpoint : -1;
+      _eyesOpenPausedSeconds = 0f;
+      _nextEarlyOpenVoiceAt = Time.unscaledTime +
+                              Mathf.Max(0f, restore != null ? restore.restEarlyOpenVoiceCooldown : 0f);
+      _completionCuePlayed = restore != null &&
+                             (restore.completionSignalEmitted || restore.readyToOpenCuePlayed ||
+                              (type == CareActionType.PilotEyeRoutine && restore.pilotCompletionConsumed));
+      _cueGuard.Reset(
+        restore != null && restore.closeRequestCuePlayed,
+        restore != null && restore.readyToOpenCuePlayed);
       _restoredCompletionPending = _runtime.Stage == CareActionStage.Completed &&
                                    !_runtime.Data.completionSignalEmitted;
-      if (type == CareActionType.ScreenDown) CaptureNeutralOrientation();
       if (type == CareActionType.FocusShift) PrepareFocusReference(restore);
       if (type == CareActionType.FocusShift) _focusStepOpenedAt = Time.unscaledTime;
       if (type == CareActionType.FocusShift && InternalPhase != CareActionInternalPhase.FocusReference)
@@ -251,8 +281,15 @@ namespace KeepBlinking.CareStation
         _focusFreshSamplesInStep = 0;
       }
       if (!developmentTest) _gameplay?.SetCareActionActive(true);
+      var careAudio = CareAudioFeedbackController.EnsureExists();
+      var startsPaused = _runtime.Stage == CareActionStage.Paused;
+      var voiceStartsPaused = startsPaused && IsVoicePauseReason(_runtime.PauseReason);
+      careAudio.StartActionAmbience(type, startsPaused);
+      CareVoiceService.EnsureExists().SetPaused(voiceStartsPaused);
       Present(true);
       ExecuteCueCommand(_cueGuard.ObservePhase(ActionType, InternalPhase));
+      if (showIntro) PlayActionIntroNarration(type);
+      else PlayPhaseNarration(CareActionInternalPhase.None, InternalPhase);
       return true;
     }
 
@@ -262,6 +299,8 @@ namespace KeepBlinking.CareStation
       _runtime.Cancel();
       if (!IsDevelopmentTest) _gameplay?.SetCareActionActive(false);
       CareAudioFeedbackController.EnsureExists().StopGuidedCue();
+      CareAudioFeedbackController.EnsureExists().StopActionAmbience(true);
+      CareVoiceService.EnsureExists().Stop();
       IsDevelopmentTest = false;
     }
 
@@ -282,6 +321,8 @@ namespace KeepBlinking.CareStation
       _runtime.Suspend(background
         ? CareActionPauseReason.ApplicationBackground
         : CareActionPauseReason.ApplicationFocusLost);
+      CareAudioFeedbackController.EnsureExists().SetActionAudioPaused(true);
+      CareVoiceService.EnsureExists().SetPaused(true);
     }
 
     public void CompleteCurrentStepForDevelopment()
@@ -295,22 +336,6 @@ namespace KeepBlinking.CareStation
       EmitCompletionIfReady();
 #endif
     }
-
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-    public bool TrySkipUnavailableScreenDownForDevelopment()
-    {
-      if (_runtime == null || !CanSkipUnavailableScreenDown ||
-          !_runtime.SkipUnavailableScreenDownForDevelopment()) return false;
-      Present(true);
-      EmitCompletionIfReady();
-      return true;
-    }
-
-    private void HandleSkipCareStepSelected()
-    {
-      TrySkipUnavailableScreenDownForDevelopment();
-    }
-#endif
 
     public void SetDevelopmentTimeMultiplier(float multiplier)
     {
@@ -334,14 +359,6 @@ namespace KeepBlinking.CareStation
 #endif
     }
 
-    public void SimulateScreenPose(bool screenDown)
-    {
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-      _simulateScreenDown = screenDown;
-      _simulateReturn = !screenDown;
-#endif
-    }
-
     public void SimulateFocusRatio(float ratio)
     {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
@@ -355,10 +372,9 @@ namespace KeepBlinking.CareStation
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
       if (ActionType != CareActionType.FocusShift || !IsRunning) return;
       EnsureSimulatedFocusReference();
-      var directionDelta = Mathf.Lerp(_distanceDeadZone, _distanceCompleteThreshold, Mathf.Clamp01(progress));
       _simulatedDistanceRatio = ExpectedDistanceDirection == CareDistanceDirection.Closer
-        ? 1f + directionDelta
-        : 1f - directionDelta;
+        ? Mathf.Lerp(1.06f, _focusCloserRatio, Mathf.Clamp01(progress))
+        : Mathf.Lerp(0.94f, _focusAwayRatio, Mathf.Clamp01(progress));
       _simulatedTracking = true;
 #endif
     }
@@ -398,10 +414,13 @@ namespace KeepBlinking.CareStation
       var input = ReadInputFrame(delta);
       ExecuteCueCommand(_cueGuard.PollReadyToOpen(input.ApplicationActive, input.TrackingValid));
       _runtime.Advance(delta, input);
+      UpdateAudioSuspension(input);
       if (previousPhase != InternalPhase)
         PlayPhaseTransition(previousPhase, InternalPhase, input.ApplicationActive, input.TrackingValid);
       Present(previousPhase != InternalPhase || previousStage != Stage);
       PlayGuidedNotesIfNeeded();
+      PlayPilotProgressIfNeeded();
+      UpdateClosedEyeAudio(delta, input);
       EmitCompletionIfReady();
     }
 
@@ -410,6 +429,7 @@ namespace KeepBlinking.CareStation
       if (_runtime != null && _runtime.TryConsumeCompletionSignal())
       {
         PlayCompletionCueOnce();
+        CareAudioFeedbackController.EnsureExists().StopActionAmbience();
         if (!IsDevelopmentTest) _gameplay?.SetCareActionActive(false);
         CareActionCompleted?.Invoke(ActionType);
         if (IsDevelopmentTest)
@@ -422,7 +442,6 @@ namespace KeepBlinking.CareStation
 
     private CareActionInputFrame ReadInputFrame(float delta)
     {
-      if (ActionType == CareActionType.ScreenDown && !_orientationCaptured) CaptureNeutralOrientation();
       var tracking = _gameplay != null && _gameplay.IsTrackingAvailable;
       var eyesClosed = _gameplay != null && _gameplay.AreEyesClosed;
       var referenceValid = false;
@@ -455,22 +474,13 @@ namespace KeepBlinking.CareStation
         distanceSampleDelta = delta;
       }
 #endif
-      SampleMotion(delta);
-      var sensorAvailable = SensorsAvailable && _orientationCaptured;
-      var screenDown = IsScreenDownAndStable();
-      var returned = IsReturnedAndStable();
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-      sensorAvailable |= _simulateScreenDown || _simulateReturn;
-      screenDown |= _simulateScreenDown;
-      returned |= _simulateReturn;
-#endif
       return new CareActionInputFrame(
         _applicationActive && _hasFocus,
         tracking,
         eyesClosed,
-        sensorAvailable,
-        screenDown,
-        returned,
+        false,
+        false,
+        false,
         referenceValid,
         distanceRatio,
         distanceSampleFresh,
@@ -480,11 +490,6 @@ namespace KeepBlinking.CareStation
     private void Present(bool force)
     {
       if (_runtime == null || _view == null) return;
-      if (ActionType == CareActionType.FocusShift && Stage == CareActionStage.Preparing)
-      {
-        _view.HideAllModals();
-        return;
-      }
       if (!force && _lastPresentedPhase == InternalPhase && _lastPresentedStage == Stage)
       {
         RenderCurrentAction();
@@ -507,13 +512,16 @@ namespace KeepBlinking.CareStation
         CurrentDistanceRatio,
         DirectionProgress,
         ExpectedDistanceDirection,
-        FocusStep);
-      _view.SetReturnFallbackAvailable(CanOfferDistanceFallback);
+        FocusCycle,
+        SaveData != null && SaveData.introWasRequested);
+      _view.RenderCareActionMotionData(SaveData);
+      // Formal Focus Shift is completed by the Session-baseline sensor path or
+      // replaced through CHANGE STEP. The old generic CONTINUE fallback stays
+      // hidden; F6 can still advance a development-only preview explicitly.
+      _view.SetReturnFallbackAvailable(false);
       _view.SetCareActionChangeAvailable(
-        !IsDevelopmentTest && IsRunning && ActionType != CareActionType.ClosedEyeRest);
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-      _view.SetCareActionSkipAvailable(CanSkipUnavailableScreenDown);
-#endif
+        !IsDevelopmentTest && IsRunning && _changeStepAllowed &&
+        ActionType != CareActionType.ClosedEyeRest);
     }
 
     private float CurrentDistanceRatio
@@ -529,22 +537,28 @@ namespace KeepBlinking.CareStation
 
     private void PrepareFocusReference(CareActionSaveData restore)
     {
-      _focusReferenceSampler = new CareDistanceReferenceSampler(
-        _gestureReferenceCaptureSeconds,
-        _gestureReferenceMinimumSamples);
       _lastGestureSampleSequence = long.MinValue;
       _hasSmoothedGestureFaceScale = false;
       _smoothedGestureFaceScale = 0f;
       _currentGestureRatio = 1f;
       _lastGestureFreshSampleAt = -1f;
       _rawGestureFaceScale = 0f;
-      if (restore != null && restore.gestureReferenceValid &&
-          _focusReferenceSampler.Restore(restore.gestureReferenceScale, true))
+      var restoredScale = restore != null && restore.gestureReferenceValid
+        ? restore.gestureReferenceScale
+        : _gameplay != null && _gameplay.BaselineFaceScale > 0f
+          ? _gameplay.BaselineFaceScale
+          : 0f;
+      if (CareDistanceReferenceSampler.IsValidScale(restoredScale))
       {
-        _runtime.Data.gestureReferenceScale = _focusReferenceSampler.ReferenceScale;
+        _runtime.Data.gestureReferenceScale = restoredScale;
         _runtime.Data.gestureReferenceValid = true;
-        _smoothedGestureFaceScale = _focusReferenceSampler.ReferenceScale;
+        _smoothedGestureFaceScale = restoredScale;
         _hasSmoothedGestureFaceScale = true;
+      }
+      else
+      {
+        _runtime.Data.gestureReferenceScale = 0f;
+        _runtime.Data.gestureReferenceValid = false;
       }
     }
 
@@ -563,39 +577,15 @@ namespace KeepBlinking.CareStation
       ratio = referenceValid ? _currentGestureRatio : 0f;
       if (!TryReadFreshFaceScale(out var scale, out var sequence))
       {
-        if (!tracking)
-        {
-          _lastGestureFreshSampleAt = -1f;
-          if (!referenceValid) _focusReferenceSampler?.Reset();
-        }
+        if (!tracking) _lastGestureFreshSampleAt = -1f;
         return;
       }
 
       _rawGestureFaceScale = scale;
-
-      if (!referenceValid && _runtime != null && _runtime.Data.focusTargetStep > 0 &&
-          _runtime.Data.phaseElapsedSeconds < _focusStepTransitionSeconds) return;
-
       if (!referenceValid)
       {
-        if (_focusReferenceSampler == null) PrepareFocusReference(null);
-        if (sequence != _lastGestureSampleSequence)
-        {
-          _lastGestureSampleSequence = sequence;
-          _focusFreshSamplesInStep++;
-          ObserveFocusScale(scale);
-        }
-        if (!_focusReferenceSampler.AddFreshSample(sequence, scale, Time.unscaledTime, tracking)) return;
-        _runtime.Data.gestureReferenceScale = _focusReferenceSampler.ReferenceScale;
-        _runtime.Data.gestureReferenceValid = true;
-        _smoothedGestureFaceScale = _focusReferenceSampler.ReferenceScale;
-        _hasSmoothedGestureFaceScale = true;
-        _lastGestureSampleSequence = sequence;
-        _lastGestureFreshSampleAt = Time.unscaledTime;
-        _currentGestureRatio = 1f;
-        referenceValid = true;
-        ratio = 1f;
-        sampleFresh = true;
+        // Focus Shift is deliberately not allowed to create an action-local
+        // origin. It waits for the Session baseline established by gameplay.
         return;
       }
 
@@ -653,7 +643,6 @@ namespace KeepBlinking.CareStation
       if (_runtime == null || _runtime.Data.gestureReferenceValid) return;
       _runtime.Data.gestureReferenceScale = 1f;
       _runtime.Data.gestureReferenceValid = true;
-      _focusReferenceSampler?.Restore(1f, true);
     }
 #endif
 
@@ -669,36 +658,49 @@ namespace KeepBlinking.CareStation
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         _simulatedDistanceRatio = null;
 #endif
-        PrepareFocusReference(null);
         _focusStepOpenedAt = Time.unscaledTime;
         _focusFreshSamplesInStep = 0;
         ResetFocusScaleObservation();
       }
       else if (ActionType == CareActionType.FocusShift &&
                (current == CareActionInternalPhase.FocusNearOne ||
-                current == CareActionInternalPhase.FocusFarOne ||
-                current == CareActionInternalPhase.FocusNearTwo ||
-                current == CareActionInternalPhase.FocusFarTwo))
+                current == CareActionInternalPhase.FocusFarOne))
       {
         _focusStepOpenedAt = Time.unscaledTime;
         _focusFreshSamplesInStep = 0;
         ResetFocusScaleObservation();
       }
-      if (previous == CareActionInternalPhase.ScreenDownRest && current == CareActionInternalPhase.ScreenDownReturn)
-      {
-        audio.PlayGuidedCompletion();
-        _completionCuePlayed = true;
-      }
       ExecuteCueCommand(_cueGuard.ObservePhase(ActionType, current));
       ExecuteCueCommand(_cueGuard.PollReadyToOpen(applicationActive, trackingValid));
+      PlayPhaseNarration(previous, current);
       if (current == CareActionInternalPhase.GuidedPause)
         audio.PlayGuidedCenterPause();
-      else if (ActionType == CareActionType.FocusShift && previous != CareActionInternalPhase.None)
-        audio.PlayStepComplete();
+      else if (ActionType == CareActionType.FocusShift && previous != CareActionInternalPhase.None &&
+               (current == CareActionInternalPhase.FocusReference ||
+                current == CareActionInternalPhase.FocusNeutralFinish))
+      {
+        var completedDirection = ExpectedDistanceDirection == CareDistanceDirection.Closer
+          ? CareDistanceDirection.Away
+          : CareDistanceDirection.Closer;
+        _view?.PlayFocusLegFeedback(completedDirection);
+        if (completedDirection == CareDistanceDirection.Closer) audio.PlayFocusCloser();
+        else
+        {
+          audio.PlayFocusAway();
+          audio.PlayFocusCycle();
+        }
+        StartCoroutine(PlayLightHapticPulses(1));
+      }
       if (current == CareActionInternalPhase.GuidedClockwise || current == CareActionInternalPhase.GuidedCounterClockwise)
       {
         _lastGuidedNote = -1;
         StartCoroutine(PlayHapticPulses(current == CareActionInternalPhase.GuidedCounterClockwise ? 2 : 1));
+      }
+      if (ActionType == CareActionType.PilotEyeRoutine && current == CareActionInternalPhase.PilotTransition &&
+          !_completionCuePlayed)
+      {
+        _completionCuePlayed = true;
+        audio.PlayPilotCompletion();
       }
     }
 
@@ -709,12 +711,77 @@ namespace KeepBlinking.CareStation
         ? _guidedClockwiseSeconds
         : InternalPhase == CareActionInternalPhase.GuidedCounterClockwise ? _guidedCounterClockwiseSeconds : 0f;
       if (duration <= 0f) return;
-      var note = Mathf.Clamp(Mathf.FloorToInt(SaveData.phaseElapsedSeconds / duration * 8f), 0, 7);
+      var audio = CareAudioFeedbackController.EnsureExists();
+      if (SaveData.guidedLapCount > _lastGuidedLap)
+      {
+        _lastGuidedLap = SaveData.guidedLapCount;
+        if (_lastGuidedLap > 0) audio.PlayGuidedLap();
+      }
+      var note = Mathf.Clamp(Mathf.FloorToInt(Mathf.Repeat(SaveData.phaseElapsedSeconds, duration) /
+        duration * 8f), 0, 7);
       if (note == _lastGuidedNote) return;
       _lastGuidedNote = note;
-      var audio = CareAudioFeedbackController.EnsureExists();
       if (InternalPhase == CareActionInternalPhase.GuidedClockwise) audio.PlayGuidedClockwiseNote(note, 8);
       else audio.PlayGuidedCounterClockwiseNote(note, 8);
+    }
+
+    private void PlayPilotProgressIfNeeded()
+    {
+      if (ActionType != CareActionType.PilotEyeRoutine || SaveData == null ||
+          Stage != CareActionStage.Active || !IsPilotAxisPhase(InternalPhase)) return;
+      if (SaveData.pilotCurrentAxis != _lastPilotAxis || SaveData.pilotCurrentRound != _lastPilotRound)
+      {
+        if (_lastPilotAxis >= 0 && SaveData.pilotCurrentAxis > _lastPilotAxis)
+          CareAudioFeedbackController.EnsureExists().PlayPilotAxis();
+        _lastPilotAxis = SaveData.pilotCurrentAxis;
+        _lastPilotRound = SaveData.pilotCurrentRound;
+        _lastPilotEndpoint = -1;
+        if (SaveData.pilotCurrentRound == 0 && SaveData.pilotCurrentAxis >= 0 &&
+            SaveData.pilotCurrentAxis < 4)
+        {
+          var axisLines = new[]
+          {
+            "LOOK UP AND DOWN.",
+            "LOOK LEFT AND RIGHT.",
+            "LOOK UPPER LEFT AND LOWER RIGHT.",
+            "LOOK LOWER LEFT AND UPPER RIGHT.",
+          };
+          SpeakEventOnce(2000 + SaveData.pilotCurrentAxis,
+            $"pilot-axis-{SaveData.pilotCurrentAxis}", axisLines[SaveData.pilotCurrentAxis], 3.2f);
+        }
+      }
+      if (SaveData.pilotCurrentEndpoint == _lastPilotEndpoint) return;
+      _lastPilotEndpoint = SaveData.pilotCurrentEndpoint;
+      if (_lastPilotEndpoint <= 0 || _lastPilotEndpoint == 2 || _lastPilotEndpoint == 4)
+      {
+        CareAudioFeedbackController.EnsureExists().PlayPilotCenter();
+      }
+      else
+      {
+        var secondHalf = _lastPilotEndpoint >= 3;
+        var directionIndex = SaveData.pilotCurrentAxis * 2 + (secondHalf ? 1 : 0);
+        CareAudioFeedbackController.EnsureExists().PlayPilotDirection(
+          Mathf.Clamp(directionIndex, 0, 7));
+        var directionLines = new[]
+        {
+          "UP.", "DOWN.", "LEFT.", "RIGHT.",
+          "UPPER LEFT.", "LOWER RIGHT.", "LOWER LEFT.", "UPPER RIGHT.",
+        };
+        var eventId = 3000 + SaveData.pilotCurrentAxis * 100 + SaveData.pilotCurrentRound * 10 +
+                      _lastPilotEndpoint;
+        SpeakSynchronizedDirectionEventOnce(
+          eventId,
+          $"pilot-direction-{directionIndex}",
+          directionLines[directionIndex]);
+      }
+    }
+
+    private static bool IsPilotAxisPhase(CareActionInternalPhase phase)
+    {
+      return phase == CareActionInternalPhase.PilotVertical ||
+             phase == CareActionInternalPhase.PilotHorizontal ||
+             phase == CareActionInternalPhase.PilotDiagonalA ||
+             phase == CareActionInternalPhase.PilotDiagonalB;
     }
 
     private void PlayCompletionCueOnce()
@@ -725,11 +792,23 @@ namespace KeepBlinking.CareStation
         // only covers a restored completed action whose signal was not yet
         // consumed; the guard prevents any duplicate cue.
         ExecuteCueCommand(_cueGuard.PollReadyToOpen(true, true));
+        if (ActionType == CareActionType.GuidedEyeCircles)
+          SpeakOnce(VoiceComplete, "guided-complete", "GUIDED MOVEMENT COMPLETE.", 2.5f,
+            CareVoicePriority.Completion);
         return;
       }
       if (_completionCuePlayed) return;
       _completionCuePlayed = true;
-      CareAudioFeedbackController.EnsureExists().PlayStepComplete();
+      if (ActionType == CareActionType.FocusShift)
+      {
+        CareAudioFeedbackController.EnsureExists().PlayFocusCompletion();
+        SpeakOnce(VoiceComplete, "focus-complete", "FOCUS SHIFT COMPLETE.", 2.5f,
+          CareVoicePriority.Completion);
+      }
+      else if (ActionType == CareActionType.PilotEyeRoutine)
+        CareAudioFeedbackController.EnsureExists().PlayPilotCompletion();
+      else
+        CareAudioFeedbackController.EnsureExists().PlayStepComplete();
     }
 
     private void ExecuteCueCommand(CareActionCueCommand command)
@@ -743,9 +822,190 @@ namespace KeepBlinking.CareStation
       if ((command & CareActionCueCommand.ReadyToOpen) != 0)
       {
         _completionCuePlayed = true;
-        CareAudioFeedbackController.EnsureExists().PlayGuidedCompletion();
+        if (_runtime?.Data != null)
+        {
+          _runtime.Data.readyToOpenCuePlayed = true;
+          if (ActionType == CareActionType.GuidedEyeCircles) _runtime.Data.guidedOpenCuePlayed = true;
+        }
+        if (ActionType == CareActionType.GuidedEyeCircles)
+        {
+          CareAudioFeedbackController.EnsureExists().PlayGuidedOpen();
+          SpeakOnce(VoiceReadyOpen, "guided-ready-open",
+            "REST COMPLETE. GENTLY OPEN YOUR EYES.", 3.4f, CareVoicePriority.Completion);
+        }
+        else
+        {
+          CareAudioFeedbackController.EnsureExists().PlayRestOpen();
+          if (_runtime?.Data != null && !_runtime.Data.restCompletionVoicePlayed)
+          {
+            _runtime.Data.restCompletionVoicePlayed = true;
+            SpeakOnce(VoiceReadyOpen, "rest-ready-open",
+              "REST COMPLETE. GENTLY OPEN YOUR EYES.", 3.4f, CareVoicePriority.Completion);
+          }
+        }
         StartCoroutine(PlayLightHapticPulses(1));
       }
+    }
+
+    private void PlayActionIntroNarration(CareActionType type)
+    {
+      switch (type)
+      {
+        case CareActionType.FocusShift:
+          SpeakOnce(VoiceIntro, "focus-intro",
+            "KEEP YOUR HEAD STILL. MOVE THE PHONE, NOT YOUR HEAD.", 4.2f);
+          break;
+        case CareActionType.GuidedEyeCircles:
+          SpeakOnce(VoiceIntro, "guided-intro",
+            "KEEP YOUR HEAD STILL. FOLLOW THE DOT WITH YOUR EYES.", 4.2f);
+          break;
+        case CareActionType.PilotEyeRoutine:
+          SpeakOnce(VoiceIntro, "pilot-intro",
+            "KEEP YOUR HEAD STILL. MOVE ONLY YOUR EYES.", 3.8f);
+          break;
+        case CareActionType.ClosedEyeRest:
+          SpeakOnce(VoiceClose, "rest-intro", "GENTLY CLOSE YOUR EYES.", 2.5f);
+          break;
+      }
+    }
+
+    private void PlayPhaseNarration(CareActionInternalPhase previous, CareActionInternalPhase current)
+    {
+      if (!_enableCareVoice || SaveData == null || previous == current) return;
+      switch (current)
+      {
+        case CareActionInternalPhase.FocusNearOne:
+        case CareActionInternalPhase.FocusFarOne:
+          var direction = ExpectedDistanceDirection;
+          var firstCycle = SaveData.focusTargetStep < 2;
+          var focusText = direction == CareDistanceDirection.Closer
+            ? firstCycle ? "SLOWLY MOVE THE PHONE CLOSER." : "MOVE CLOSER."
+            : firstCycle ? "SLOWLY MOVE THE PHONE AWAY." : "MOVE AWAY.";
+          SpeakEventOnce(1000 + SaveData.focusTargetStep,
+            direction == CareDistanceDirection.Closer ? "focus-closer" : "focus-away",
+            focusText, firstCycle ? 2.9f : 1.5f);
+          break;
+        case CareActionInternalPhase.FocusNeutralFinish:
+          SpeakOnce(VoiceReturn, "focus-return", "RETURN TO A COMFORTABLE DISTANCE.", 3f);
+          break;
+        case CareActionInternalPhase.GuidedClockwise:
+          SpeakOnce(VoiceClockwise, "guided-clockwise", "FOLLOW CLOCKWISE. THREE SLOW CIRCLES.", 3.6f);
+          break;
+        case CareActionInternalPhase.GuidedPause:
+          SpeakOnce(VoiceCenter, "guided-center", "RETURN TO CENTER.", 2f);
+          break;
+        case CareActionInternalPhase.GuidedCounterClockwise:
+          SpeakOnce(VoiceCounterClockwise, "guided-counterclockwise",
+            "NOW COUNTERCLOCKWISE. THREE SLOW CIRCLES.", 3.8f);
+          break;
+        case CareActionInternalPhase.GuidedPromptClose:
+          SpeakOnce(VoiceClose, "guided-close", "GENTLY CLOSE YOUR EYES AND RELAX.", 3.2f);
+          break;
+        case CareActionInternalPhase.ClosedEyePrompt:
+          SpeakOnce(VoiceClose, "rest-close", "GENTLY CLOSE YOUR EYES.", 2.5f);
+          break;
+        case CareActionInternalPhase.PilotTransition:
+          SpeakOnce(VoiceComplete, "pilot-complete",
+            "PILOT ROUTINE COMPLETE. NOW FOLLOW THE CIRCULAR GUIDE.", 4.6f,
+            CareVoicePriority.Completion);
+          break;
+      }
+    }
+
+    private void SpeakOnce(
+      int mask,
+      string cueKey,
+      string text,
+      float estimatedSeconds,
+      CareVoicePriority priority = CareVoicePriority.Instruction)
+    {
+      if (!_enableCareVoice || SaveData == null || (SaveData.consumedVoiceCueMask & mask) != 0) return;
+      SaveData.consumedVoiceCueMask |= mask;
+      CareVoiceService.EnsureExists().Speak(cueKey, text, estimatedSeconds, priority);
+    }
+
+    private void SpeakEventOnce(
+      int eventId,
+      string cueKey,
+      string text,
+      float estimatedSeconds,
+      CareVoicePriority priority = CareVoicePriority.Instruction)
+    {
+      if (!_enableCareVoice || SaveData == null || SaveData.lastVoiceEventId == eventId) return;
+      SaveData.lastVoiceEventId = eventId;
+      CareVoiceService.EnsureExists().Speak(cueKey, text, estimatedSeconds, priority);
+    }
+
+    private void SpeakSynchronizedDirectionEventOnce(int eventId, string cueKey, string text)
+    {
+      if (!_enableCareVoice || SaveData == null || SaveData.lastVoiceEventId == eventId) return;
+      SaveData.lastVoiceEventId = eventId;
+      CareVoiceService.EnsureExists().SpeakSynchronizedDirection(cueKey, text, 0.55f);
+    }
+
+    private static bool IsVoicePauseReason(CareActionPauseReason reason)
+    {
+      return reason == CareActionPauseReason.ApplicationBackground ||
+             reason == CareActionPauseReason.ApplicationFocusLost ||
+             reason == CareActionPauseReason.Manual ||
+             reason == CareActionPauseReason.TrackingLost;
+    }
+
+    private void UpdateAudioSuspension(CareActionInputFrame input)
+    {
+      var voicePaused = !input.ApplicationActive || IsVoicePauseReason(PauseReason);
+      var ambiencePaused = voicePaused || Stage == CareActionStage.Paused;
+      CareAudioFeedbackController.EnsureExists().SetActionAudioPaused(ambiencePaused);
+      // Eyes-open pauses keep narration available for the gentle continue
+      // reminder; tracking and application pauses silence every channel.
+      CareVoiceService.EnsureExists().SetPaused(voicePaused);
+    }
+
+    private void UpdateClosedEyeAudio(float delta, CareActionInputFrame input)
+    {
+      if (ActionType != CareActionType.ClosedEyeRest || SaveData == null) return;
+      SaveData.restEarlyOpenVoiceCooldown = Mathf.Max(0f, _nextEarlyOpenVoiceAt - Time.unscaledTime);
+      var audio = CareAudioFeedbackController.EnsureExists();
+      if (InternalPhase == CareActionInternalPhase.ClosedEyeActive && Stage == CareActionStage.Active)
+      {
+        audio.StartClosedEyeMusic();
+        _eyesOpenPausedSeconds = 0f;
+        if (!SaveData.restBenefitVoicePlayed && SaveData.elapsedSeconds >= 2f)
+        {
+          SaveData.restBenefitVoicePlayed = true;
+          SpeakOnce(VoiceBenefit, "rest-benefit", "LET YOUR EYES REST FROM THE SCREEN.", 3.2f);
+        }
+        var configuredDuration = SaveData.elapsedSeconds + RemainingSeconds;
+        if ((SaveData.consumedVoiceCueMask & VoiceMiddle) == 0 && configuredDuration > 0f &&
+            SaveData.elapsedSeconds >= configuredDuration * 0.5f)
+        {
+          SpeakOnce(VoiceMiddle, "rest-middle",
+            "KEEP YOUR EYES GENTLY CLOSED. RELAX YOUR FOREHEAD AND SHOULDERS.", 4.8f);
+        }
+        if (_enableRestAlmostCompleteVoice && !SaveData.restAlmostCompleteVoicePlayed && RemainingSeconds <= 10f)
+        {
+          SaveData.restAlmostCompleteVoicePlayed = true;
+          SpeakOnce(VoiceAlmost, "rest-almost", "YOU ARE ALMOST DONE.", 2.4f);
+        }
+        return;
+      }
+      if (Stage == CareActionStage.Paused && PauseReason == CareActionPauseReason.EyesOpen &&
+          input.TrackingValid)
+      {
+        _eyesOpenPausedSeconds += delta;
+        if (_eyesOpenPausedSeconds >= 1.5f && Time.unscaledTime >= _nextEarlyOpenVoiceAt)
+        {
+          _nextEarlyOpenVoiceAt = Time.unscaledTime + 8f;
+          SaveData.restEarlyOpenVoiceCooldown = 8f;
+          _eyesOpenPausedSeconds = 0f;
+          CareVoiceService.EnsureExists().Speak("rest-continue", "CLOSE YOUR EYES TO CONTINUE.", 2.5f);
+        }
+      }
+      else if (PauseReason == CareActionPauseReason.TrackingLost)
+      {
+        _eyesOpenPausedSeconds = 0f;
+      }
+      if (Stage == CareActionStage.Completed) audio.StopClosedEyeMusic();
     }
 
     private System.Collections.IEnumerator PlayHapticPulses(int count)
@@ -774,14 +1034,12 @@ namespace KeepBlinking.CareStation
 #endif
     }
 
-    private CareActionConfiguration BuildConfiguration(float closedEyeDurationOverride = 0f)
+    private CareActionConfiguration BuildConfiguration(float closedEyeDurationOverride = 0f, bool showIntro = false)
     {
       return new CareActionConfiguration
       {
-        screenDownDemoSeconds = _screenDownDemoSeconds,
-        screenDownDurationSeconds = _screenDownSeconds,
-        screenDownHoldSeconds = _screenDownHoldSeconds,
-        screenReturnHoldSeconds = _returnHoldSeconds,
+        showIntro = showIntro,
+        actionIntroSeconds = _actionIntroSeconds,
         closedEyeDurationSeconds = closedEyeDurationOverride > 0f
           ? Mathf.Clamp(closedEyeDurationOverride, 1f, 180f)
           : _closedEyeRestSeconds,
@@ -792,11 +1050,25 @@ namespace KeepBlinking.CareStation
         distanceStepHoldSeconds = _distanceStepHoldSeconds,
         distanceProgressFallSeconds = _distanceProgressFallSeconds,
         focusStepTransitionSeconds = _focusStepTransitionSeconds,
+        focusNeutralMinimum = _focusNeutralMinimum,
+        focusNeutralMaximum = _focusNeutralMaximum,
+        focusCloserRatio = _focusCloserRatio,
+        focusAwayRatio = _focusAwayRatio,
+        focusTooCloseRatio = _focusTooCloseRatio,
+        focusTargetHoldSeconds = _focusTargetHoldSeconds,
+        focusMinimumLegSeconds = _focusMinimumLegSeconds,
+        focusDirectionIntervalSeconds = _focusDirectionIntervalSeconds,
+        focusCycleCount = _focusCycleCount,
         guidedPreviewSeconds = _guidedPreviewSeconds,
         guidedClockwiseSeconds = _guidedClockwiseSeconds,
         guidedPauseSeconds = _guidedPauseSeconds,
         guidedCounterClockwiseSeconds = _guidedCounterClockwiseSeconds,
         guidedRelaxSeconds = _guidedRelaxSeconds,
+        guidedLapsPerDirection = _guidedLapsPerDirection,
+        pilotIntroSeconds = _pilotIntroSeconds,
+        pilotRoundSeconds = _pilotRoundSeconds,
+        pilotRoundsPerAxis = _pilotRoundsPerAxis,
+        pilotTransitionSeconds = _pilotTransitionSeconds,
       };
     }
 
@@ -813,135 +1085,41 @@ namespace KeepBlinking.CareStation
       _focusObservedMaximum = float.NegativeInfinity;
     }
 
-    private void CaptureNeutralOrientation()
-    {
-      ResolveSensors();
-      _orientationCaptured = false;
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-      if (_simulateScreenDown || _simulateReturn)
-      {
-        _initialDeviceGravity = Vector3.back;
-        _deviceGravity = Vector3.back;
-        _previousDeviceGravity = Vector3.back;
-        _orientationCaptured = true;
-        return;
-      }
-#endif
-      if (!SensorsAvailable) return;
-      var gravity = ReadGravity();
-      var acceleration = ReadAccelerationMagnitude();
-      if (gravity.sqrMagnitude <= 0.0001f || acceleration <= 0.01f) return;
-      _initialDeviceGravity = gravity.normalized;
-      _deviceGravity = _initialDeviceGravity;
-      _previousDeviceGravity = _initialDeviceGravity;
-      _orientationCaptured = true;
-    }
-
-    private void ResolveSensors()
-    {
-      _gravitySensor = GravitySensor.current;
-      _accelerometer = Accelerometer.current;
-      _gyroscope = UnityEngine.InputSystem.Gyroscope.current;
-      Enable(_gravitySensor);
-      Enable(_accelerometer);
-      Enable(_gyroscope);
-    }
-
-    private bool SensorsAvailable => _gravitySensor != null || _accelerometer != null;
-
-    private static void Enable(InputDevice sensor)
-    {
-      if (sensor != null && !sensor.enabled) InputSystem.EnableDevice(sensor);
-    }
-
-    /// <summary>
-    /// Sampled once per frame so both judgements below share one reading and the no-gyroscope
-    /// fallback always compares against the previous frame. See <see cref="ScreenDownRestMotionLogic"/>
-    /// for why this works on device-space gravity instead of the attitude sensor.
-    /// </summary>
-    private void SampleMotion(float delta)
-    {
-      var gravity = ReadGravity();
-      if (gravity.sqrMagnitude > 0.0001f)
-      {
-        _deviceGravity = gravity.normalized;
-        _angularSpeed = _gyroscope != null
-          ? _gyroscope.angularVelocity.ReadValue().magnitude
-          : ScreenDownRestMotionLogic.AngularSpeedFromGravity(_previousDeviceGravity, _deviceGravity, delta);
-        _previousDeviceGravity = _deviceGravity;
-      }
-      _accelerationMagnitude = ReadAccelerationMagnitude();
-    }
-
-    private bool IsScreenDownAndStable()
-    {
-      if (!_orientationCaptured || !SensorsAvailable) return false;
-      return ScreenDownRestMotionLogic.IsScreenDown(_deviceGravity, _groundAlignmentDegrees) && IsStable();
-    }
-
-    private bool IsReturnedAndStable()
-    {
-      if (!_orientationCaptured || !SensorsAvailable) return false;
-      return ScreenDownRestMotionLogic.IsReturned(_initialDeviceGravity, _deviceGravity, _returnAngleDegrees) &&
-             IsStable();
-    }
-
-    private bool IsStable()
-    {
-      return ScreenDownRestMotionLogic.IsStable(
-        _accelerationMagnitude,
-        _accelerationTolerance,
-        _angularSpeed,
-        _maximumGyroRadiansPerSecond);
-    }
-
-    private Vector3 ReadGravity()
-    {
-      if (_gravitySensor != null) return _gravitySensor.gravity.ReadValue();
-      if (_accelerometer != null) return _accelerometer.acceleration.ReadValue();
-      return Vector3.zero;
-    }
-
-    private float ReadAccelerationMagnitude()
-    {
-      if (_accelerometer != null) return _accelerometer.acceleration.ReadValue().magnitude;
-      if (_gravitySensor != null) return _gravitySensor.gravity.ReadValue().magnitude;
-      return 0f;
-    }
-
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
     private void PollDevelopmentKeys()
     {
       var keyboard = Keyboard.current;
       if (keyboard == null) return;
-      if (keyboard.f11Key.wasPressedThisFrame)
-        SimulateScreenPose(!(keyboard.leftShiftKey.isPressed || keyboard.rightShiftKey.isPressed));
       if (keyboard.bKey.wasPressedThisFrame)
         SimulateEyesClosed(!(keyboard.leftShiftKey.isPressed || keyboard.rightShiftKey.isPressed));
-      if (keyboard.sKey.wasPressedThisFrame)
-        TrySkipUnavailableScreenDownForDevelopment();
     }
 #endif
-
-    private void OnDestroy()
-    {
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-      if (_view != null) _view.SkipCareStepSelected -= HandleSkipCareStepSelected;
-#endif
-    }
 
     private void OnApplicationPause(bool paused)
     {
       _applicationActive = !paused;
       if (paused && IsRunning)
+      {
+        CareAudioFeedbackController.EnsureExists().SetActionAudioPaused(true);
+        CareVoiceService.EnsureExists().SetPaused(true);
         _runtime.Suspend(CareActionPauseReason.ApplicationBackground);
+      }
+      // Do not unpause here. The next action update must first validate the
+      // current tracking/eye state and then release audio through
+      // UpdateAudioSuspension; otherwise foregrounding can leak one frame.
     }
 
     private void OnApplicationFocus(bool focused)
     {
       _hasFocus = focused;
       if (!focused && IsRunning)
+      {
+        CareAudioFeedbackController.EnsureExists().SetActionAudioPaused(true);
+        CareVoiceService.EnsureExists().SetPaused(true);
         _runtime.Suspend(CareActionPauseReason.ApplicationFocusLost);
+      }
+      // As with application resume, the first valid action frame owns the
+      // audio resume decision.
     }
   }
 }
