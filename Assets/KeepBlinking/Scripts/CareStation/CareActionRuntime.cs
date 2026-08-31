@@ -138,9 +138,18 @@ namespace KeepBlinking.CareStation
                                   ActionType == CareActionType.GuidedEyeCircles;
     public bool RequiresDevicePose => false;
     public string DisplayName => DisplayNameFor(ActionType);
-    public string Prompt => Stage == CareActionStage.Completed || Stage == CareActionStage.Cancelled
-      ? string.Empty
-      : PromptFor(Phase, PauseReason);
+    public string Prompt
+    {
+      get
+      {
+        if (Stage == CareActionStage.Completed || Stage == CareActionStage.Cancelled) return string.Empty;
+        var prompt = PromptFor(Phase, PauseReason);
+        if (ActionType != CareActionType.FocusShift || PauseReason != CareActionPauseReason.None ||
+            !IsFocusMovementPhase(Phase) || !FocusTargetReached) return prompt;
+        if (!_data.focusRearmed) return "RETURN TO CENTER";
+        return $"HOLD\n{Mathf.RoundToInt(FocusConfirmationProgress * 100f)}%";
+      }
+    }
     public float Progress => CalculateProgress();
     public float RemainingSeconds => CalculateRemainingSeconds();
     public int RemainingSteps => ActionType == CareActionType.FocusShift
@@ -154,6 +163,24 @@ namespace KeepBlinking.CareStation
           : 0;
     public float DirectionProgress => ActionType == CareActionType.FocusShift && _data != null
       ? Mathf.Clamp01(_data.distanceDirectionProgress)
+      : 0f;
+    public float FocusLegElapsedSeconds => ActionType == CareActionType.FocusShift && _data != null &&
+                                           IsFocusMovementPhase(Phase)
+      ? Mathf.Max(0f, _data.phaseElapsedSeconds)
+      : 0f;
+    public float FocusMinimumLegSeconds => Mathf.Max(0f, _config.focusMinimumLegSeconds);
+    public float FocusTargetHoldSeconds => Mathf.Max(0f, _config.focusTargetHoldSeconds);
+    public bool FocusTargetReached => ActionType == CareActionType.FocusShift && _data != null &&
+                                      IsFocusMovementPhase(Phase) && DirectionProgress >= 1f;
+    public bool FocusPaceReady => FocusLegElapsedSeconds >= FocusMinimumLegSeconds;
+    public float FocusHoldProgress => FocusTargetHoldSeconds <= 0f
+      ? 1f
+      : Mathf.Clamp01((_data != null ? _data.holdElapsedSeconds : 0f) / FocusTargetHoldSeconds);
+    public float FocusPaceProgress => FocusMinimumLegSeconds <= 0f
+      ? 1f
+      : Mathf.Clamp01(FocusLegElapsedSeconds / FocusMinimumLegSeconds);
+    public float FocusConfirmationProgress => FocusTargetReached && _data.focusRearmed
+      ? Mathf.Min(FocusHoldProgress, FocusPaceProgress)
       : 0f;
     public CareDistanceDirection ExpectedDistanceDirection => ActionType == CareActionType.FocusShift
       ? DirectionForFocusStep(_data != null ? _data.focusTargetStep : 0)
@@ -477,11 +504,14 @@ namespace KeepBlinking.CareStation
         ? Mathf.InverseLerp(_config.focusNeutralMaximum, _config.focusCloserRatio, ratio)
         : Mathf.InverseLerp(_config.focusNeutralMinimum, _config.focusAwayRatio, ratio);
       _data.distanceDirectionProgress = Mathf.Clamp01(progress);
-      var paceReady = _data.phaseElapsedSeconds >= _config.focusMinimumLegSeconds;
-      _data.holdElapsedSeconds = targetReached && paceReady && _data.focusRearmed
+      // The stable hold and minimum movement rhythm are independent gates. Accumulating
+      // both from the leg start confirms at max(minimumLeg, targetReachedAt + hold)
+      // instead of imposing minimumLeg + hold serially on an early arrival.
+      _data.holdElapsedSeconds = targetReached && _data.focusRearmed
         ? _data.holdElapsedSeconds + sampleDelta
         : 0f;
-      if (_data.holdElapsedSeconds >= _config.focusTargetHoldSeconds)
+      if (_data.phaseElapsedSeconds >= _config.focusMinimumLegSeconds &&
+          _data.holdElapsedSeconds >= _config.focusTargetHoldSeconds)
         CompleteFocusTarget();
     }
 
@@ -856,6 +886,14 @@ namespace KeepBlinking.CareStation
         : CareActionInternalPhase.FocusFarOne;
     }
 
+    private static bool IsFocusMovementPhase(CareActionInternalPhase phase)
+    {
+      return phase == CareActionInternalPhase.FocusNearOne ||
+             phase == CareActionInternalPhase.FocusNearTwo ||
+             phase == CareActionInternalPhase.FocusFarOne ||
+             phase == CareActionInternalPhase.FocusFarTwo;
+    }
+
     private static CareDistanceDirection DirectionForFocusStep(int step)
     {
       return (step & 1) == 0 ? CareDistanceDirection.Closer : CareDistanceDirection.Away;
@@ -897,7 +935,7 @@ namespace KeepBlinking.CareStation
       if (reason == CareActionPauseReason.TrackingLost) return "TRACKING LOST";
       if (reason == CareActionPauseReason.SensorUnavailable || reason == CareActionPauseReason.DistanceUnavailable)
         return "SENSOR UNAVAILABLE";
-      if (reason == CareActionPauseReason.TooClose) return "MOVE AWAY";
+      if (reason == CareActionPauseReason.TooClose) return "TOO CLOSE\nMOVE AWAY";
       if (reason == CareActionPauseReason.ApplicationBackground || reason == CareActionPauseReason.ApplicationFocusLost ||
           reason == CareActionPauseReason.Manual) return "PAUSED";
       switch (phase)

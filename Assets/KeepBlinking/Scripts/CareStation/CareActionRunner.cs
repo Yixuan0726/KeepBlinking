@@ -190,6 +190,13 @@ namespace KeepBlinking.CareStation
     public float CurrentGestureFaceScale => _hasSmoothedGestureFaceScale ? _smoothedGestureFaceScale : 0f;
     public float RawGestureFaceScale => _rawGestureFaceScale;
     public float FocusStableSeconds => SaveData != null ? SaveData.holdElapsedSeconds : 0f;
+    public float FocusTargetHoldSeconds => _runtime?.FocusTargetHoldSeconds ?? _focusTargetHoldSeconds;
+    public float FocusLegElapsedSeconds => _runtime?.FocusLegElapsedSeconds ?? 0f;
+    public float FocusMinimumLegSeconds => _runtime?.FocusMinimumLegSeconds ?? _focusMinimumLegSeconds;
+    public float FocusConfirmationProgress => _runtime?.FocusConfirmationProgress ?? 0f;
+    public bool FocusTargetReached => _runtime != null && _runtime.FocusTargetReached;
+    public bool FocusPaceReady => _runtime != null && _runtime.FocusPaceReady;
+    public bool FocusTooClose => PauseReason == CareActionPauseReason.TooClose;
     public int FocusStep => SaveData != null ? SaveData.focusTargetStep : 0;
     public int FocusCycle => SaveData != null ? SaveData.focusCycleCount : 0;
     public bool FocusRearmed => SaveData != null && SaveData.focusRearmed;
@@ -219,9 +226,13 @@ namespace KeepBlinking.CareStation
       {
         if (ActionType != CareActionType.FocusShift || !IsRunning) return "INACTIVE";
         if (PauseReason == CareActionPauseReason.TrackingLost) return "TRACKING LOST";
+        if (PauseReason == CareActionPauseReason.TooClose) return "TOO CLOSE";
         if (InternalPhase == CareActionInternalPhase.FocusReference) return "REARMING";
         if (DistanceSensorUnavailable) return "SENSOR UNAVAILABLE";
-        if (FocusStableSeconds > 0f) return "STABILIZING";
+        if (FocusTargetReached && !FocusRearmed) return "WAITING FOR NEUTRAL";
+        if (FocusTargetReached && FocusStableSeconds >= FocusTargetHoldSeconds && !FocusPaceReady)
+          return "HOLD COMPLETE / PACING";
+        if (FocusTargetReached) return "HOLDING";
         if (DirectionProgress <= 0f) return "DEAD ZONE";
         return ExpectedDistanceDirection == CareDistanceDirection.Closer ? "MOVING CLOSER" : "MOVING AWAY";
       }
@@ -249,12 +260,20 @@ namespace KeepBlinking.CareStation
       CareActionSaveData restore = null,
       bool developmentTest = false,
       float closedEyeDurationOverride = 0f,
-      bool showIntro = false)
+      bool showIntro = false,
+      int focusCycleCountOverride = 0,
+      int guidedLapsOverride = 0,
+      int pilotRoundsOverride = 0)
     {
       if (type == CareActionType.None || CareActionLibrary.IsRetiredTask(type) || IsRunning) return false;
       IsDevelopmentTest = developmentTest;
       _runtime = new CareActionRuntime();
-      _runtime.Begin(type, BuildConfiguration(closedEyeDurationOverride, showIntro), restore);
+      _runtime.Begin(type, BuildConfiguration(
+        closedEyeDurationOverride,
+        showIntro,
+        focusCycleCountOverride,
+        guidedLapsOverride,
+        pilotRoundsOverride), restore);
       _lastPresentedPhase = CareActionInternalPhase.None;
       _lastPresentedStage = CareActionStage.Cancelled;
       _lastGuidedNote = -1;
@@ -291,6 +310,11 @@ namespace KeepBlinking.CareStation
       if (showIntro) PlayActionIntroNarration(type);
       else PlayPhaseNarration(CareActionInternalPhase.None, InternalPhase);
       return true;
+    }
+
+    public void PlayRoutineStepRewardHaptic()
+    {
+      if (isActiveAndEnabled) StartCoroutine(PlayLightHapticPulses(1));
     }
 
     public void CancelAction()
@@ -1034,7 +1058,12 @@ namespace KeepBlinking.CareStation
 #endif
     }
 
-    private CareActionConfiguration BuildConfiguration(float closedEyeDurationOverride = 0f, bool showIntro = false)
+    private CareActionConfiguration BuildConfiguration(
+      float closedEyeDurationOverride = 0f,
+      bool showIntro = false,
+      int focusCycleCountOverride = 0,
+      int guidedLapsOverride = 0,
+      int pilotRoundsOverride = 0)
     {
       return new CareActionConfiguration
       {
@@ -1058,16 +1087,16 @@ namespace KeepBlinking.CareStation
         focusTargetHoldSeconds = _focusTargetHoldSeconds,
         focusMinimumLegSeconds = _focusMinimumLegSeconds,
         focusDirectionIntervalSeconds = _focusDirectionIntervalSeconds,
-        focusCycleCount = _focusCycleCount,
+        focusCycleCount = focusCycleCountOverride > 0 ? focusCycleCountOverride : _focusCycleCount,
         guidedPreviewSeconds = _guidedPreviewSeconds,
         guidedClockwiseSeconds = _guidedClockwiseSeconds,
         guidedPauseSeconds = _guidedPauseSeconds,
         guidedCounterClockwiseSeconds = _guidedCounterClockwiseSeconds,
         guidedRelaxSeconds = _guidedRelaxSeconds,
-        guidedLapsPerDirection = _guidedLapsPerDirection,
+        guidedLapsPerDirection = guidedLapsOverride > 0 ? guidedLapsOverride : _guidedLapsPerDirection,
         pilotIntroSeconds = _pilotIntroSeconds,
         pilotRoundSeconds = _pilotRoundSeconds,
-        pilotRoundsPerAxis = _pilotRoundsPerAxis,
+        pilotRoundsPerAxis = pilotRoundsOverride > 0 ? pilotRoundsOverride : _pilotRoundsPerAxis,
         pilotTransitionSeconds = _pilotTransitionSeconds,
       };
     }

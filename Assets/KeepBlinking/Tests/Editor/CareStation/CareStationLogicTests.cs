@@ -550,11 +550,11 @@ namespace KeepBlinking.Tests
     }
 
     [Test]
-    public void InspectionSchedulesOnlyAfterAllLevelTwoTrainingAndDailyEndGates()
+    public void InspectionSchedulesAfterLevelTwoMilestoneAndDailyEndGatesWithoutTrainingGate()
     {
       var save = new CareStationSaveData
       {
-        trainingProgress = 4,
+        trainingProgress = 0,
         workerLevel = 2,
         storageLevel = 2,
         cartLevel = 2,

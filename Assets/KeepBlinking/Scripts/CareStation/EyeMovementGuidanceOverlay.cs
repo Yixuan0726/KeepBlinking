@@ -74,6 +74,8 @@ namespace KeepBlinking.CareStation
     }
 
     internal bool IsVisible => _root != null && _root.gameObject.activeSelf;
+    internal bool InputShieldActive => IsVisible && _overlayGroup != null && _overlayGroup.blocksRaycasts &&
+                                       _scrim != null && _scrim.raycastTarget;
     internal float GuideSize => _guideSize;
     internal float SafeAreaWidth => _layoutSize.x;
     internal float SafeAreaHeight => _layoutSize.y;
@@ -90,15 +92,15 @@ namespace KeepBlinking.CareStation
       _root = root;
       _overlayGroup = root.gameObject.AddComponent<CanvasGroup>();
       _overlayGroup.alpha = 0f;
-      _overlayGroup.interactable = true;
-      _overlayGroup.blocksRaycasts = true;
+      _overlayGroup.interactable = false;
+      _overlayGroup.blocksRaycasts = false;
 
       _scrim = FirstLevelUiFactory.CreateImage("Guidance Input Shield", root,
         KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.BackgroundPrimary, 0.28f));
       FirstLevelUiFactory.Stretch(_scrim.rectTransform);
       // This is the sole raycast target in the guidance surface. It prevents
       // hidden Station controls from being activated while remaining inert.
-      _scrim.raycastTarget = true;
+      _scrim.raycastTarget = false;
 
       var topVeil = FirstLevelUiFactory.CreateImage("Hidden Station Header Veil", root,
         KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.BackgroundPrimary, 0.96f));
@@ -140,6 +142,7 @@ namespace KeepBlinking.CareStation
 
       BuildSafeAreaGuide();
       LayoutForSize(new Vector2(FirstLevelUiFactory.ReferenceWidth, FirstLevelUiFactory.ReferenceHeight));
+      SetGuidanceRaycastState(false);
       root.gameObject.SetActive(false);
     }
 
@@ -253,6 +256,7 @@ namespace KeepBlinking.CareStation
       _targetAlpha = 1f;
       _overlayGroup.interactable = true;
       _overlayGroup.blocksRaycasts = true;
+      SetGuidanceRaycastState(true);
       _externalPrompt = prompt ?? string.Empty;
       _title.text = type == CareActionType.PilotEyeRoutine ? "PILOT EYE ROUTINE" : "GUIDED EYE MOVEMENT";
       if (type == CareActionType.PilotEyeRoutine)
@@ -267,11 +271,13 @@ namespace KeepBlinking.CareStation
       }
     }
 
-    internal void PresentPilotToGuidedHold()
+    internal void PresentPilotToGuidedHold(int careEnergyGranted = 0)
     {
       Present(CareActionType.PilotEyeRoutine, CareActionInternalPhase.PilotTransition,
         "AXES COMPLETE\nNEXT: SLOW CIRCLES");
-      _progress.text = "AXES COMPLETE";
+      _progress.text = careEnergyGranted > 0
+        ? $"+{careEnergyGranted} CARE ENERGY"
+        : "AXES COMPLETE";
       _prompt.text = "NEXT: SLOW CIRCLES";
       _axesGroup.alpha = 0f;
       _circleGroup.alpha = 1f;
@@ -295,18 +301,27 @@ namespace KeepBlinking.CareStation
       _overlayGroup.alpha = 0f;
       _overlayGroup.interactable = false;
       _overlayGroup.blocksRaycasts = false;
+      SetGuidanceRaycastState(false);
       _root.gameObject.SetActive(false);
       _guidanceClosedPhase = false;
     }
 
     internal void HideAnimated()
     {
-      if (_root == null || !_root.gameObject.activeSelf) return;
+      if (_root == null) return;
+      if (!_root.gameObject.activeSelf)
+      {
+        _overlayGroup.interactable = false;
+        _overlayGroup.blocksRaycasts = false;
+        SetGuidanceRaycastState(false);
+        return;
+      }
       _targetAlpha = 0f;
       _overlayGroup.interactable = false;
       // Keep blocking until the short fade completes so Station controls do
       // not become clickable through a still-visible guidance surface.
       _overlayGroup.blocksRaycasts = true;
+      SetGuidanceRaycastState(true);
     }
 
     internal void AdjustGuideSizeDevelopment()
@@ -606,8 +621,18 @@ namespace KeepBlinking.CareStation
       if (_targetAlpha <= 0f && _overlayGroup.alpha <= 0.001f && _root.gameObject.activeSelf)
       {
         _overlayGroup.blocksRaycasts = false;
+        SetGuidanceRaycastState(false);
         _root.gameObject.SetActive(false);
       }
+    }
+
+    private void SetGuidanceRaycastState(bool shieldActive)
+    {
+      if (_root == null) return;
+      var graphics = _root.GetComponentsInChildren<Graphic>(true);
+      for (var index = 0; index < graphics.Length; index++)
+        graphics[index].raycastTarget = false;
+      if (_scrim != null) _scrim.raycastTarget = shieldActive;
     }
   }
 }

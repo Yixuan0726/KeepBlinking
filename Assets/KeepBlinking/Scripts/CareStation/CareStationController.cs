@@ -45,17 +45,15 @@ namespace KeepBlinking.CareStation
 
     [Header("Station Upgrades")]
     [SerializeField] private CareStationUpgradeConfiguration _upgradeConfiguration = new CareStationUpgradeConfiguration();
+    [SerializeField] private CareEconomyConfiguration _economyConfiguration = new CareEconomyConfiguration();
 
-    [Header("Station Inspection")]
-    [SerializeField, Range(45f, 60f)] private float _inspectionClosedEyeRestSeconds = 45f;
-    [SerializeField, Min(1)] private int _inspectionFullBottleReward = 24;
-    [SerializeField, Min(1)] private int _inspectionGoldBottleReward = 1;
+    [Header("Production Line")]
+    [SerializeField] private CareProductionConfiguration _productionConfiguration = new CareProductionConfiguration();
 
     [Header("Research")]
     [SerializeField] private bool _researchMode;
 
     [Header("Presentation")]
-    [SerializeField, Min(0.1f)] private float _incidentWorkPreviewSeconds = 2.4f;
     [SerializeField, Min(0.1f)] private float _repairRevealSeconds = 1.4f;
     [SerializeField, Range(8, 30)] private int _maximumXpBundleVisuals = 24;
 
@@ -73,6 +71,7 @@ namespace KeepBlinking.CareStation
     private readonly HashSet<int> _arrivedCollectionTargetIds = new HashSet<int>();
     private float _stateStartedAt;
     private float _nextActionSaveAt;
+    private float _nextProductionSaveAt;
     private bool _xpBundlesSpawned;
     private int _collectionSpawnedBundleCount;
     private string _collectionPausedReason = "NONE";
@@ -100,6 +99,7 @@ namespace KeepBlinking.CareStation
     private float _distanceStepOpenedAt = -1f;
     private int _pushFreshSamplesInStep;
     private CareStationState _resumeStateBeforeWelcome = CareStationState.Dormant;
+    private int _pendingStepFeedbackEnergy;
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
     private float _clearResearchConfirmationUntil = -1f;
 #endif
@@ -152,7 +152,7 @@ namespace KeepBlinking.CareStation
       _stationAudio.Build();
       _careActions = gameObject.AddComponent<CareActionRunner>();
       _careActions.CareActionCompleted += HandleUnifiedCareActionCompleted;
-      _view.IncidentSelected += HandleIncidentSelected;
+      _view.StartCareSelected += HandleStartCareSelected;
       _view.ContinueSelected += HandleWelcomeContinue;
       _view.FallbackCollectSelected += HandleFallbackCollect;
       _view.ReturnFallbackSelected += HandleReturnFallback;
@@ -209,6 +209,8 @@ namespace KeepBlinking.CareStation
       _view.ApplyStation(_save);
       _view.SetPendingXp(CurrentRemainingBottleValue, CurrentGoldBottleCount);
       ResumeSavedFlow();
+      _view.RebindInputHandlers();
+      _view.SynchronizeUiInputOwnership(IsGuidanceInputExpected());
     }
 
     private void ResumeSavedFlow()
@@ -242,15 +244,9 @@ namespace KeepBlinking.CareStation
           break;
         case CareStationState.PresentIncident:
         case CareStationState.WaitIncidentSelection:
-          if (!_save.preCareScores.IsResolved)
-          {
-            EnterPreCareCheck();
-            break;
-          }
-          EnsureCurrentRecipe();
-          SetState(CareStationState.WaitIncidentSelection);
-          _view.ShowIncident(CurrentIncident, true);
-          _view.SetCrewState(CareCrewState.Idle);
+          // Legacy UI states are presentation-only. Preserve the recipe and
+          // return to the normal station without rebuilding an Incident card.
+          EnterStationWorking();
           break;
         case CareStationState.StationWorking:
           SetState(CareStationState.StationWorking);
@@ -272,12 +268,16 @@ namespace KeepBlinking.CareStation
           EnterCareActionCompleted();
           break;
         case CareStationState.RepairReveal:
+          EnterRepairReveal();
+          break;
         case CareStationState.ProduceBottles:
+          ResumeProductionLine();
+          break;
         case CareStationState.PresentCareBottles:
         case CareStationState.WaitCarePushAway:
         case CareStationState.WaitPushAwayReady:
         case CareStationState.WaitPushAway:
-          BeginCareBottleCollection();
+          EnterProduceBottles();
           break;
         case CareStationState.CollectingExperience:
         case CareStationState.WaitExperienceCollected:
@@ -322,6 +322,7 @@ namespace KeepBlinking.CareStation
     private void Update()
     {
       if (_gameplay == null || _save == null) return;
+      _view?.SynchronizeUiInputOwnership(IsGuidanceInputExpected());
 #if UNITY_EDITOR || UNITY_STANDALONE
       if (_view.IsUpgradeVisible && Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
       {
@@ -335,7 +336,7 @@ namespace KeepBlinking.CareStation
         if (_developmentRecipeAdvancePending && Time.unscaledTime >= _developmentRecipeAdvanceAt)
         {
           _developmentRecipeAdvancePending = false;
-          _careActions.StartAction(_developmentRecipe.CurrentAction, null, true);
+          StartDevelopmentRecipeCurrentAction();
         }
         return;
       }
@@ -377,18 +378,9 @@ namespace KeepBlinking.CareStation
           _save.currentRecipe.routineIntroElapsedSeconds = _routineIntroSeconds;
           StartStationCareAction(_recipe.CurrentAction, false);
           break;
-        case CareStationState.PresentIncident:
-          if (StateElapsed >= _incidentWorkPreviewSeconds)
-          {
-            SetState(CareStationState.WaitIncidentSelection);
-            _view.ShowIncident(CurrentIncident, true);
-            _view.SetCrewState(CareCrewState.Idle);
-          }
-          break;
         case CareStationState.StationWorking:
-          if (StateElapsed >= _incidentWorkPreviewSeconds &&
-              CareStationStateRules.CanPresentIncident(_save.offlineCollectionResolved, _save.returnedNeutralAfterOffline))
-            PresentCurrentIncident();
+          // Foreground waiting is intentionally economy-neutral. Care begins
+          // only from the explicit START CARE action.
           break;
         case CareStationState.WaitCareActionStart:
         case CareStationState.CareActionInProgress:
@@ -402,8 +394,11 @@ namespace KeepBlinking.CareStation
           if (StateElapsed >= _repairRevealSeconds) EnterProduceBottles();
           break;
         case CareStationState.ProduceBottles:
+          UpdateProductionLine(delta);
+          break;
         case CareStationState.PresentCareBottles:
-          if (StateElapsed >= 0.8f) EnterWaitForPushAway(CareStationCollectionPhase.Care);
+          // v22 migration redirects this legacy presentation into ProduceBottles.
+          EnterProduceBottles();
           break;
         case CareStationState.WaitPushAwayReady:
           UpdateWaitForPushAway(delta);
@@ -588,7 +583,7 @@ namespace KeepBlinking.CareStation
     {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
       if (_save == null) return;
-      _save.storedGoldBottles++;
+      _save.pendingPremiumShipment++;
       _view.ApplyStation(_save);
       SaveNow();
 #endif
@@ -713,14 +708,16 @@ namespace KeepBlinking.CareStation
       if (_careActions.IsRunning) _careActions.CancelAction();
       var seed = 46000 + (int)type * 101 + Mathf.Max(0, trainingIndex);
       var recipe = type == CareRecipeType.Training
-        ? CareRecipeGenerator.CreateTraining(Mathf.Clamp(trainingIndex, 0, 3), 999, seed)
-        : CareRecipeGenerator.CreateFormal(type, 999, seed, Array.Empty<string>(), 0, 0, 32);
+        ? CareRecipeGenerator.CreateRoutine(CareRoutineId.FocusFlow, 999, seed)
+        : type == CareRecipeType.Full
+          ? CareRecipeGenerator.CreateRoutine(CareRoutineId.FullCare, 999, seed)
+          : CareRecipeGenerator.CreateFormal(type, 999, seed, Array.Empty<string>(), 0, 0, 32);
       _developmentRecipe = new CareRecipeRuntime(recipe);
       _developmentRecipeAdvancePending = false;
       _view.RestoreRecipePipeline(recipe);
       _view.ConfigureRecipe(recipe);
       _stationAudio?.StopWork();
-      var started = _careActions.StartAction(_developmentRecipe.CurrentAction, null, true);
+      var started = StartDevelopmentRecipeCurrentAction();
       if (started) _developmentActionStartedAt = Time.unscaledTime;
       else
       {
@@ -728,6 +725,51 @@ namespace KeepBlinking.CareStation
         _developmentRecipeAdvancePending = false;
       }
       return started;
+#else
+      return false;
+#endif
+    }
+
+    public bool StartRoutineDevelopmentTest(CareRoutineId routineId)
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      if (_careActions == null || IsFormalCareActionState(State)) return false;
+      if (_careActions.IsRunning) _careActions.CancelAction();
+      var seed = 48000 + (int)routineId * 101;
+      var recipe = CareRecipeGenerator.CreateRoutine(routineId, 999, seed);
+      _developmentRecipe = new CareRecipeRuntime(recipe);
+      _developmentRecipeAdvancePending = false;
+      _view.RestoreRecipePipeline(recipe);
+      _view.ConfigureRecipe(recipe);
+      _stationAudio?.StopWork();
+      var started = StartDevelopmentRecipeCurrentAction();
+      if (started) _developmentActionStartedAt = Time.unscaledTime;
+      else
+      {
+        _developmentRecipe = null;
+        _developmentRecipeAdvancePending = false;
+      }
+      return started;
+#else
+      return false;
+#endif
+    }
+
+    private bool StartDevelopmentRecipeCurrentAction()
+    {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      if (_careActions == null || _developmentRecipe == null ||
+          _developmentRecipe.CurrentAction == CareActionType.None) return false;
+      var recipe = _developmentRecipe.Data;
+      return _careActions.StartAction(
+        _developmentRecipe.CurrentAction,
+        null,
+        true,
+        recipe.closedEyeRestSeconds,
+        false,
+        recipe.focusCycleCount,
+        recipe.guidedLapsPerDirection,
+        recipe.pilotRoundsPerAxis);
 #else
       return false;
 #endif
@@ -762,6 +804,8 @@ namespace KeepBlinking.CareStation
       _save.trainingProgress = 0;
       _save.completedTrainingActionMask = 0;
       _save.formalRecipesCreated = 0;
+      _save.careRoutinesCreated = 0;
+      _save.lastCompletedRoutineId = CareRoutineId.None;
       _save.recentRecipeHistory = Array.Empty<string>();
       _save.focusShiftCooldownUntilShiftId = 0;
       _save.guidedEyeCirclesCooldownUntilShiftId = 0;
@@ -1009,7 +1053,7 @@ namespace KeepBlinking.CareStation
       {
         case CareStationState.WaitIncidentSelection:
         case CareStationState.PresentIncident:
-          _view.ShowIncident(CurrentIncident, State == CareStationState.WaitIncidentSelection);
+          _view.ShowStationWorking();
           break;
         case CareStationState.StationWorking:
         case CareStationState.AutoShift:
@@ -1208,6 +1252,11 @@ namespace KeepBlinking.CareStation
         var focusStep = _careActions != null ? _careActions.FocusStep : 0;
         var focusCycle = _careActions != null ? _careActions.FocusCycle : 0;
         var focusRearmed = _careActions != null && _careActions.FocusRearmed;
+        var focusHoldTarget = focusReturn ? _careActions.FocusTargetHoldSeconds : 0f;
+        var focusLegElapsed = focusReturn ? _careActions.FocusLegElapsedSeconds : 0f;
+        var focusMinimumLeg = focusReturn ? _careActions.FocusMinimumLegSeconds : 0f;
+        var focusConfirmation = focusReturn ? _careActions.FocusConfirmationProgress : 0f;
+        var focusTooClose = focusReturn && _careActions.FocusTooClose;
         var sessionBaseline = focusReturn && _careActions.GestureReferenceValid
           ? _careActions.GestureReferenceScale
           : _gameplay != null ? _gameplay.BaselineFaceScale : 0f;
@@ -1216,18 +1265,22 @@ namespace KeepBlinking.CareStation
           $"Tracking Valid: {EffectiveTracking}\n" +
           $"Session Baseline: {sessionBaseline:F6}\n" +
           $"Raw Face Scale: {rawScale:F6}\n" +
-          $"Current Face Scale: {currentScale:F6}\n" +
+          $"Smoothed Face Scale: {currentScale:F6}\n" +
           $"Reference Scale: {(referenceValid ? referenceScale : 0f):F6}\n" +
           $"Distance Ratio: {ratio:F3}\n" +
           $"Delta Percent: {deltaPercent:+0.0;-0.0;0.0}%\n" +
           $"Expected Direction: {expected}\n" +
           $"Direction Progress: {progress:P0}\n" +
-          $"Hold Time: {stable:F2}\n" +
+          $"Hold Time: {stable:F2} / {focusHoldTarget:F2}\n" +
+          $"Minimum Leg Time: {focusLegElapsed:F2} / {focusMinimumLeg:F2}\n" +
+          $"Confirmation Progress: {focusConfirmation:P0}\n" +
           $"Near Peak: {(focusReturn ? _careActions.FocusNearPeakRatio : 0f):F3}\n" +
           $"Far Peak: {(focusReturn ? _careActions.FocusFarPeakRatio : 0f):F3}\n" +
           $"Current Cycle: {focusCycle} / 6\n" +
           $"Neutral/Rearm: {focusRearmed}\n" +
-          $"Current Distance State: {distanceState}\n" +
+          $"Detection State: {distanceState}\n" +
+          $"Too Close: {focusTooClose}\n" +
+          "Timing Source: UNSCALED\n" +
           $"Return Source: {source}\n" +
           $"Push Armed: {(_gameplay != null && _gameplay.IsCareCollectionArmed)}\n" +
           $"Focus Step: {focusStep}";
@@ -1270,16 +1323,14 @@ namespace KeepBlinking.CareStation
 #endif
     }
 
+    internal string UiInputLockDescription =>
+      $"{(_view != null ? _view.UiInputLockDescription : "owner=NO_VIEW")} expectedGuidance={IsGuidanceInputExpected()} state={State}";
+
     public void ClearStaleUiLockDevelopment()
     {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
       if (_view == null) return;
-      var action = _careActions != null ? _careActions.ActionType : CareActionType.None;
-      var legitimateGuidanceLock =
-        (action == CareActionType.PilotEyeRoutine || action == CareActionType.GuidedEyeCircles) &&
-        (State == CareStationState.WaitCareActionStart ||
-         State == CareStationState.CareActionInProgress ||
-         State == CareStationState.CareActionPaused);
+      var legitimateGuidanceLock = IsGuidanceInputExpected();
       if (!_view.ClearStaleUiInputLock(legitimateGuidanceLock))
       {
         Debug.Log("[UI INPUT] CLEAR STALE UI LOCK skipped: a visible care guidance surface still owns input.", this);
@@ -1314,35 +1365,36 @@ namespace KeepBlinking.CareStation
         _minimumOfflineMinutes,
         _save.storageHours,
         _offlineXpPerHour * CareStationShiftRules.ProductionRateMultiplier(_save),
-        _save.shiftIncidentGenerated);
+        true);
       var validOfflineInterval = produced.CreditedDuration > TimeSpan.Zero;
       if (_save.currentState == CareStationState.AutoShift && validOfflineInterval)
         PrepareNextShift(true, false);
-      var settlement = _production.Settle(_save, produced.ExperienceMade);
+      var settlementId = validOfflineInterval
+        ? $"{offlineStart.ToUniversalTime().Ticks}:{now.ToUniversalTime().Ticks}"
+        : string.Empty;
+      var settlement = validOfflineInterval
+        ? _production.SettleCart(_save, produced.ExperienceMade, settlementId, _economyConfiguration)
+        : default;
+      var resumedProduction = CareProductionRules.AdvanceForegroundCycle(
+        _save,
+        0f,
+        _productionConfiguration);
+      if (resumedProduction.BottleStored && _save.currentState == CareStationState.ProduceBottles)
+        _save.currentState = CareStationState.PostCareCheck;
       _lastOfflineResult = new CareStationOfflineResult(
         produced.CreditedDuration,
-        settlement.ProducedStored,
+        settlement.CoinsEarned + settlement.BottlesProduced,
         produced.BuildCompleteCount,
-        produced.HelpNeededCount);
-      _save.lastOfflineStoredFullBottles = settlement.ProducedStored;
+        0);
+      _save.lastOfflineStoredFullBottles = settlement.BottlesProduced;
       _save.lastOfflineStoredGoldBottles = 0;
       _save.lastOfflineWorkedSeconds = (float)produced.CreditedDuration.TotalSeconds;
       _save.offlineSummaryConsumed = !validOfflineInterval;
       _save.pendingOfflineXP = 0;
       _save.collectedOfflineBottleValue = 0;
       _save.offlineCollectionResolved = true;
-      if (validOfflineInterval && IsSessionEntryState(_save.currentState))
-      {
-        _save.returnedNeutralAfterOffline = false;
-        _save.distanceResetReferenceScale = 0f;
-        _save.distanceResetReferenceValid = false;
-        _save.distanceResetAwayScale = 0f;
-        _save.distanceResetAwayCompleted = false;
-        _save.distanceResetCompleted = false;
-      }
+      _save.returnedNeutralAfterOffline = true;
       _save.stationConstructionState += produced.BuildCompleteCount;
-      if (_lastOfflineResult.HelpNeededCount > 0 && IsSessionEntryState(_save.currentState))
-        _save.shiftIncidentGenerated = true;
       if (validOfflineInterval) _save.StampClaimed(now);
       if (!initialLoad || validOfflineInterval || _lastOfflineResult.HasAnything) SaveNow();
     }
@@ -1359,10 +1411,8 @@ namespace KeepBlinking.CareStation
         EnterInspectionPreparing(true);
         return;
       }
-      if (_save.selectedIncident == CareStationIncidentType.None)
-        _save.selectedIncident = CareStationShiftRules.IncidentForShift(_save.currentShift);
-      _save.shiftIncidentGenerated = true;
-      if (_save.pendingIncidentXP <= 0) _save.pendingIncidentXP = CareStationShiftRules.IncidentExperience(CurrentIncident);
+      _save.selectedIncident = CareStationIncidentType.None;
+      _save.shiftIncidentGenerated = false;
       EnsureCurrentRecipe();
       _save.careActionCompleted = _save.currentRecipe.recipeCompleted;
       if (!_save.currentRecipe.recipeCompleted) _save.careAction?.Reset();
@@ -1370,16 +1420,26 @@ namespace KeepBlinking.CareStation
       _save.careActionReferenceValid = false;
       _save.pushAwayCompleted = false;
       _save.pushAwayCompletion = CareStationPushAwayCompletion.None;
-      _save.collectedCareBottleValue = 0;
       _save.carePushAwayCompletion = CareStationPushAwayCompletion.None;
       _save.careReturnCompletion = CareStationReturnCompletion.None;
       _save.activeCollectionPhase = CareStationCollectionPhase.None;
       _xpBundlesSpawned = false;
-      SetState(CareStationState.PresentIncident);
-      _view.ShowIncident(CurrentIncident, false);
-      _view.SetPendingXp(0);
-      _view.SetCrewState(CareCrewState.Work);
-      SaveNow();
+      if (_save.currentRecipe.recipeCompleted)
+      {
+        EnterCareActionCompleted();
+        return;
+      }
+      SetState(CareStationState.PromptCareAction);
+      _view.SetCrewState(CareCrewState.Rest);
+      if (!_save.currentRecipe.routineIntroCompleted)
+      {
+        _save.currentRecipe.routineIntroElapsedSeconds = 0f;
+        _view.ShowCareRoutineIntro(_save.currentRecipe);
+        CareAudioFeedbackController.EnsureExists().PlayStepComplete();
+        SaveNow();
+        return;
+      }
+      StartStationCareAction(_recipe.CurrentAction, false);
     }
 
     private void EnsureResearchSession()
@@ -1503,15 +1563,12 @@ namespace KeepBlinking.CareStation
     {
       if (State != CareStationState.WelcomeBack) return;
       _save.offlineSummaryConsumed = true;
-      if (IsSessionEntryState(_resumeStateBeforeWelcome))
-        BeginDistanceReset();
-      else
-        ResumeSavedFlowAfterWelcome();
+      ResumeSavedFlowAfterWelcome();
     }
 
     private void ResumeSavedFlowAfterWelcome()
     {
-      if (_save.selectedIncident == CareStationIncidentType.None || _resumeStateBeforeWelcome == CareStationState.Dormant)
+      if (_resumeStateBeforeWelcome == CareStationState.Dormant)
         BeginSessionCollectionFlow();
       else
         ResumeSavedFlowWithoutWelcome();
@@ -1527,20 +1584,32 @@ namespace KeepBlinking.CareStation
 
     private void HandleIncidentSelected()
     {
-      if (State != CareStationState.WaitIncidentSelection) return;
-      EnsureCurrentRecipe();
-      if (_recipe == null || _recipe.CurrentAction == CareActionType.None) return;
-      SetState(CareStationState.PromptCareAction);
-      _view.SetCrewState(CareCrewState.Rest);
-      if (!_save.currentRecipe.routineIntroCompleted)
+      // Legacy callback funnels into the same direct Recipe entry.
+      PresentCurrentIncident();
+    }
+
+    private void HandleStartCareSelected()
+    {
+      if (_save == null) return;
+      if (State == CareStationState.WaitIncidentSelection || State == CareStationState.PresentIncident)
+        SetState(CareStationState.StationWorking);
+      if (State == CareStationState.WaitStorageSpace)
       {
-        _save.currentRecipe.routineIntroElapsedSeconds = 0f;
-        _view.ShowCareRoutineIntro(_save.currentRecipe);
-        CareAudioFeedbackController.EnsureExists().PlayStepComplete();
-        SaveNow();
+        if (HasPendingStorageReward(_save)) return;
+        _save.activeCollectionPhase = CareStationCollectionPhase.None;
+        _save.pendingReturnPhase = CareStationCollectionPhase.None;
+        _save.offlineProductionPausedByFullStorage = CareStationStorageRules.Remaining(_save) <= 0;
+        EnterStationWorking();
+      }
+      if (State != CareStationState.StationWorking) return;
+      if (!_save.preCareScores.IsResolved)
+      {
+        EnterPreCareCheck();
         return;
       }
-      StartStationCareAction(_recipe.CurrentAction, false);
+      if (!CareStationStateRules.CanPresentIncident(_save.offlineCollectionResolved, _save.returnedNeutralAfterOffline))
+        return;
+      PresentCurrentIncident();
     }
 
     private void HandleChangeStepRequested()
@@ -1617,6 +1686,7 @@ namespace KeepBlinking.CareStation
 
       if (replacement.SatisfiedByCompletedRest)
       {
+        CareEconomyRules.TryGrantAllCompletedRecipeSteps(_save, out _pendingStepFeedbackEnergy);
         _save.careActionCompleted = replacement.RecipeCompleted;
         if (replacement.RecipeCompleted)
         {
@@ -1640,7 +1710,7 @@ namespace KeepBlinking.CareStation
         ? _recipe.CurrentAction
         : _save.careAction != null && _save.careAction.actionType != CareActionType.None
           ? _save.careAction.actionType
-          : ActionForIncident(CurrentIncident);
+          : CareActionType.None;
       StartStationCareAction(type, true);
     }
 
@@ -1665,13 +1735,20 @@ namespace KeepBlinking.CareStation
         restored.gestureReferenceScale = _save.careActionGestureReferenceScale;
         restored.gestureReferenceValid = _save.careActionReferenceValid;
       }
-      var inspectionRestSeconds = _save.inspectionActive && type == CareActionType.ClosedEyeRest
-        ? _inspectionClosedEyeRestSeconds
-        : _save.currentRecipe != null && _save.currentRecipe.deepRest && type == CareActionType.ClosedEyeRest
-          ? CareActionLibrary.DeepRestSeconds
-          : 0f;
+      var recipeParameters = _save.currentRecipe;
+      var restSeconds = type == CareActionType.ClosedEyeRest && recipeParameters != null
+        ? recipeParameters.closedEyeRestSeconds
+        : 0f;
       var showIntro = !canRestore && !HasSeenCareActionIntro(type);
-      if (!_careActions.StartAction(type, restored, false, inspectionRestSeconds, showIntro)) return false;
+      if (!_careActions.StartAction(
+            type,
+            restored,
+            false,
+            restSeconds,
+            showIntro,
+            recipeParameters?.focusCycleCount ?? 0,
+            recipeParameters?.guidedLapsPerDirection ?? 0,
+            recipeParameters?.pilotRoundsPerAxis ?? 0)) return false;
       var guidedBoundToPilot = type == CareActionType.GuidedEyeCircles &&
                                _save.currentRecipe != null &&
                                _save.currentRecipe.currentActionIndex > 0 &&
@@ -1753,6 +1830,8 @@ namespace KeepBlinking.CareStation
       EnsureCurrentRecipe();
       var result = _recipe?.CompleteCurrentAction(type) ?? default;
       if (!result.Accepted) return;
+      CareEconomyRules.TryGrantCompletedRecipeStep(_save, result.CompletedStepIndex, out _pendingStepFeedbackEnergy);
+      _careActions.PlayRoutineStepRewardHaptic();
       if (_save.inspectionActive)
       {
         _save.inspectionCurrentCheck = _save.currentRecipe.currentActionIndex;
@@ -1778,6 +1857,9 @@ namespace KeepBlinking.CareStation
           CareRecipeGenerator.ApplyCompletionToProgress(_save, _save.currentRecipe);
         if (_recipe.TryConsumeCompletionSignal()) RecipeCompleted?.Invoke();
       }
+      // Persist action completion and its planned-slot reward as one state
+      // transition before any presentation or navigation can interrupt it.
+      SaveNow();
       EnterCareActionCompleted();
     }
 
@@ -1838,7 +1920,8 @@ namespace KeepBlinking.CareStation
       {
         if (_save.currentRecipe.createdShiftId != _save.careShiftId ||
             string.IsNullOrEmpty(_save.currentRecipe.recipeId) ||
-            !_save.currentRecipe.recipeId.StartsWith("station_inspection_", StringComparison.Ordinal))
+            !_save.currentRecipe.recipeId.StartsWith("station_inspection_", StringComparison.Ordinal) ||
+            !IsPilotFlowInspection(_save.currentRecipe))
           _save.currentRecipe = CareStationInspectionRules.CreateRecipe(_save.careShiftId);
         CareRecipeGenerator.SanitizeRecipe(_save.currentRecipe);
         if (_recipe == null || !ReferenceEquals(_recipe.Data, _save.currentRecipe))
@@ -1859,7 +1942,7 @@ namespace KeepBlinking.CareStation
 
       var seed = unchecked((_save.careShiftId * 73856093) ^
                            (_save.currentShift * 19349663) ^
-                           ((_save.trainingProgress + 1) * 83492791));
+                           ((_save.careRoutinesCreated + 1) * 83492791));
       var settings = new CareRecipeGenerationSettings(
         _singleRecipeWeight,
         _doubleRecipeWeight,
@@ -1875,6 +1958,14 @@ namespace KeepBlinking.CareStation
       // Recipe identity and action order are persisted at creation time so a
       // reload, foreground transition, or tracking recovery cannot reroll it.
       SaveNow();
+    }
+
+    private static bool IsPilotFlowInspection(CareRecipeSaveData recipe)
+    {
+      return recipe != null && recipe.ActionCount == 3 && recipe.actionList != null &&
+             recipe.actionList[0] == CareActionType.PilotEyeRoutine &&
+             recipe.actionList[1] == CareActionType.GuidedEyeCircles &&
+             recipe.actionList[2] == CareActionType.ClosedEyeRest;
     }
 
     private static CareStationState StateForActionStage(CareActionStage stage)
@@ -1897,6 +1988,8 @@ namespace KeepBlinking.CareStation
       {
         if (!_save.inspectionActive)
           CareRecipeGenerator.ApplyCompletionToProgress(_save, _save.currentRecipe);
+        CareEconomyRules.TryGrantRecipeCareEnergy(_save, _economyConfiguration, out var reconciled);
+        _pendingStepFeedbackEnergy += reconciled;
         if (_recipe.TryConsumeCompletionSignal()) RecipeCompleted?.Invoke();
       }
       SetState(CareStationState.CareActionCompleted);
@@ -1907,7 +2000,8 @@ namespace KeepBlinking.CareStation
       var completedType = _save.currentRecipe.ActionCount > 0
         ? _save.currentRecipe.actionList[completedIndex]
         : CareActionType.None;
-      _view.ShowRecipeStepFeedback(_save.currentRecipe, completedType);
+      _view.ShowRecipeStepFeedback(_save.currentRecipe, completedType, _pendingStepFeedbackEnergy);
+      _pendingStepFeedbackEnergy = 0;
       if (_save.currentRecipe.recipeCompleted && !_save.currentRecipe.completionFeedbackPlayed)
       {
         _save.currentRecipe.completionFeedbackPlayed = true;
@@ -1920,7 +2014,7 @@ namespace KeepBlinking.CareStation
     {
       var feedbackSeconds = _save.currentRecipe != null && _save.currentRecipe.recipeCompleted
         ? _recipeCompletionFeedbackSeconds
-        : IsPilotGuidedTransition(_save.currentRecipe) ? 0.05f : _recipeStepFeedbackSeconds;
+        : _recipeStepFeedbackSeconds;
       if (StateElapsed < feedbackSeconds) return;
       EnsureCurrentRecipe();
       if (_recipe != null && !_recipe.Data.recipeCompleted && _recipe.CurrentAction != CareActionType.None)
@@ -1933,15 +2027,6 @@ namespace KeepBlinking.CareStation
         return;
       }
       EnterRepairReveal();
-    }
-
-    private static bool IsPilotGuidedTransition(CareRecipeSaveData recipe)
-    {
-      if (recipe == null || recipe.recipeCompleted || recipe.actionList == null) return false;
-      var completed = recipe.currentActionIndex - 1;
-      return completed >= 0 && completed + 1 < recipe.ActionCount &&
-             recipe.actionList[completed] == CareActionType.PilotEyeRoutine &&
-             recipe.actionList[completed + 1] == CareActionType.GuidedEyeCircles;
     }
 
     private void EnterInspectionPreparing(bool createIfNeeded)
@@ -1964,7 +2049,10 @@ namespace KeepBlinking.CareStation
       EnsureCurrentRecipe();
       if (_recipe == null || _recipe.CurrentAction == CareActionType.None)
       {
-        EnterInspectionPassed(true);
+        if (_save.currentRecipe != null && _save.currentRecipe.recipeCompleted)
+          EnterInspectionPassed(true);
+        else
+          EnterInspectionPreparing(true);
         return;
       }
       StartStationCareAction(_recipe.CurrentAction, restore);
@@ -1973,6 +2061,11 @@ namespace KeepBlinking.CareStation
 
     private void EnterInspectionPassed(bool produceReward)
     {
+      if (_save?.currentRecipe == null || !_save.currentRecipe.recipeCompleted)
+      {
+        EnterInspectionPreparing(true);
+        return;
+      }
       _stationAudio.StopWork();
       _gameplay.SetCareActionActive(true);
       _save.inspectionActive = true;
@@ -1980,17 +2073,13 @@ namespace KeepBlinking.CareStation
       _save.inspectionCompletedMask = CareStationInspectionRules.AllChecks;
       _save.inspectionCurrentCheck = 4;
       _save.stationLevel = 2;
+      var conveyorUnlocked = CareProductionTransportRules.TryConsumeBasicConveyorUnlock(_save);
       _save.careActionCompleted = true;
-      if (produceReward && !_save.inspectionRewardProduced)
-      {
-        _save.pendingIncidentXP = Mathf.Max(1, _inspectionFullBottleReward) +
-                                  Mathf.Max(1, _inspectionGoldBottleReward);
-        _save.pendingGoldBottleCount = Mathf.Max(1, _inspectionGoldBottleReward);
-        _save.collectedCareBottleValue = 0;
-        _save.inspectionRewardProduced = true;
-      }
+      CareEconomyRules.TryGrantRecipeCareEnergy(_save, _economyConfiguration, out _);
+      _save.inspectionRewardProduced = true;
       SetState(CareStationState.InspectionPassed);
       _view.ShowInspectionPassed(_save);
+      if (conveyorUnlocked) _view.ShowTransportUpgradeUnlocked();
       _view.SetCrewState(CareCrewState.Cheer);
       CareAudioFeedbackController.EnsureExists().PlayStepComplete();
       SaveNow();
@@ -2001,6 +2090,7 @@ namespace KeepBlinking.CareStation
       EnsureCurrentRecipe();
       if (_recipe == null || !_recipe.Data.recipeCompleted) return;
       if (!_recipe.Data.completionConsumed) _recipe.TryConsumeForProduction();
+      CareEconomyRules.TryGrantRecipeCareEnergy(_save, _economyConfiguration, out _);
       if (_save.inspectionActive)
       {
         EnterInspectionPassed(true);
@@ -2008,10 +2098,8 @@ namespace KeepBlinking.CareStation
       }
       _gameplay.SetCareActionActive(true);
       SetState(CareStationState.RepairReveal);
-      if (CurrentIncident == CareStationIncidentType.EyeGunk) _save.pendingGoldBottleCount = 1;
-      GuaranteeFirstFormalGoldBottle();
-      _view.ShowRepairReveal(CurrentIncident);
-      _view.SetPendingXp(PendingCareBottleValue, _save.pendingGoldBottleCount);
+      _view.ShowRepairReveal();
+      _view.SetPendingXp(PendingCareBottleValue, 0);
       _view.SetCrewState(CareCrewState.Cheer);
       CareAudioFeedbackController.EnsureExists().PlayStepComplete();
       SaveNow();
@@ -2019,13 +2107,71 @@ namespace KeepBlinking.CareStation
 
     private void EnterProduceBottles()
     {
-      SetState(CareStationState.PresentCareBottles);
-      _save.activeCollectionPhase = CareStationCollectionPhase.Care;
-      if (_save.carePushAwayCompletion == CareStationPushAwayCompletion.None)
-        _save.careCollectionReleased = false;
-      _save.collectedCareBottleValue = Mathf.Clamp(_save.collectedCareBottleValue, 0, PendingCareBottleValue);
-      _view.ShowBottleProduction(RemainingCareBottleValue, _save.pendingGoldBottleCount);
+      var recipeId = _save.currentRecipe?.recipeId ?? string.Empty;
+      if (_save.productionStage == CareProductionStage.None &&
+          !CareProductionRules.TryBeginForegroundCycle(_save, recipeId))
+      {
+        // Full Storage or an already represented Recipe never blocks reports.
+        // Unspent Care Energy remains available to a later Auto Shift.
+        _save.offlineProductionPausedByFullStorage =
+          _save.careEnergy > 0 && CareStationStorageRules.RemainingForAutomaticOfflineSettlement(_save) <= 0;
+        EnterPostCareCheck();
+        return;
+      }
+      ResumeProductionLine();
       SaveNow();
+    }
+
+    private void ResumeProductionLine()
+    {
+      if (_save == null || _save.productionStage == CareProductionStage.None)
+      {
+        EnterPostCareCheck();
+        return;
+      }
+      SetState(CareStationState.ProduceBottles);
+      _gameplay.SetCareCollectionArmed(false);
+      _gameplay.SetCareActionActive(true);
+      _view.ShowProductionStage(
+        _save.productionStage,
+        CareProductionRules.StageProgress(_save, _productionConfiguration),
+        _save);
+      _view.SetCrewState(CareCrewState.Work);
+    }
+
+    private void UpdateProductionLine(float unscaledDeltaSeconds)
+    {
+      if (_save == null || _save.productionStage == CareProductionStage.None)
+      {
+        EnterPostCareCheck();
+        return;
+      }
+      var result = CareProductionRules.AdvanceForegroundCycle(
+        _save,
+        unscaledDeltaSeconds,
+        _productionConfiguration);
+      _view.ShowProductionStage(
+        _save.productionStage,
+        CareProductionRules.StageProgress(_save, _productionConfiguration),
+        _save);
+      if (result.BottleStored)
+      {
+        _view.ApplyStation(_save);
+        SaveNow();
+        EnterPostCareCheck();
+        return;
+      }
+      if (result.WaitingForStorage)
+      {
+        SaveNow();
+        EnterPostCareCheck();
+        return;
+      }
+      if (result.StageChanged || Time.unscaledTime >= _nextProductionSaveAt)
+      {
+        _nextProductionSaveAt = Time.unscaledTime + 1f;
+        SaveNow();
+      }
     }
 
     private void BeginSessionCollectionFlow()
@@ -2042,7 +2188,8 @@ namespace KeepBlinking.CareStation
       _save.pendingOfflineXP = 0;
       _save.collectedOfflineBottleValue = 0;
       _save.offlineCollectionResolved = true;
-      BeginDistanceReset();
+      _save.returnedNeutralAfterOffline = true;
+      EnterStationWorking();
     }
 
     private bool IsDistanceResetState =>
@@ -2179,7 +2326,7 @@ namespace KeepBlinking.CareStation
         return;
       }
       SetState(CareStationState.PresentCareBottles);
-      _view.ShowBottleProduction(RemainingCareBottleValue, _save.pendingGoldBottleCount);
+      _view.ShowBottleProduction(RemainingCareBottleValue, 0);
       SaveNow();
     }
 
@@ -2541,26 +2688,13 @@ namespace KeepBlinking.CareStation
       }
       else if (_save.activeCollectionPhase == CareStationCollectionPhase.Care)
       {
-        if (state == CareExperienceState.Rested && _save.pendingGoldBottleCount > 0)
-        {
-          _save.shiftStoredGoldBottles++;
-          _save.storedGoldBottles++;
-          var accompanyingFull = Mathf.Max(0, value - 1);
-          _save.shiftStoredFullBottles += accompanyingFull;
-          _save.storedFullBottles += accompanyingFull;
-          _save.pendingGoldBottleCount--;
-        }
-        else
-        {
-          _save.shiftStoredFullBottles += Mathf.Max(0, value);
-          _save.storedFullBottles += Mathf.Max(0, value);
-        }
+        CareEconomyRules.TryStoreReservedBottle(_save);
       }
       if (_save.activeCollectionPhase == CareStationCollectionPhase.Offline)
         _save.collectedOfflineBottleValue = Mathf.Min(PendingOfflineBottleValue, _save.collectedOfflineBottleValue + Mathf.Max(0, value));
       else
-        _save.collectedCareBottleValue = Mathf.Min(PendingCareBottleValue, _save.collectedCareBottleValue + Mathf.Max(0, value));
-      _save.collectedExperienceCount = _save.storedFullBottles + _save.storedGoldBottles;
+        _save.collectedCareBottleValue = _save.pendingFullBottleShipment <= 0 ? 1 : 0;
+      _save.collectedExperienceCount = _save.storedFullBottles;
       _view.ApplyStation(_save);
       _view.SetPendingXp(CurrentRemainingBottleValue, CurrentGoldBottleCount);
       SetState(_save.activeCollectionPhase == CareStationCollectionPhase.Offline
@@ -2594,9 +2728,7 @@ namespace KeepBlinking.CareStation
         return;
       }
 
-      _save.pendingIncidentXP = 0;
       _save.collectedCareBottleValue = 0;
-      _save.pendingGoldBottleCount = 0;
       _save.careCollectionReleased = false;
       _save.activeCollectionPhase = CareStationCollectionPhase.None;
       _view.SetPendingXp(0);
@@ -2617,6 +2749,7 @@ namespace KeepBlinking.CareStation
         _save.inspectionCompleted = true;
         _save.inspectionActive = false;
         _save.stationLevel = 2;
+        CareProductionTransportRules.Synchronize(_save);
         _save.completedShifts++;
         if (!_save.inspectionCompletionSignalSent)
         {
@@ -2941,7 +3074,7 @@ namespace KeepBlinking.CareStation
     private void EnterUpgradeSelection()
     {
       _save.upgradeOffered = true;
-      if (!CareStationShiftRules.CanEnterUpgradeSelection(_save, _upgradeConfiguration))
+      if (!CareStationShiftRules.CanPurchaseAnyUpgrade(_save, _upgradeConfiguration, _economyConfiguration))
       {
         DeferUpgradeOpportunity();
         return;
@@ -2949,7 +3082,7 @@ namespace KeepBlinking.CareStation
       _save.upgradeDeferred = false;
       SetState(CareStationState.UpgradeSelection);
       _gameplay.SetCareActionActive(true);
-      _view.ShowUpgrade(_save, _upgradeConfiguration);
+      _view.ShowUpgrade(_save, _upgradeConfiguration, _economyConfiguration);
       SaveNow();
     }
 
@@ -2959,7 +3092,11 @@ namespace KeepBlinking.CareStation
       var formalSelection = State == CareStationState.UpgradeSelection;
       var pendingOpportunity = _save.upgradeOffered;
       if (!_view.IsUpgradeVisible || (!pendingOpportunity && !storageRecovery)) return;
-      var availability = CareStationShiftRules.EvaluateUpgrade(_save, upgrade, _upgradeConfiguration);
+      var availability = CareStationShiftRules.EvaluateUpgrade(
+        _save,
+        upgrade,
+        _upgradeConfiguration,
+        _economyConfiguration);
       if (!availability.CanPurchase)
       {
         _view.ShowUpgradeFeedback(upgrade, availability.PlayerReason);
@@ -2967,7 +3104,11 @@ namespace KeepBlinking.CareStation
         return;
       }
       var previousValue = _upgradeConfiguration.Value(upgrade, CareStationShiftRules.GetUpgradeLevel(_save, upgrade));
-      if (!CareStationShiftRules.TryPurchaseUpgrade(_save, upgrade, _upgradeConfiguration)) return;
+      if (!CareStationShiftRules.TryPurchaseUpgrade(
+            _save,
+            upgrade,
+            _upgradeConfiguration,
+            _economyConfiguration)) return;
       _save.upgradeOffered = false;
       _save.upgradeDeferred = false;
       _save.offlineProductionPausedByFullStorage = CareStationStorageRules.Remaining(_save) <= 0;
@@ -2996,7 +3137,7 @@ namespace KeepBlinking.CareStation
       }
       if (index == 1)
       {
-        _view.ShowUpgrade(_save, _upgradeConfiguration);
+        _view.ShowUpgrade(_save, _upgradeConfiguration, _economyConfiguration);
         return;
       }
       if (index == 2)
@@ -3026,13 +3167,27 @@ namespace KeepBlinking.CareStation
       if (_save == null) return;
       CareStationShiftRules.MarkUpgradeDeferred(_save, DateTime.UtcNow);
       _view.SetUpgradeOpportunity(true);
-      EnterShiftComplete();
+      if (!_save.careShiftCompleted)
+      {
+        _save.careShiftCompleted = true;
+        CareStationEventLog.Append(_save, CareStationEventType.ShiftCompleted, DateTime.UtcNow);
+      }
+      _save.shiftCompleteRewardsShown = true;
+      _save.endShiftConsumed = true;
+      _save.autoShiftEntered = true;
+      SetState(CareStationState.AutoShift);
+      _gameplay?.SetCareActionActive(true);
+      _view.ShowAutoShift();
+      SaveNow();
     }
 
     private void RestoreCurrentPresentation()
     {
       switch (State)
       {
+        case CareStationState.StationWorking:
+          _view.ShowStationWorking();
+          break;
         case CareStationState.AutoShift:
           _view.ShowAutoShift();
           break;
@@ -3047,7 +3202,7 @@ namespace KeepBlinking.CareStation
           break;
         case CareStationState.WaitIncidentSelection:
         case CareStationState.PresentIncident:
-          _view.ShowIncident(CurrentIncident, State == CareStationState.WaitIncidentSelection);
+          _view.ShowStationWorking();
           break;
         default:
           _view.HideAllModals();
@@ -3071,6 +3226,14 @@ namespace KeepBlinking.CareStation
 
     private void RestoreStorageFullGate()
     {
+      if (!HasPendingStorageReward(_save))
+      {
+        _save.activeCollectionPhase = CareStationCollectionPhase.None;
+        _save.pendingReturnPhase = CareStationCollectionPhase.None;
+        _save.offlineProductionPausedByFullStorage = CareStationStorageRules.Remaining(_save) <= 0;
+        EnterStationWorking();
+        return;
+      }
       if (CareStationStorageRules.Remaining(_save) > 0 || CanCollectAnyCareBottleNow())
       {
         ResumeAfterStorageSpaceAvailable();
@@ -3081,31 +3244,38 @@ namespace KeepBlinking.CareStation
         : _save.activeCollectionPhase);
     }
 
+    private static bool HasPendingStorageReward(CareStationSaveData save)
+    {
+      if (save == null) return false;
+      var pendingCare = save.pendingFullBottleShipment > 0;
+      var pendingOffline = save.pendingOfflineXP > save.collectedOfflineBottleValue;
+      return pendingCare || pendingOffline;
+    }
+
+    private bool IsGuidanceInputExpected()
+    {
+      if (_careActions == null) return false;
+      var action = _careActions.ActionType;
+      if (action != CareActionType.PilotEyeRoutine && action != CareActionType.GuidedEyeCircles)
+        return false;
+      return State == CareStationState.WaitCareActionStart ||
+             State == CareStationState.CareActionInProgress ||
+             State == CareStationState.CareActionPaused ||
+             State == CareStationState.CareActionCompleted;
+    }
+
     private void ResumeAfterStorageSpaceAvailable()
     {
-      if (_save == null || (CareStationStorageRules.Remaining(_save) <= 0 && !CanCollectAnyCareBottleNow())) return;
-      _save.offlineProductionPausedByFullStorage = false;
-      _xpBundlesSpawned = false;
-      var phase = _save.activeCollectionPhase;
-      if (phase == CareStationCollectionPhase.Care && _save.careCollectionReleased)
-      {
-        EnsureXpBundles();
-        _gameplay.SetCareCollectionArmed(true);
-        if (_gameplay.StartCareCollectionFromSkip()) BeginCollectionState(phase);
-        else EnterStorageFullGate(phase);
-      }
-      else if (phase == CareStationCollectionPhase.Offline &&
-               _save.offlinePushAwayCompletion != CareStationPushAwayCompletion.None)
-      {
-        EnsureXpBundles();
-        _gameplay.SetCareCollectionArmed(true);
-        if (_gameplay.StartCareCollectionFromSkip()) BeginCollectionState(phase);
-        else EnterStorageFullGate(phase);
-      }
-      else
-      {
-        EnterWaitForPushAway(phase);
-      }
+      if (_save == null) return;
+      if (_save.productionStage != CareProductionStage.None)
+        CareProductionRules.AdvanceForegroundCycle(_save, 0f, _productionConfiguration);
+      _save.offlineProductionPausedByFullStorage =
+        _save.careEnergy > 0 && CareStationStorageRules.RemainingForAutomaticOfflineSettlement(_save) <= 0;
+      _view.ApplyStation(_save);
+      // v22 never returns to the retired Push Away collection path. A finished
+      // item either commits atomically when a slot exists or stays persisted in
+      // WaitingForStorage while the rest of the Station remains available.
+      EnterPostCareCheck();
       SaveNow();
     }
 
@@ -3352,10 +3522,7 @@ namespace KeepBlinking.CareStation
         Mathf.Max(Mathf.CeilToInt(remaining / (float)preferredSize), plan.CollectibleGoldValue),
         1,
         _maximumXpBundleVisuals);
-      var existingGoldBundles = _gameplay.CountPendingCareExperience(CareExperienceState.Rested, true);
-      var goldCount = _save.activeCollectionPhase == CareStationCollectionPhase.Care
-        ? Mathf.Min(Mathf.Max(0, _save.pendingGoldBottleCount - existingGoldBundles), count)
-        : 0;
+      var goldCount = 0;
       var quotient = remaining / count;
       var remainder = remaining % count;
       var spawnedValue = 0;
@@ -3380,12 +3547,7 @@ namespace KeepBlinking.CareStation
     private bool CanCollectAnyCareBottleNow()
     {
       if (_save == null || RemainingCareBottleValue <= 0) return false;
-      return CareStationStorageRules.Remaining(_save) > 0 || _save.pendingGoldBottleCount > 0;
-    }
-
-    private void GuaranteeFirstFormalGoldBottle()
-    {
-      CareStationShiftRules.EnsureFirstFormalGoldBottle(_save);
+      return CareStationStorageRules.Remaining(_save) > 0;
     }
 
     private void SetState(CareStationState state)
@@ -3417,27 +3579,23 @@ namespace KeepBlinking.CareStation
         : phase == CareStationCollectionPhase.Care && _save.carePushReferenceValid;
       return valid && CareDistanceReferenceSampler.IsValidScale(ReturnReferenceScale(phase));
     }
-    private CareStationIncidentType CurrentIncident => _save != null && _save.selectedIncident != CareStationIncidentType.None
-      ? _save.selectedIncident
-      : CareStationShiftRules.IncidentForShift(_save != null ? _save.currentShift : 1);
+    private CareStationIncidentType CurrentIncident => CareStationIncidentType.None;
     private int PendingOfflineBottleValue => _save == null ? 0 : Mathf.Max(0, _save.pendingOfflineXP);
     private int RemainingOfflineBottleValue => _save == null
       ? 0
       : Mathf.Max(0, PendingOfflineBottleValue - _save.collectedOfflineBottleValue);
     private int PendingCareBottleValue => _save == null || !_save.careActionCompleted
       ? 0
-      : Mathf.Max(0, _save.pendingIncidentXP);
+      : Mathf.Max(0, _save.pendingFullBottleShipment);
     private int RemainingCareBottleValue => _save == null
       ? 0
-      : Mathf.Max(0, PendingCareBottleValue - _save.collectedCareBottleValue);
+      : Mathf.Max(0, PendingCareBottleValue);
     private int CurrentRemainingBottleValue => _save == null
       ? 0
       : _save.activeCollectionPhase == CareStationCollectionPhase.Offline
         ? RemainingOfflineBottleValue
         : _save.activeCollectionPhase == CareStationCollectionPhase.Care ? RemainingCareBottleValue : 0;
-    private int CurrentGoldBottleCount => _save != null && _save.activeCollectionPhase == CareStationCollectionPhase.Care
-      ? _save.pendingGoldBottleCount
-      : 0;
+    private int CurrentGoldBottleCount => 0;
     private bool IsCurrentShiftSupply => _save != null &&
       _save.shiftSupplyGeneratedForShiftId == _save.careShiftId &&
       _save.offlineRewardReason == CareStationPushAwayCompletion.NoOfflineReward;
@@ -3568,6 +3726,8 @@ namespace KeepBlinking.CareStation
       {
         EnterAutoShift();
       }
+      _view?.RebindInputHandlers();
+      _view?.SynchronizeUiInputOwnership(IsGuidanceInputExpected());
     }
 
     private void OnDestroy()
@@ -3577,7 +3737,7 @@ namespace KeepBlinking.CareStation
       Unsubscribe();
       if (_view != null)
       {
-        _view.IncidentSelected -= HandleIncidentSelected;
+        _view.StartCareSelected -= HandleStartCareSelected;
         _view.ContinueSelected -= HandleWelcomeContinue;
         _view.FallbackCollectSelected -= HandleFallbackCollect;
         _view.ReturnFallbackSelected -= HandleReturnFallback;

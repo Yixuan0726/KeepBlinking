@@ -53,10 +53,10 @@ namespace KeepBlinking.CareStation
       var ground = FirstLevelUiFactory.CreateImage("Ground", _stage, KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.AccentPrimary, 0.24f), FirstLevelUiFactory.RoundedSprite);
       FirstLevelUiFactory.SetRect(ground.rectTransform, new Vector2(0.16f, 0.16f), new Vector2(0.84f, 0.16f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(0f, 12f));
 
-      BuildChoiceRow("CREW", 0.275f, new[] { "DUST", "MENDER", "COURIER", "REST" }, index => { _role = (CareCrewRole)index; RebuildPreview(); });
+      BuildChoiceRow("CREW", 0.275f, new[] { "CLEAN", "MENDER", "COURIER", "REST" }, index => { _role = (CareCrewRole)index; RebuildPreview(); });
       BuildChoiceRow("STATE", 0.195f, new[] { "IDLE", "WALK", "WORK", "REST", "CHEER" }, index => { _state = (CareCrewAnimationState)index; ApplyState(); });
       BuildChoiceRow("CART", 0.115f, new[] { "SMALL", "MEDIUM", "LARGE" }, index => { _cart = (CareCartTier)index; ApplyCart(); });
-      BuildChoiceRow("LOAD", 0.035f, new[] { "EMPTY", "PARTIAL", "FULL", "GOLD", "MIXED" }, index => { _load = (CareCartLoadPreview)index; ApplyLoad(); });
+      BuildChoiceRow("LOAD", 0.035f, new[] { "EMPTY", "PARTIAL", "FULL", "PREMIUM", "MIXED" }, index => { _load = (CareCartLoadPreview)index; ApplyLoad(); });
 
       var close = FirstLevelUiFactory.CreateButton("Close Preview", _root, "CLOSE", KeepBlinkingTheme.AccentPrimary);
       FirstLevelUiFactory.SetRect((RectTransform)close.transform, new Vector2(0.75f, 0.935f), new Vector2(0.95f, 0.982f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
@@ -140,7 +140,9 @@ namespace KeepBlinking.CareStation
 
     private static string Friendly(Enum value)
     {
-      return value.ToString().Replace("DrySpot", "Dry Spot ").Replace("Care", "Care ").Replace("PartialMint", "Partial Mint").Replace("FullMint", "Full Mint").Replace("OneGoldBottle", "One Gold").Replace("MixedMintAndGold", "Mixed").ToUpperInvariant();
+      return value.ToString().Replace("DustKeeper", "Maintenance Crew").Replace("DrySpotMender", "Line Technician")
+        .Replace("Care", "Care ").Replace("PartialMint", "Partial Mint").Replace("FullMint", "Full Mint")
+        .Replace("OneGoldBottle", "One Premium").Replace("MixedMintAndGold", "Mixed").ToUpperInvariant();
     }
   }
 }

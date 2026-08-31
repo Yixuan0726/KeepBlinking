@@ -14,26 +14,43 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   _levels:
   - level: 1
-    baseSprite: {fileID: 21300000, guid: 99f4d939583606fad69a2f8fed7eccb7, type: 3}
+    baseSprite: {fileID: 21300000, guid: e4f266a104c134a4795a93a1eb822246, type: 3}
     flowFrames:
-    - {fileID: 21300000, guid: 97287601dc61bb4492928f0f6a8006f8, type: 3}
-    - {fileID: 21300000, guid: 2afbf89e000047e288198c7ab1558afa, type: 3}
-    - {fileID: 21300000, guid: cff0ccd134e5fa6d9bd0ce8a21c4b518, type: 3}
-    - {fileID: 21300000, guid: c18be6cdf06880a5d6b38ce9a2445787, type: 3}
+    - {fileID: 21300000, guid: 4c2b63958237d29468f463deea04a4a2, type: 3}
+    - {fileID: 21300000, guid: cc6946a64a20a8e4fbf2ff9d5389033f, type: 3}
+    - {fileID: 21300000, guid: e152e4720dc37ee44a722ea0fd5dba8d, type: 3}
+    - {fileID: 21300000, guid: 98a0b4496a2fcb44b999b721394affb6, type: 3}
     crankSprite: {fileID: 0}
     brushSprite: {fileID: 0}
     gaugeNeedleSprite: {fileID: 0}
     badgeSprite: {fileID: 21300000, guid: efc06334bc38fd9abf3af26770da5658, type: 3}
     crankPivot: {x: 0, y: 0}
     gaugePivot: {x: 0, y: 0}
-    rawLiquidSprite: {fileID: 21300000, guid: 98fcde4dba02caaf1643d0ac83671e58, type: 3}
-    rawParticlesSprite: {fileID: 21300000, guid: b89ef8a5a72f580e0ace034e641f40cd, type: 3}
-    filterCartridgeSprite: {fileID: 21300000, guid: 7f79b5c3cc5d268c51d172677d06b20c, type: 3}
-    funnelAndPipeSprite: {fileID: 21300000, guid: 6b9b1f4e7e24a822f799b5b0b9e8bec8, type: 3}
-    bottleSprite: {fileID: 21300000, guid: 00a132d4f6125d93062ee84d52f1897d, type: 3}
-    bottleFillSprite: {fileID: 21300000, guid: 846482e3d0b389b6691e70d9d838c426, type: 3}
+    rawLiquidSprite: {fileID: 0}
+    rawParticlesSprite: {fileID: 0}
+    filterCartridgeSprite: {fileID: 0}
+    funnelAndPipeSprite: {fileID: 0}
+    bottleSprite: {fileID: 0}
+    bottleFillSprite: {fileID: 0}
     rawLiquidScalePivotY: 0.59
     bottleFillScalePivotY: 0.06
+    machineBaseSprite: {fileID: 21300000, guid: e4f266a104c134a4795a93a1eb822246, type: 3}
+    rawLiquidBodySprite: {fileID: 21300000, guid: b87db82c588ab984c9e0a978b126ec03, type: 3}
+    rawLiquidSurfaceSprite: {fileID: 21300000, guid: c88e4b7eeccd7724ba023349bcf5be2d, type: 3}
+    filterBedSprite: {fileID: 21300000, guid: de9da66417177a442ad72e3af255066f, type: 3}
+    filterDripFrames:
+    - {fileID: 21300000, guid: 063c9a98002d420459253b15ca2bbc30, type: 3}
+    - {fileID: 21300000, guid: cf1f3c3fda505b043b8bf30f46044e1b, type: 3}
+    - {fileID: 21300000, guid: 6cdd3f4e4efaf6749b2db15dc2ca3720, type: 3}
+    - {fileID: 21300000, guid: 3c451fde126f589468daf7b4c01de34b, type: 3}
+    outletFlowFrames:
+    - {fileID: 21300000, guid: 4c2b63958237d29468f463deea04a4a2, type: 3}
+    - {fileID: 21300000, guid: cc6946a64a20a8e4fbf2ff9d5389033f, type: 3}
+    - {fileID: 21300000, guid: e152e4720dc37ee44a722ea0fd5dba8d, type: 3}
+    - {fileID: 21300000, guid: 98a0b4496a2fcb44b999b721394affb6, type: 3}
+    bottleGlassSprite: {fileID: 21300000, guid: 48eb54833f5dbfd408f3c8b2a79548c5, type: 3}
+    bottleLiquidBodySprite: {fileID: 21300000, guid: 41637b0a3990f8a47a7aa40036460127, type: 3}
+    bottleLiquidSurfaceSprite: {fileID: 21300000, guid: 8111a59f24acdd24b9860ead2b796a53, type: 3}
     displayScale: {x: 1, y: 1}
     normalizedHitBounds:
       serializedVersion: 2

@@ -2,6 +2,13 @@ using System;
 
 namespace KeepBlinking.CareStation
 {
+  public static class CareStationDisplayNames
+  {
+    public const string Filter = "FILTER";
+    public const string Filler = "FILLER";
+    public const string Packer = "PACKER";
+  }
+
   public interface ICareActionExecution
   {
     CareActionType ActionType { get; }
@@ -38,6 +45,20 @@ namespace KeepBlinking.CareStation
     Double,
     Triple,
     Inspection,
+    // Appended for v24. Earlier numeric values are serialized in real saves.
+    Full,
+  }
+
+  public enum CareRoutineId
+  {
+    None,
+    FocusFlow,
+    PilotFlow,
+    DeepReset,
+    FullCare,
+    // Migration-only identity for a started pre-v24 Recipe whose current
+    // action order cannot be rewritten without losing real player progress.
+    LegacyCompatible,
   }
 
   [Serializable]
@@ -45,7 +66,8 @@ namespace KeepBlinking.CareStation
   {
     public string recipeId;
     public int recipeSeed;
-    public CareRecipeType recipeType;
+    public CareRecipeType recipeType = CareRecipeType.Triple;
+    public CareRoutineId routineId;
     public CareActionType[] actionList = Array.Empty<CareActionType>();
     // The immutable authored/generated steps. actionList may be safely changed
     // by CHANGE STEP, while this list preserves what was replaced.
@@ -61,7 +83,25 @@ namespace KeepBlinking.CareStation
     public bool routineIntroCompleted;
     public float routineIntroElapsedSeconds;
     public bool deepRest;
+    // v24 Recipe parameters are persisted so a reload cannot turn a short
+    // Full Care action back into its standard variant.
+    public int focusCycleCount = 6;
+    public int pilotRoundsPerAxis = 3;
+    public int guidedLapsPerDirection = 3;
+    public float closedEyeRestSeconds = 60f;
+    // Each live action owns one or more immutable planned reward slots. CHANGE
+    // STEP may merge two action entries, but it merges their slot masks rather
+    // than creating or deleting Care Energy.
+    public int plannedSlotCount;
+    public int[] plannedSlotRewards = Array.Empty<int>();
+    public int[] rewardSlotMasks = Array.Empty<int>();
+    public int rewardedStepMask;
+    public int careEnergyRewardedTotal;
     public bool completionFeedbackPlayed;
+    // Economy v21: the completed recipe, rather than any presentation state,
+    // owns its one-shot Care Energy settlement.
+    public bool careEnergyGranted;
+    public int careEnergyGrantedAmount;
     // A v19 migration can move the currently running real action later in a
     // repaired recipe (for example Rest after the new Pilot -> Guided pair).
     // Keep that one action snapshot until its turn so real progress is not lost.
@@ -101,7 +141,8 @@ namespace KeepBlinking.CareStation
     {
       recipeId = string.Empty;
       recipeSeed = 0;
-      recipeType = CareRecipeType.Training;
+      recipeType = CareRecipeType.Triple;
+      routineId = CareRoutineId.None;
       actionList = Array.Empty<CareActionType>();
       originalActionList = Array.Empty<CareActionType>();
       currentActionIndex = 0;
@@ -115,7 +156,18 @@ namespace KeepBlinking.CareStation
       routineIntroCompleted = false;
       routineIntroElapsedSeconds = 0f;
       deepRest = false;
+      focusCycleCount = 6;
+      pilotRoundsPerAxis = 3;
+      guidedLapsPerDirection = 3;
+      closedEyeRestSeconds = 60f;
+      plannedSlotCount = 0;
+      plannedSlotRewards = Array.Empty<int>();
+      rewardSlotMasks = Array.Empty<int>();
+      rewardedStepMask = 0;
+      careEnergyRewardedTotal = 0;
       completionFeedbackPlayed = false;
+      careEnergyGranted = false;
+      careEnergyGrantedAmount = 0;
       deferredActionSnapshot = new CareActionSaveData();
     }
   }
@@ -424,6 +476,62 @@ namespace KeepBlinking.CareStation
     EyeGunk,
   }
 
+  public enum CareProductionStage
+  {
+    None = 0,
+    FilterProcessing = 1,
+    TransferFilteredLiquid = 2,
+    FillerCreateBottle = 3,
+    FillerFilling = 4,
+    FillerFilled = 5,
+    TransferToPacker = 6,
+    PackerCapping = 7,
+    PackerLabeling = 8,
+    PackerPackaging = 9,
+    TransferToStorage = 10,
+    WaitingForStorage = 11,
+  }
+
+  public enum CareProductionTransportMode
+  {
+    ManualCarry = 0,
+    BasicConveyor = 1,
+    AdvancedConveyor = 2,
+  }
+
+  [Serializable]
+  public sealed class CareProductionConfiguration
+  {
+    public float filterSeconds = 1.4f;
+    public float filteredTransferSeconds = 0.7f;
+    public float createBottleSeconds = 0.45f;
+    public float fillBottleSeconds = 1.5f;
+    public float filledHoldSeconds = 0.35f;
+    public float packerTransferSeconds = 0.7f;
+    public float capSeconds = 0.45f;
+    public float labelSeconds = 0.45f;
+    public float packageSeconds = 0.55f;
+    public float storageTransferSeconds = 0.8f;
+
+    public float Duration(CareProductionStage stage)
+    {
+      switch (stage)
+      {
+        case CareProductionStage.FilterProcessing: return Math.Max(0.05f, filterSeconds);
+        case CareProductionStage.TransferFilteredLiquid: return Math.Max(0.05f, filteredTransferSeconds);
+        case CareProductionStage.FillerCreateBottle: return Math.Max(0.05f, createBottleSeconds);
+        case CareProductionStage.FillerFilling: return Math.Max(0.05f, fillBottleSeconds);
+        case CareProductionStage.FillerFilled: return Math.Max(0.05f, filledHoldSeconds);
+        case CareProductionStage.TransferToPacker: return Math.Max(0.05f, packerTransferSeconds);
+        case CareProductionStage.PackerCapping: return Math.Max(0.05f, capSeconds);
+        case CareProductionStage.PackerLabeling: return Math.Max(0.05f, labelSeconds);
+        case CareProductionStage.PackerPackaging: return Math.Max(0.05f, packageSeconds);
+        case CareProductionStage.TransferToStorage: return Math.Max(0.05f, storageTransferSeconds);
+        default: return 0f;
+      }
+    }
+  }
+
   public enum CareStationUpgradeId
   {
     None,
@@ -456,9 +564,12 @@ namespace KeepBlinking.CareStation
   public readonly struct CareStationUpgradeAvailability
   {
     public readonly CareStationUpgradeAvailabilityReason Reason;
+    // Legacy source cost is retained for save/config migration and diagnostics.
     public readonly CareStationUpgradeCost Cost;
     public readonly int MissingFull;
     public readonly int MissingGold;
+    public readonly int CoinCost;
+    public readonly int MissingCoins;
 
     public bool CanPurchase => Reason == CareStationUpgradeAvailabilityReason.Available;
     public bool IsMaximum => Reason == CareStationUpgradeAvailabilityReason.MaximumLevel;
@@ -473,6 +584,23 @@ namespace KeepBlinking.CareStation
       Cost = cost;
       MissingFull = Math.Max(0, missingFull);
       MissingGold = Math.Max(0, missingGold);
+      CoinCost = Math.Max(0, cost.fullBottles + cost.goldBottles * CareEconomyConfiguration.DefaultPremiumBottleCoinValue);
+      MissingCoins = Math.Max(0, MissingFull + MissingGold * CareEconomyConfiguration.DefaultPremiumBottleCoinValue);
+    }
+
+    public CareStationUpgradeAvailability(
+      CareStationUpgradeAvailabilityReason reason,
+      CareStationUpgradeCost legacyCost,
+      int coinCost,
+      int missingCoins,
+      bool coinCurrency)
+    {
+      Reason = reason;
+      Cost = legacyCost;
+      MissingFull = 0;
+      MissingGold = 0;
+      CoinCost = Math.Max(0, coinCost);
+      MissingCoins = Math.Max(0, missingCoins);
     }
 
     public string PlayerReason
@@ -480,13 +608,41 @@ namespace KeepBlinking.CareStation
       get
       {
         if (Reason == CareStationUpgradeAvailabilityReason.MaximumLevel) return "MAX";
-        if (Reason == CareStationUpgradeAvailabilityReason.StorageCapacityTooSmall)
-          return "UPGRADE STORAGE FIRST";
         if (Reason != CareStationUpgradeAvailabilityReason.MissingResources) return string.Empty;
-        if (MissingFull > 0 && MissingGold > 0) return $"NEED {MissingFull} FULL + {MissingGold} GOLD";
-        if (MissingFull > 0) return $"NEED {MissingFull} FULL";
-        return MissingGold > 0 ? $"NEED {MissingGold} GOLD" : string.Empty;
+        return MissingCoins > 0 ? $"NEED {MissingCoins} COINS" : string.Empty;
       }
+    }
+  }
+
+  /// <summary>
+  /// Central serialized source of truth for the phase-one economy. Legacy
+  /// Bottle costs remain authored in CareStationUpgradeConfiguration and are
+  /// converted here exactly once at the point of use.
+  /// </summary>
+  [Serializable]
+  public sealed class CareEconomyConfiguration
+  {
+    public const int DefaultPremiumBottleCoinValue = 5;
+    public const int DefaultRoutineCareEnergy = 12;
+
+    // Retained as serialized migration aliases. Every v24 Routine now has the
+    // same twelve-point budget, distributed by its persisted slot rewards.
+    public int trainingOrSingleCareEnergy = 12;
+    public int doubleCareEnergy = 24;
+    public int tripleOrInspectionCareEnergy = 36;
+    public int routineCareEnergy = DefaultRoutineCareEnergy;
+    public int fullBottleCoinValue = 1;
+    public int premiumBottleCoinValue = DefaultPremiumBottleCoinValue;
+
+    public int CareEnergyFor(CareRecipeSaveData recipe)
+    {
+      return recipe == null ? 0 : Math.Max(0, routineCareEnergy);
+    }
+
+    public int CoinCost(CareStationUpgradeCost legacyCost)
+    {
+      return Math.Max(0, legacyCost.fullBottles) +
+             Math.Max(0, legacyCost.goldBottles) * Math.Max(0, premiumBottleCoinValue);
     }
   }
 
@@ -658,7 +814,7 @@ namespace KeepBlinking.CareStation
   [Serializable]
   public sealed class CareStationSaveData
   {
-    public int saveVersion = 20;
+    public int saveVersion = 24;
     public int currentShift = 1;
     public int careShiftId = 1;
     public CareStationState currentState = CareStationState.Dormant;
@@ -682,6 +838,28 @@ namespace KeepBlinking.CareStation
     public int storageLevel = 1;
     public int cartLevel = 1;
     public int storedFullBottles;
+    public int careEnergy;
+    public int coins;
+    // A produced foreground bottle is reserved until its dispatch animation
+    // reaches Storage. It has already consumed one Care Energy.
+    public int pendingFullBottleShipment;
+    public CareProductionStage productionStage;
+    public float productionStageElapsedSeconds;
+    public int productionCycleId;
+    public bool productionCycleEnergyConsumed;
+    public bool productionCycleStored;
+    public string productionCycleSourceRecipeId;
+    public string lastForegroundProductionRecipeId;
+    public CareProductionTransportMode productionTransportMode;
+    public bool basicConveyorUnlockPresented;
+    // v21 destination for every legacy Gold Bottle. Premium products do not
+    // occupy normal Storage and are sold by the next valid Cart settlement.
+    public int pendingPremiumShipment;
+    public string lastCartSettlementId;
+    public int lastCartFullBottlesSold;
+    public int lastCartPremiumBottlesSold;
+    public int lastCartCoinsEarned;
+    public int lastAutoProducedBottles;
     public int storedGoldBottles;
     public bool offlineProductionPausedByFullStorage;
     public int discardedOfflineBottleCount;
@@ -730,6 +908,8 @@ namespace KeepBlinking.CareStation
     // former first training step from erasing completion of later actions.
     public int completedTrainingActionMask;
     public int formalRecipesCreated;
+    public int careRoutinesCreated;
+    public CareRoutineId lastCompletedRoutineId;
     public CareRecipeSaveData currentRecipe = new CareRecipeSaveData();
     public string[] recentRecipeHistory = Array.Empty<string>();
     public int focusShiftCooldownUntilShiftId;
@@ -888,20 +1068,16 @@ namespace KeepBlinking.CareStation
     public static int RemainingForOfflineProduction(CareStationSaveData save)
     {
       if (save == null) return 0;
-      var reserved = Math.Max(0, save.pendingOfflineXP) + Math.Max(0, save.queuedOfflineXP);
+      var reserved = Math.Max(0, save.pendingFullBottleShipment) +
+                     CareProductionRules.ReservedBottleCount(save);
       return Math.Max(0, Capacity(save) - Stored(save) - reserved);
     }
 
     public static int RemainingForAutomaticOfflineSettlement(CareStationSaveData save)
     {
       if (save == null) return 0;
-      // A completed care routine is a verified player reward and must not be
-      // displaced by legacy/offline output during migration or foreground
-      // settlement. The offline queue may wait; the care flight may not vanish.
-      var pendingCare = save.careActionCompleted
-        ? Math.Max(0, save.pendingIncidentXP - save.collectedCareBottleValue - save.pendingGoldBottleCount)
-        : 0;
-      return Math.Max(0, Remaining(save) - pendingCare);
+      return Math.Max(0, Remaining(save) - Math.Max(0, save.pendingFullBottleShipment) -
+        CareProductionRules.ReservedBottleCount(save));
     }
 
     public static CareStationOfflineStorageResult LimitOfflineProduction(CareStationSaveData save, int produced)
@@ -918,6 +1094,367 @@ namespace KeepBlinking.CareStation
     public static int CollectibleNow(CareStationSaveData save, int pending)
     {
       return Math.Min(Math.Max(0, pending), Remaining(save));
+    }
+  }
+
+  public readonly struct CareCartSettlementResult
+  {
+    public readonly int FullBottlesSold;
+    public readonly int PremiumBottlesSold;
+    public readonly int CoinsEarned;
+    public readonly int BottlesProduced;
+    public readonly bool AlreadySettled;
+    public readonly bool StorageFull;
+
+    public CareCartSettlementResult(
+      int fullSold,
+      int premiumSold,
+      int coinsEarned,
+      int produced,
+      bool alreadySettled,
+      bool storageFull)
+    {
+      FullBottlesSold = Math.Max(0, fullSold);
+      PremiumBottlesSold = Math.Max(0, premiumSold);
+      CoinsEarned = Math.Max(0, coinsEarned);
+      BottlesProduced = Math.Max(0, produced);
+      AlreadySettled = alreadySettled;
+      StorageFull = storageFull;
+    }
+  }
+
+  /// <summary>
+  /// Pure phase-one economy transitions. Controllers may replay visuals, but
+  /// only these persisted transitions grant energy, produce bottles or settle
+  /// Cart proceeds.
+  /// </summary>
+  public static class CareEconomyRules
+  {
+    public static bool TryGrantCompletedRecipeStep(
+      CareStationSaveData save,
+      int completedStepIndex,
+      out int granted)
+    {
+      granted = 0;
+      var recipe = save?.currentRecipe;
+      if (recipe == null || !recipe.IsStepCompleted(completedStepIndex) ||
+          completedStepIndex < 0 || completedStepIndex >= recipe.ActionCount) return false;
+      CareRecipeGenerator.SanitizeRecipe(recipe);
+      var slotMask = recipe.rewardSlotMasks != null && completedStepIndex < recipe.rewardSlotMasks.Length
+        ? recipe.rewardSlotMasks[completedStepIndex]
+        : 1 << completedStepIndex;
+      var validSlots = recipe.plannedSlotCount <= 0 ? 0 : (1 << recipe.plannedSlotCount) - 1;
+      var unclaimed = slotMask & validSlots & ~recipe.rewardedStepMask;
+      if (unclaimed == 0) return false;
+
+      var remainingBudget = Math.Max(0,
+        CareEconomyConfiguration.DefaultRoutineCareEnergy - recipe.careEnergyRewardedTotal);
+      for (var slot = 0; slot < recipe.plannedSlotCount && granted < remainingBudget; slot++)
+      {
+        if ((unclaimed & (1 << slot)) == 0) continue;
+        var authored = recipe.plannedSlotRewards != null && slot < recipe.plannedSlotRewards.Length
+          ? Math.Max(0, recipe.plannedSlotRewards[slot])
+          : 0;
+        granted += Math.Min(authored, remainingBudget - granted);
+      }
+
+      recipe.rewardedStepMask |= unclaimed;
+      recipe.careEnergyRewardedTotal = Math.Min(
+        CareEconomyConfiguration.DefaultRoutineCareEnergy,
+        Math.Max(0, recipe.careEnergyRewardedTotal) + granted);
+      recipe.careEnergyGrantedAmount = recipe.careEnergyRewardedTotal;
+      recipe.careEnergyGranted = recipe.careEnergyRewardedTotal >=
+                                 CareEconomyConfiguration.DefaultRoutineCareEnergy;
+      if (granted <= 0) return false;
+      save.careEnergy = Math.Max(0, save.careEnergy) + granted;
+      return true;
+    }
+
+    public static bool TryGrantAllCompletedRecipeSteps(CareStationSaveData save, out int granted)
+    {
+      granted = 0;
+      var recipe = save?.currentRecipe;
+      if (recipe == null) return false;
+      var changed = false;
+      for (var step = 0; step < recipe.ActionCount; step++)
+      {
+        if (!recipe.IsStepCompleted(step)) continue;
+        if (!TryGrantCompletedRecipeStep(save, step, out var stepGrant)) continue;
+        granted += stepGrant;
+        changed = true;
+      }
+      return changed;
+    }
+
+    public static bool TryGrantRecipeCareEnergy(
+      CareStationSaveData save,
+      CareEconomyConfiguration configuration,
+      out int granted)
+    {
+      // Compatibility entry point used by older controllers/tests. It no
+      // longer creates a completion bonus; it only reconciles already-completed
+      // planned slots that have not been claimed yet.
+      return TryGrantAllCompletedRecipeSteps(save, out granted);
+    }
+
+    public static bool TryReserveForegroundBottle(CareStationSaveData save)
+    {
+      if (save == null || save.careEnergy <= 0 || save.pendingFullBottleShipment > 0 ||
+          save.productionStage != CareProductionStage.None ||
+          CareStationStorageRules.RemainingForAutomaticOfflineSettlement(save) <= 0) return false;
+      save.careEnergy--;
+      save.pendingFullBottleShipment = 1;
+      save.offlineProductionPausedByFullStorage = false;
+      return true;
+    }
+
+    public static bool TryStoreReservedBottle(CareStationSaveData save)
+    {
+      if (save == null || save.pendingFullBottleShipment <= 0 || CareStationStorageRules.Remaining(save) <= 0)
+        return false;
+      save.pendingFullBottleShipment--;
+      save.storedFullBottles++;
+      save.shiftStoredFullBottles++;
+      save.collectedExperienceCount = save.storedFullBottles;
+      save.offlineProductionPausedByFullStorage = CareStationStorageRules.Remaining(save) <= 0;
+      return true;
+    }
+
+    public static CareCartSettlementResult SettleCart(
+      CareStationSaveData save,
+      int throughput,
+      string settlementId,
+      CareEconomyConfiguration configuration)
+    {
+      if (save == null) return default;
+      configuration = configuration ?? new CareEconomyConfiguration();
+      throughput = Math.Max(0, throughput);
+      settlementId = settlementId ?? string.Empty;
+      if (!string.IsNullOrEmpty(settlementId) &&
+          string.Equals(save.lastCartSettlementId, settlementId, StringComparison.Ordinal))
+        return new CareCartSettlementResult(0, 0, 0, 0, true, CareStationStorageRules.Remaining(save) <= 0);
+
+      // Sell only inventory that existed before this settlement. Auto Shift
+      // production is stored for a later Cart trip and can never become Coins
+      // in the same atomic transaction.
+      // Premium shipments use their retained non-Storage lane and are cleared
+      // on the next valid Cart settlement. Normal Cart throughput is therefore
+      // always still able to free a full ordinary rack.
+      var premiumSold = Math.Max(0, save.pendingPremiumShipment);
+      var fullSold = Math.Min(Math.Max(0, save.storedFullBottles), throughput);
+      var coinsEarned = fullSold * Math.Max(0, configuration.fullBottleCoinValue) +
+                        premiumSold * Math.Max(0, configuration.premiumBottleCoinValue);
+      var storedAfterSale = Math.Max(0, save.storedFullBottles - fullSold);
+      // Auto Shift can use space that existed when the interval began; Cart
+      // slots freed by this transaction remain visibly free until a later
+      // interval. A full rack therefore never prevents shipment.
+      var availableForProduction = Math.Max(0,
+        CareStationStorageRules.Capacity(save) - Math.Max(0, save.storedFullBottles) -
+        Math.Max(0, save.pendingFullBottleShipment) - CareProductionRules.ReservedBottleCount(save));
+      var produced = CareProductionRules.OfflineProductionCount(save, throughput, availableForProduction);
+
+      // Commit together after every value has been derived. SaveService then
+      // persists the complete result with the settlement id.
+      save.pendingPremiumShipment = Math.Max(0, save.pendingPremiumShipment - premiumSold);
+      save.storedFullBottles = storedAfterSale + produced;
+      save.careEnergy = Math.Max(0, save.careEnergy - produced);
+      save.coins = Math.Max(0, save.coins) + coinsEarned;
+      save.lastCartSettlementId = settlementId;
+      save.lastCartFullBottlesSold = fullSold;
+      save.lastCartPremiumBottlesSold = premiumSold;
+      save.lastCartCoinsEarned = coinsEarned;
+      save.lastAutoProducedBottles = produced;
+      save.shiftStoredFullBottles = Math.Max(0, save.shiftStoredFullBottles + produced - fullSold);
+      save.collectedExperienceCount = save.storedFullBottles;
+      save.offlineProductionPausedByFullStorage =
+        save.careEnergy > 0 && CareStationStorageRules.RemainingForAutomaticOfflineSettlement(save) <= 0;
+      return new CareCartSettlementResult(
+        fullSold,
+        premiumSold,
+        coinsEarned,
+        produced,
+        false,
+        CareStationStorageRules.RemainingForAutomaticOfflineSettlement(save) <= 0);
+    }
+  }
+
+  public readonly struct CareProductionAdvanceResult
+  {
+    public readonly bool StageChanged;
+    public readonly bool BottleStored;
+    public readonly bool WaitingForStorage;
+
+    public CareProductionAdvanceResult(bool changed, bool stored, bool waiting)
+    {
+      StageChanged = changed;
+      BottleStored = stored;
+      WaitingForStorage = waiting;
+    }
+  }
+
+  public static class CareProductionRules
+  {
+    public static int ReservedBottleCount(CareStationSaveData save)
+    {
+      return save != null && save.productionStage != CareProductionStage.None &&
+             !save.productionCycleStored ? 1 : 0;
+    }
+
+    public static bool TryBeginForegroundCycle(CareStationSaveData save, string recipeId)
+    {
+      if (save == null || save.productionStage != CareProductionStage.None ||
+          save.careEnergy <= 0 ||
+          CareStationStorageRules.RemainingForAutomaticOfflineSettlement(save) <= 0) return false;
+      recipeId = recipeId ?? string.Empty;
+      if (!string.IsNullOrEmpty(recipeId) &&
+          string.Equals(save.lastForegroundProductionRecipeId, recipeId, StringComparison.Ordinal)) return false;
+
+      save.careEnergy--;
+      save.productionCycleId = Math.Max(0, save.productionCycleId) + 1;
+      save.productionStage = CareProductionStage.FilterProcessing;
+      save.productionStageElapsedSeconds = 0f;
+      save.productionCycleEnergyConsumed = true;
+      save.productionCycleStored = false;
+      save.productionCycleSourceRecipeId = recipeId;
+      save.lastForegroundProductionRecipeId = recipeId;
+      save.pendingFullBottleShipment = 0;
+      save.offlineProductionPausedByFullStorage = false;
+      return true;
+    }
+
+    public static CareProductionAdvanceResult AdvanceForegroundCycle(
+      CareStationSaveData save,
+      float unscaledDeltaSeconds,
+      CareProductionConfiguration configuration)
+    {
+      if (save == null || save.productionStage == CareProductionStage.None)
+        return default;
+      configuration = configuration ?? new CareProductionConfiguration();
+      var changed = false;
+      var stored = false;
+      var remainingDelta = Math.Max(0f, unscaledDeltaSeconds);
+
+      if (save.productionStage == CareProductionStage.WaitingForStorage)
+      {
+        stored = TryCommitForegroundBottle(save);
+        return new CareProductionAdvanceResult(stored, stored, !stored);
+      }
+
+      save.productionStageElapsedSeconds = Math.Max(0f, save.productionStageElapsedSeconds) + remainingDelta;
+      for (var guard = 0; guard < 12 && save.productionStage != CareProductionStage.None; guard++)
+      {
+        var duration = configuration.Duration(save.productionStage);
+        if (duration <= 0f || save.productionStageElapsedSeconds < duration) break;
+        save.productionStageElapsedSeconds -= duration;
+        var next = NextStage(save.productionStage);
+        save.productionStage = next;
+        changed = true;
+        if (next != CareProductionStage.WaitingForStorage) continue;
+        stored = TryCommitForegroundBottle(save);
+        break;
+      }
+
+      return new CareProductionAdvanceResult(
+        changed,
+        stored,
+        save.productionStage == CareProductionStage.WaitingForStorage);
+    }
+
+    public static float StageProgress(CareStationSaveData save, CareProductionConfiguration configuration)
+    {
+      if (save == null || save.productionStage == CareProductionStage.None) return 0f;
+      if (save.productionStage == CareProductionStage.WaitingForStorage) return 1f;
+      configuration = configuration ?? new CareProductionConfiguration();
+      var duration = configuration.Duration(save.productionStage);
+      return duration <= 0f ? 1f : Math.Min(1f, Math.Max(0f, save.productionStageElapsedSeconds) / duration);
+    }
+
+    public static int OfflineProductionCount(CareStationSaveData save, int throughput, int availableAtStart)
+    {
+      if (save == null) return 0;
+      return Math.Min(Math.Max(0, throughput),
+        Math.Min(Math.Max(0, save.careEnergy), Math.Max(0, availableAtStart)));
+    }
+
+    private static bool TryCommitForegroundBottle(CareStationSaveData save)
+    {
+      if (save == null || save.productionCycleStored) return false;
+      if (CareStationStorageRules.Remaining(save) <= 0)
+      {
+        save.productionStage = CareProductionStage.WaitingForStorage;
+        save.productionStageElapsedSeconds = 0f;
+        save.offlineProductionPausedByFullStorage = true;
+        return false;
+      }
+
+      save.storedFullBottles++;
+      save.shiftStoredFullBottles++;
+      save.collectedExperienceCount = save.storedFullBottles;
+      save.productionCycleStored = true;
+      save.productionStage = CareProductionStage.None;
+      save.productionStageElapsedSeconds = 0f;
+      save.offlineProductionPausedByFullStorage = CareStationStorageRules.Remaining(save) <= 0;
+      return true;
+    }
+
+    private static CareProductionStage NextStage(CareProductionStage stage)
+    {
+      switch (stage)
+      {
+        case CareProductionStage.FilterProcessing: return CareProductionStage.TransferFilteredLiquid;
+        case CareProductionStage.TransferFilteredLiquid: return CareProductionStage.FillerCreateBottle;
+        case CareProductionStage.FillerCreateBottle: return CareProductionStage.FillerFilling;
+        case CareProductionStage.FillerFilling: return CareProductionStage.FillerFilled;
+        case CareProductionStage.FillerFilled: return CareProductionStage.TransferToPacker;
+        case CareProductionStage.TransferToPacker: return CareProductionStage.PackerCapping;
+        case CareProductionStage.PackerCapping: return CareProductionStage.PackerLabeling;
+        case CareProductionStage.PackerLabeling: return CareProductionStage.PackerPackaging;
+        case CareProductionStage.PackerPackaging: return CareProductionStage.TransferToStorage;
+        case CareProductionStage.TransferToStorage: return CareProductionStage.WaitingForStorage;
+        default: return CareProductionStage.None;
+      }
+    }
+  }
+
+  /// <summary>
+  /// One authoritative transport-mode gateway. The current progression has a
+  /// single Station level, so L2 represents all three production devices
+  /// completing their basic automation retrofit. The method boundary is kept
+  /// deliberately independent from that representation so future per-device
+  /// levels can replace the predicate without changing save or view callers.
+  /// </summary>
+  public static class CareProductionTransportRules
+  {
+    public static bool HasBasicAutomationMilestone(CareStationSaveData save)
+    {
+      return save != null && (save.stationLevel >= 2 || save.inspectionCompleted);
+    }
+
+    public static CareProductionTransportMode AuthoritativeMode(CareStationSaveData save)
+    {
+      if (!HasBasicAutomationMilestone(save)) return CareProductionTransportMode.ManualCarry;
+      return save != null && save.productionTransportMode == CareProductionTransportMode.AdvancedConveyor
+        ? CareProductionTransportMode.AdvancedConveyor
+        : CareProductionTransportMode.BasicConveyor;
+    }
+
+    public static void Synchronize(CareStationSaveData save)
+    {
+      if (save == null) return;
+      if (!Enum.IsDefined(typeof(CareProductionTransportMode), save.productionTransportMode))
+        save.productionTransportMode = CareProductionTransportMode.ManualCarry;
+      save.productionTransportMode = AuthoritativeMode(save);
+    }
+
+    public static bool TryConsumeBasicConveyorUnlock(CareStationSaveData save)
+    {
+      if (save == null || !HasBasicAutomationMilestone(save)) return false;
+      save.productionTransportMode = save.productionTransportMode == CareProductionTransportMode.AdvancedConveyor
+        ? CareProductionTransportMode.AdvancedConveyor
+        : CareProductionTransportMode.BasicConveyor;
+      if (save.basicConveyorUnlockPresented) return false;
+      save.basicConveyorUnlockPresented = true;
+      return true;
     }
   }
 
@@ -989,32 +1526,20 @@ namespace KeepBlinking.CareStation
     public static bool CanSchedule(CareStationSaveData save)
     {
       return save != null && !save.inspectionTriggered && !save.inspectionCompleted &&
-             CareRecipeGenerator.HasCompletedTraining(save) && save.workerLevel >= 2 &&
-             save.storageLevel >= 2 && save.cartLevel >= 2 &&
+             save.workerLevel >= 2 && save.storageLevel >= 2 && save.cartLevel >= 2 &&
              save.pendingOfflineXP <= 0 && save.queuedOfflineXP <= 0 &&
-             save.pendingIncidentXP <= 0 && save.pendingGoldBottleCount <= 0 &&
+             save.pendingFullBottleShipment <= 0 &&
              save.currentState == CareStationState.AutoShift &&
              save.careShiftCompleted && save.endShiftConsumed;
     }
 
     public static CareRecipeSaveData CreateRecipe(int shiftId)
     {
-      var actions = new[]
-      {
-        CareActionType.PilotEyeRoutine,
-        CareActionType.GuidedEyeCircles,
-        CareActionType.ClosedEyeRest,
-      };
-      return new CareRecipeSaveData
-      {
-        recipeId = $"station_inspection_{Math.Max(1, shiftId)}",
-        recipeSeed = unchecked(Math.Max(1, shiftId) * 486187739),
-        recipeType = CareRecipeType.Inspection,
-        actionList = actions,
-        originalActionList = (CareActionType[])actions.Clone(),
-        createdShiftId = Math.Max(1, shiftId),
-        deepRest = true,
-      };
+      return CareRecipeGenerator.CreateRoutine(
+        CareRoutineId.PilotFlow,
+        Math.Max(1, shiftId),
+        unchecked(Math.Max(1, shiftId) * 486187739),
+        true);
     }
 
     public static int CompletedCheckMask(int completedActionIndex, bool recipeCompleted)
@@ -1157,16 +1682,24 @@ namespace KeepBlinking.CareStation
       CareStationUpgradeId upgrade,
       CareStationUpgradeConfiguration configuration)
     {
-      return EvaluateUpgrade(save, upgrade, configuration).CanPurchase;
+      return EvaluateUpgrade(save, upgrade, configuration, null).CanPurchase;
     }
 
     public static bool CanPurchaseAnyUpgrade(
       CareStationSaveData save,
       CareStationUpgradeConfiguration configuration)
     {
-      return CanPurchaseUpgrade(save, CareStationUpgradeId.MoreWorkers, configuration) ||
-             CanPurchaseUpgrade(save, CareStationUpgradeId.LargerStorage, configuration) ||
-             CanPurchaseUpgrade(save, CareStationUpgradeId.BiggerCart, configuration);
+      return CanPurchaseAnyUpgrade(save, configuration, null);
+    }
+
+    public static bool CanPurchaseAnyUpgrade(
+      CareStationSaveData save,
+      CareStationUpgradeConfiguration configuration,
+      CareEconomyConfiguration economy)
+    {
+      return EvaluateUpgrade(save, CareStationUpgradeId.MoreWorkers, configuration, economy).CanPurchase ||
+             EvaluateUpgrade(save, CareStationUpgradeId.LargerStorage, configuration, economy).CanPurchase ||
+             EvaluateUpgrade(save, CareStationUpgradeId.BiggerCart, configuration, economy).CanPurchase;
     }
 
     public static bool CanEnterUpgradeSelection(
@@ -1187,20 +1720,24 @@ namespace KeepBlinking.CareStation
 
     public static bool EnsureFirstFormalGoldBottle(CareStationSaveData save)
     {
-      if (save == null || save.firstFormalGoldBottleGenerated || save.inspectionActive ||
-          save.currentRecipe == null) return false;
-      var type = save.currentRecipe.recipeType;
-      if (type != CareRecipeType.Double && type != CareRecipeType.Triple) return false;
-      save.pendingIncidentXP = Math.Max(1, save.pendingIncidentXP);
-      save.pendingGoldBottleCount = Math.Max(1, save.pendingGoldBottleCount);
-      save.firstFormalGoldBottleGenerated = true;
-      return true;
+      // Legacy API retained so old call sites and v20 tests deserialize safely.
+      // Gold/Premium products are never generated by care in the v21 economy.
+      return false;
     }
 
     public static CareStationUpgradeAvailability EvaluateUpgrade(
       CareStationSaveData save,
       CareStationUpgradeId upgrade,
       CareStationUpgradeConfiguration configuration)
+    {
+      return EvaluateUpgrade(save, upgrade, configuration, null);
+    }
+
+    public static CareStationUpgradeAvailability EvaluateUpgrade(
+      CareStationSaveData save,
+      CareStationUpgradeId upgrade,
+      CareStationUpgradeConfiguration configuration,
+      CareEconomyConfiguration economy)
     {
       if (save == null || upgrade == CareStationUpgradeId.None)
         return new CareStationUpgradeAvailability(
@@ -1209,6 +1746,7 @@ namespace KeepBlinking.CareStation
           0,
           0);
       configuration = configuration ?? new CareStationUpgradeConfiguration();
+      economy = economy ?? new CareEconomyConfiguration();
       var level = GetUpgradeLevel(save, upgrade);
       if (level >= CareStationUpgradeConfiguration.MaximumLevel)
         return new CareStationUpgradeAvailability(
@@ -1216,22 +1754,17 @@ namespace KeepBlinking.CareStation
           default,
           0,
           0);
-      var cost = configuration.Cost(upgrade, level);
-      if (cost.fullBottles > CareStationStorageRules.Capacity(save))
-        return new CareStationUpgradeAvailability(
-          CareStationUpgradeAvailabilityReason.StorageCapacityTooSmall,
-          cost,
-          Math.Max(0, cost.fullBottles - save.storedFullBottles),
-          Math.Max(0, cost.goldBottles - save.storedGoldBottles));
-      var missingFull = Math.Max(0, cost.fullBottles - save.storedFullBottles);
-      var missingGold = Math.Max(0, cost.goldBottles - save.storedGoldBottles);
+      var legacyCost = configuration.Cost(upgrade, level);
+      var coinCost = economy.CoinCost(legacyCost);
+      var missingCoins = Math.Max(0, coinCost - Math.Max(0, save.coins));
       return new CareStationUpgradeAvailability(
-        missingFull <= 0 && missingGold <= 0
+        missingCoins <= 0
           ? CareStationUpgradeAvailabilityReason.Available
           : CareStationUpgradeAvailabilityReason.MissingResources,
-        cost,
-        missingFull,
-        missingGold);
+        legacyCost,
+        coinCost,
+        missingCoins,
+        true);
     }
 
     public static bool TryPurchaseUpgrade(
@@ -1239,13 +1772,20 @@ namespace KeepBlinking.CareStation
       CareStationUpgradeId upgrade,
       CareStationUpgradeConfiguration configuration)
     {
+      return TryPurchaseUpgrade(save, upgrade, configuration, null);
+    }
+
+    public static bool TryPurchaseUpgrade(
+      CareStationSaveData save,
+      CareStationUpgradeId upgrade,
+      CareStationUpgradeConfiguration configuration,
+      CareEconomyConfiguration economy)
+    {
       configuration = configuration ?? new CareStationUpgradeConfiguration();
-      var availability = EvaluateUpgrade(save, upgrade, configuration);
+      economy = economy ?? new CareEconomyConfiguration();
+      var availability = EvaluateUpgrade(save, upgrade, configuration, economy);
       if (!availability.CanPurchase) return false;
-      var level = GetUpgradeLevel(save, upgrade);
-      var cost = availability.Cost;
-      save.storedFullBottles -= cost.fullBottles;
-      save.storedGoldBottles -= cost.goldBottles;
+      save.coins -= availability.CoinCost;
       ApplyUpgradeWithoutCost(save, upgrade, configuration);
       save.offlineProductionPausedByFullStorage = CareStationStorageRules.Remaining(save) <= 0;
       return true;
@@ -1267,7 +1807,7 @@ namespace KeepBlinking.CareStation
       if (save.workerLevel > 1) save.unlockedUpgradeMask |= UpgradeBit(CareStationUpgradeId.MoreWorkers);
       if (save.storageLevel > 1) save.unlockedUpgradeMask |= UpgradeBit(CareStationUpgradeId.LargerStorage);
       if (save.cartLevel > 1) save.unlockedUpgradeMask |= UpgradeBit(CareStationUpgradeId.BiggerCart);
-      save.collectedExperienceCount = Math.Max(0, save.storedFullBottles + save.storedGoldBottles);
+      save.collectedExperienceCount = Math.Max(0, save.storedFullBottles);
     }
 
     public static float ProductionRateMultiplier(CareStationSaveData save)

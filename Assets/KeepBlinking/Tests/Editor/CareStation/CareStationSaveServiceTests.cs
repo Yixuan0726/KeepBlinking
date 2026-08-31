@@ -181,6 +181,142 @@ namespace KeepBlinking.Tests
     }
 
     [Test]
+    public void StaleFullStorageUiStateLoadsIntoStationWithoutChangingProgressOrEconomy()
+    {
+      var now = new DateTime(2026, 8, 29, 3, 0, 0, DateTimeKind.Utc);
+      var recipe = new CareRecipeSaveData
+      {
+        recipeId = "preserve_recipe",
+        recipeSeed = 7341,
+        recipeType = CareRecipeType.Double,
+        actionList = new[] { CareActionType.FocusShift, CareActionType.ClosedEyeRest },
+        createdShiftId = 7,
+      };
+      var stale = new CareStationSaveData
+      {
+        saveVersion = CareStationSaveService.CurrentVersion,
+        currentState = CareStationState.WaitStorageSpace,
+        activeCollectionPhase = CareStationCollectionPhase.Care,
+        pendingReturnPhase = CareStationCollectionPhase.Care,
+        storedFullBottles = 24,
+        storedGoldBottles = 3,
+        offlineProductionPausedByFullStorage = false,
+        currentShift = 7,
+        careShiftId = 7,
+        completedShifts = 6,
+        workerLevel = 3,
+        storageLevel = 1,
+        cartLevel = 2,
+        stationLevel = 2,
+        unlockedUpgradeMask =
+          CareStationShiftRules.UpgradeBit(CareStationUpgradeId.MoreWorkers) |
+          CareStationShiftRules.UpgradeBit(CareStationUpgradeId.BiggerCart),
+        selectedUpgrade = CareStationUpgradeId.MoreWorkers,
+        trainingProgress = 3,
+        completedTrainingActionMask =
+          CareRecipeGenerator.TrainingBit(CareActionType.FocusShift) |
+          CareRecipeGenerator.TrainingBit(CareActionType.GuidedEyeCircles) |
+          CareRecipeGenerator.TrainingBit(CareActionType.ClosedEyeRest),
+        formalRecipesCreated = 5,
+        currentRecipe = recipe,
+        currentResearchSessionId = "research-session-preserved",
+      };
+      Directory.CreateDirectory(_directory);
+      File.WriteAllText(_path, UnityEngine.JsonUtility.ToJson(stale));
+
+      var restored = new CareStationSaveService(_path).Load(now);
+
+      Assert.That(restored.currentState, Is.EqualTo(CareStationState.StationWorking));
+      Assert.That(restored.activeCollectionPhase, Is.EqualTo(CareStationCollectionPhase.None));
+      Assert.That(restored.pendingReturnPhase, Is.EqualTo(CareStationCollectionPhase.None));
+      Assert.That(restored.offlineCollectionResolved, Is.True);
+      Assert.That(restored.returnedNeutralAfterOffline, Is.True,
+        "A repaired Station presentation must not retain an invisible return-to-neutral gate.");
+      Assert.That(restored.storedFullBottles, Is.EqualTo(24));
+      Assert.That(restored.storedGoldBottles, Is.EqualTo(3));
+      Assert.That(restored.offlineProductionPausedByFullStorage, Is.True,
+        "The load-only repair must recompute production pause from actual remaining storage.");
+      Assert.That(restored.currentShift, Is.EqualTo(7));
+      Assert.That(restored.careShiftId, Is.EqualTo(7));
+      Assert.That(restored.completedShifts, Is.EqualTo(6));
+      Assert.That(restored.workerLevel, Is.EqualTo(3));
+      Assert.That(restored.storageLevel, Is.EqualTo(1));
+      Assert.That(restored.cartLevel, Is.EqualTo(2));
+      Assert.That(restored.stationLevel, Is.EqualTo(2));
+      Assert.That(restored.unlockedUpgradeMask, Is.EqualTo(
+        CareStationShiftRules.UpgradeBit(CareStationUpgradeId.MoreWorkers) |
+        CareStationShiftRules.UpgradeBit(CareStationUpgradeId.BiggerCart)));
+      Assert.That(restored.selectedUpgrade, Is.EqualTo(CareStationUpgradeId.MoreWorkers));
+      Assert.That(restored.trainingProgress, Is.EqualTo(3));
+      Assert.That(restored.completedTrainingActionMask, Is.EqualTo(
+        CareRecipeGenerator.TrainingBit(CareActionType.FocusShift) |
+        CareRecipeGenerator.TrainingBit(CareActionType.GuidedEyeCircles) |
+        CareRecipeGenerator.TrainingBit(CareActionType.ClosedEyeRest)));
+      Assert.That(restored.formalRecipesCreated, Is.EqualTo(5));
+      Assert.That(restored.currentRecipe.recipeId, Is.EqualTo("preserve_recipe"));
+      Assert.That(restored.currentRecipe.recipeSeed, Is.EqualTo(7341));
+      Assert.That(restored.currentRecipe.actionList,
+        Is.EqualTo(new[] { CareActionType.FocusShift, CareActionType.ClosedEyeRest }));
+      Assert.That(restored.currentResearchSessionId, Is.EqualTo("research-session-preserved"));
+    }
+
+    [Test]
+    public void FullStorageWithPendingOfflineRewardKeepsResumableGate()
+    {
+      var save = new CareStationSaveData
+      {
+        currentState = CareStationState.WaitStorageSpace,
+        activeCollectionPhase = CareStationCollectionPhase.Offline,
+        storedFullBottles = 24,
+        pendingOfflineXP = 9,
+        collectedOfflineBottleValue = 2,
+        offlineProductionPausedByFullStorage = true,
+      };
+      var service = new CareStationSaveService(_path);
+      service.Save(save, DateTime.UtcNow);
+
+      var restored = service.Load(DateTime.UtcNow.AddMinutes(1));
+
+      Assert.That(restored.currentState, Is.EqualTo(CareStationState.WaitStorageSpace));
+      Assert.That(restored.activeCollectionPhase, Is.EqualTo(CareStationCollectionPhase.Offline));
+      Assert.That(restored.pendingOfflineXP, Is.EqualTo(9));
+      Assert.That(restored.collectedOfflineBottleValue, Is.EqualTo(2));
+      Assert.That(restored.storedFullBottles, Is.EqualTo(24));
+    }
+
+    [Test]
+    public void SaveDoesNotApplyLoadOnlyStaleUiMigration()
+    {
+      var stale = new CareStationSaveData
+      {
+        currentState = CareStationState.WaitStorageSpace,
+        activeCollectionPhase = CareStationCollectionPhase.Care,
+        storedFullBottles = 24,
+        offlineProductionPausedByFullStorage = true,
+      };
+
+      new CareStationSaveService(_path).Save(stale, DateTime.UtcNow);
+
+      Assert.That(stale.currentState, Is.EqualTo(CareStationState.WaitStorageSpace));
+      Assert.That(stale.activeCollectionPhase, Is.EqualTo(CareStationCollectionPhase.Care));
+      Assert.That(stale.storedFullBottles, Is.EqualTo(24));
+    }
+
+    [Test]
+    public void LoadRepairsExplicitlyNullRecipeBeforeSanitizingIt()
+    {
+      Directory.CreateDirectory(_directory);
+      File.WriteAllText(_path,
+        "{\"saveVersion\":20,\"currentState\":18,\"currentRecipe\":null,\"storedFullBottles\":24}");
+
+      var restored = new CareStationSaveService(_path).Load(DateTime.UtcNow);
+
+      Assert.That(restored.currentRecipe, Is.Not.Null);
+      Assert.That(restored.currentState, Is.EqualTo(CareStationState.StationWorking));
+      Assert.That(restored.storedFullBottles, Is.EqualTo(24));
+    }
+
+    [Test]
     public void InspectionProgressAndUnstoredRewardRoundTrip()
     {
       var now = DateTime.UtcNow;
@@ -765,7 +901,7 @@ namespace KeepBlinking.Tests
     }
 
     [Test]
-    public void VersionSixteenBlinkTrainingContinuesAtNextUnfinishedRealTraining()
+    public void VersionSixteenBlinkTrainingContinuesInsideCompatibleFormalRoutine()
     {
       var legacy = new CareStationSaveData
       {
@@ -790,8 +926,14 @@ namespace KeepBlinking.Tests
 
       Assert.That(restored.completedTrainingActionMask &
                   CareRecipeGenerator.TrainingBit(CareActionType.FocusShift), Is.Not.Zero);
-      Assert.That(restored.currentRecipe.recipeType, Is.EqualTo(CareRecipeType.Training));
-      Assert.That(restored.currentRecipe.actionList, Is.EqualTo(new[] { CareActionType.PilotEyeRoutine }));
+      Assert.That(restored.currentRecipe.recipeType, Is.EqualTo(CareRecipeType.Triple));
+      Assert.That(restored.currentRecipe.routineId, Is.EqualTo(CareRoutineId.PilotFlow));
+      Assert.That(restored.currentRecipe.actionList, Is.EqualTo(new[]
+      {
+        CareActionType.PilotEyeRoutine,
+        CareActionType.GuidedEyeCircles,
+        CareActionType.ClosedEyeRest,
+      }));
       Assert.That(restored.currentRecipe.currentActionIndex, Is.Zero);
       Assert.That(restored.careAction.actionType, Is.EqualTo(CareActionType.None));
     }

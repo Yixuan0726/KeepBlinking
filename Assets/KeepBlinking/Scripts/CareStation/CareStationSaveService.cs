@@ -7,7 +7,7 @@ namespace KeepBlinking.CareStation
 {
   public sealed class CareStationSaveService
   {
-    public const int CurrentVersion = 20;
+    public const int CurrentVersion = 24;
     public string SavePath { get; }
 
     public CareStationSaveService(string savePath = null)
@@ -27,6 +27,7 @@ namespace KeepBlinking.CareStation
           if (loaded != null)
           {
             Sanitize(loaded, utcNow);
+            MigrateStaleUiStateAfterLoad(loaded);
             return loaded;
           }
         }
@@ -78,6 +79,10 @@ namespace KeepBlinking.CareStation
     private static void Sanitize(CareStationSaveData data, DateTime utcNow)
     {
       var loadedVersion = data.saveVersion;
+      // JsonUtility leaves explicitly-null reference fields null. Several
+      // migrations inspect the recipe before the common sanitization block at
+      // the end of this method, so restore the required object immediately.
+      if (data.currentRecipe == null) data.currentRecipe = new CareRecipeSaveData();
       if (loadedVersion < 2 && data.selectedUpgrade != CareStationUpgradeId.None)
       {
         data.unlockedUpgradeMask |= CareStationShiftRules.UpgradeBit(data.selectedUpgrade);
@@ -376,6 +381,22 @@ namespace KeepBlinking.CareStation
         ResetLegacyVoiceState(data.careAction);
         ResetLegacyVoiceState(data.currentRecipe?.deferredActionSnapshot);
       }
+      if (loadedVersion < 21)
+      {
+        MigrateEconomyV21(data);
+      }
+      if (loadedVersion < 22)
+      {
+        MigrateProductionV22(data);
+      }
+      if (loadedVersion < 23)
+      {
+        MigrateTransportV23(data);
+      }
+      if (loadedVersion < 24)
+      {
+        MigrateRoutineV24(data);
+      }
       data.saveVersion = CurrentVersion;
       data.currentShift = Mathf.Max(1, data.currentShift);
       data.careShiftId = Mathf.Max(1, data.careShiftId);
@@ -389,11 +410,37 @@ namespace KeepBlinking.CareStation
       data.storageLevel = Mathf.Clamp(data.storageLevel, 1, CareStationUpgradeConfiguration.MaximumLevel);
       data.cartLevel = Mathf.Clamp(data.cartLevel, 1, CareStationUpgradeConfiguration.MaximumLevel);
       data.storedFullBottles = Mathf.Max(0, data.storedFullBottles);
-      data.storedGoldBottles = Mathf.Max(0, data.storedGoldBottles);
+      data.careEnergy = Mathf.Max(0, data.careEnergy);
+      data.coins = Mathf.Max(0, data.coins);
+      data.pendingFullBottleShipment = Mathf.Clamp(data.pendingFullBottleShipment, 0, 1);
+      if (!Enum.IsDefined(typeof(CareProductionStage), data.productionStage))
+        data.productionStage = CareProductionStage.None;
+      data.productionStageElapsedSeconds = Mathf.Max(0f, data.productionStageElapsedSeconds);
+      data.productionCycleId = Mathf.Max(0, data.productionCycleId);
+      data.productionCycleSourceRecipeId = data.productionCycleSourceRecipeId ?? string.Empty;
+      data.lastForegroundProductionRecipeId = data.lastForegroundProductionRecipeId ?? string.Empty;
+      if (data.productionCycleStored && data.productionStage != CareProductionStage.None)
+      {
+        data.productionStage = CareProductionStage.None;
+        data.productionStageElapsedSeconds = 0f;
+      }
+      data.pendingPremiumShipment = Mathf.Max(0, data.pendingPremiumShipment);
+      data.lastCartFullBottlesSold = Mathf.Max(0, data.lastCartFullBottlesSold);
+      data.lastCartPremiumBottlesSold = Mathf.Max(0, data.lastCartPremiumBottlesSold);
+      data.lastCartCoinsEarned = Mathf.Max(0, data.lastCartCoinsEarned);
+      data.lastAutoProducedBottles = Mathf.Max(0, data.lastAutoProducedBottles);
+      data.lastCartSettlementId = data.lastCartSettlementId ?? string.Empty;
+      // These fields are read only by the v21 migration above. Keeping them
+      // empty prevents any legacy presentation from becoming an economy source.
+      data.storedGoldBottles = 0;
+      data.pendingIncidentXP = 0;
+      data.pendingGoldBottleCount = 0;
+      data.selectedIncident = CareStationIncidentType.None;
       data.discardedOfflineBottleCount = Mathf.Max(0, data.discardedOfflineBottleCount);
       data.inspectionCurrentCheck = Mathf.Clamp(data.inspectionCurrentCheck, 0, 4);
       data.inspectionCompletedMask &= CareStationInspectionRules.AllChecks;
       data.stationLevel = Mathf.Clamp(data.stationLevel, 1, 2);
+      CareProductionTransportRules.Synchronize(data);
       if (data.preCareScores == null) data.preCareScores = new CareSubjectiveScores();
       if (data.postCareScores == null) data.postCareScores = new CareSubjectiveScores();
       data.preCareScores.Sanitize();
@@ -421,7 +468,7 @@ namespace KeepBlinking.CareStation
         data.offlineProductionPausedByFullStorage = CareStationStorageRules.Remaining(data) <= 0;
       data.completedShifts = Mathf.Max(0, data.completedShifts);
       data.unlockedUpgradeMask &= CareStationShiftRules.AllUpgradeMask;
-      data.pendingGoldBottleCount = Mathf.Clamp(data.pendingGoldBottleCount, 0, Mathf.Max(1, data.pendingIncidentXP));
+      data.pendingGoldBottleCount = 0;
       data.collectedOfflineBottleValue = Mathf.Clamp(data.collectedOfflineBottleValue, 0, data.pendingOfflineXP);
       data.collectedCareBottleValue = Mathf.Clamp(data.collectedCareBottleValue, 0, data.pendingIncidentXP);
       data.shiftSupplyGeneratedForShiftId = Mathf.Max(0, data.shiftSupplyGeneratedForShiftId);
@@ -453,6 +500,9 @@ namespace KeepBlinking.CareStation
       data.completedTrainingActionMask &= CareRecipeGenerator.AllTrainingActionMask;
       data.trainingProgress = CareRecipeGenerator.CompletedTrainingCount(data.completedTrainingActionMask);
       data.formalRecipesCreated = Mathf.Max(0, data.formalRecipesCreated);
+      data.careRoutinesCreated = Mathf.Max(0, data.careRoutinesCreated);
+      if (!Enum.IsDefined(typeof(CareRoutineId), data.lastCompletedRoutineId))
+        data.lastCompletedRoutineId = CareRoutineId.None;
       data.focusShiftCooldownUntilShiftId = Mathf.Max(0, data.focusShiftCooldownUntilShiftId);
       data.guidedEyeCirclesCooldownUntilShiftId = Mathf.Max(0, data.guidedEyeCirclesCooldownUntilShiftId);
       data.shiftStoredFullBottles = Mathf.Max(0, data.shiftStoredFullBottles);
@@ -495,6 +545,7 @@ namespace KeepBlinking.CareStation
       }
       if (data.currentRecipe == null) data.currentRecipe = new CareRecipeSaveData();
       CareRecipeGenerator.SanitizeRecipe(data.currentRecipe);
+      data.currentRecipe.careEnergyGrantedAmount = Mathf.Max(0, data.currentRecipe.careEnergyGrantedAmount);
       if (data.careAction.actionType == CareActionType.FocusShift)
       {
         data.careAction.gestureReferenceScale = data.careActionGestureReferenceScale;
@@ -502,6 +553,316 @@ namespace KeepBlinking.CareStation
       }
       if (string.IsNullOrWhiteSpace(data.lastActiveUtc)) data.StampActive(utcNow);
       if (string.IsNullOrWhiteSpace(data.lastClaimedUtc)) data.StampClaimed(utcNow);
+    }
+
+    private static void MigrateEconomyV21(CareStationSaveData data)
+    {
+      if (data == null) return;
+
+      var oldPending = Math.Max(0, data.pendingIncidentXP);
+      var oldCollected = Math.Max(0, data.collectedCareBottleValue);
+      var oldIncidentActive = data.selectedIncident != CareStationIncidentType.None &&
+                              !data.careShiftCompleted &&
+                              (data.currentState == CareStationState.PresentIncident ||
+                               data.currentState == CareStationState.WaitIncidentSelection ||
+                               IsRecipeFlowState(data.currentState));
+      if (oldPending <= 0 && oldIncidentActive)
+        oldPending = CareStationShiftRules.IncidentExperience(data.selectedIncident);
+      var pendingCareEnergy = Math.Max(0, oldPending - oldCollected);
+      data.careEnergy = Math.Max(0, data.careEnergy) + pendingCareEnergy;
+
+      // Gold was an inventory/upgrade currency. Its sole v21 meaning is an
+      // unsold Premium product; the shift count was already a subset of the
+      // stored wallet and must not be added a second time.
+      data.pendingPremiumShipment = Math.Max(0, data.pendingPremiumShipment) +
+                                    Math.Max(0, data.storedGoldBottles) +
+                                    Math.Max(0, data.pendingGoldBottleCount);
+
+      if (data.currentRecipe != null && (oldPending > 0 || data.currentRecipe.recipeCompleted))
+      {
+        data.currentRecipe.careEnergyGranted = true;
+        data.currentRecipe.careEnergyGrantedAmount = pendingCareEnergy;
+      }
+
+      data.pendingIncidentXP = 0;
+      data.collectedCareBottleValue = 0;
+      data.pendingGoldBottleCount = 0;
+      data.storedGoldBottles = 0;
+      data.shiftStoredGoldBottles = 0;
+      data.selectedIncident = CareStationIncidentType.None;
+      data.firstFormalGoldBottleGenerated = false;
+      data.inspectionRewardProduced = false;
+      data.inspectionRewardStored = false;
+      data.careCollectionReleased = false;
+      data.pendingFullBottleShipment = 0;
+      data.lastCartSettlementId = string.Empty;
+      data.lastCartFullBottlesSold = 0;
+      data.lastCartPremiumBottlesSold = 0;
+      data.lastCartCoinsEarned = 0;
+      data.lastAutoProducedBottles = 0;
+      data.collectedExperienceCount = Math.Max(0, data.storedFullBottles);
+
+      if (data.currentState == CareStationState.PresentIncident ||
+          data.currentState == CareStationState.WaitIncidentSelection)
+        data.currentState = CareStationState.StationWorking;
+
+      if (data.currentState == CareStationState.ProduceBottles ||
+          data.currentState == CareStationState.PresentCareBottles ||
+          data.currentState == CareStationState.WaitCarePushAway ||
+          data.currentState == CareStationState.WaitPushAwayReady ||
+          data.currentState == CareStationState.WaitPushAway ||
+          data.currentState == CareStationState.CollectingExperience ||
+          data.currentState == CareStationState.WaitExperienceCollected ||
+          data.currentState == CareStationState.CollectingCareBottles ||
+          data.currentState == CareStationState.WaitCareBottlesStored ||
+          data.currentState == CareStationState.WaitStorageSpace)
+        data.currentState = data.currentRecipe != null && data.currentRecipe.recipeCompleted
+          ? CareStationState.RepairReveal
+          : CareStationState.StationWorking;
+
+      if (data.currentState == CareStationState.UpgradeSelection)
+      {
+        data.upgradeOffered = true;
+        data.upgradeDeferred = true;
+        data.currentState = CareStationState.StationWorking;
+      }
+      data.activeCollectionPhase = CareStationCollectionPhase.None;
+      data.pendingReturnPhase = CareStationCollectionPhase.None;
+      data.carePushAwayCompletion = CareStationPushAwayCompletion.None;
+      data.careReturnCompletion = CareStationReturnCompletion.None;
+      data.pushAwayCompleted = false;
+    }
+
+    private static void MigrateProductionV22(CareStationSaveData data)
+    {
+      if (data == null) return;
+
+      if (data.pendingFullBottleShipment > 0)
+      {
+        data.productionCycleId = Math.Max(1, data.productionCycleId);
+        data.productionStage = CareProductionStage.TransferToStorage;
+        data.productionStageElapsedSeconds = 0f;
+        data.productionCycleEnergyConsumed = true;
+        data.productionCycleStored = false;
+        data.productionCycleSourceRecipeId = data.currentRecipe?.recipeId ?? string.Empty;
+        data.lastForegroundProductionRecipeId = data.productionCycleSourceRecipeId;
+      }
+      data.pendingFullBottleShipment = 0;
+
+      var legacyBottleFlow = data.currentState == CareStationState.PresentCareBottles ||
+                             data.currentState == CareStationState.WaitCarePushAway ||
+                             data.currentState == CareStationState.WaitPushAwayReady ||
+                             data.currentState == CareStationState.WaitPushAway ||
+                             data.currentState == CareStationState.CollectingExperience ||
+                             data.currentState == CareStationState.WaitExperienceCollected ||
+                             data.currentState == CareStationState.CollectingCareBottles ||
+                             data.currentState == CareStationState.WaitCareBottlesStored;
+      if (legacyBottleFlow)
+        data.currentState = data.productionStage != CareProductionStage.None
+          ? CareStationState.ProduceBottles
+          : CareStationState.RepairReveal;
+      if (data.currentState == CareStationState.WaitStorageSpace)
+        data.currentState = data.productionStage != CareProductionStage.None
+          ? CareStationState.ProduceBottles
+          : CareStationState.PostCareCheck;
+      if (data.currentState == CareStationState.WaitReturnToNeutral &&
+          data.pendingReturnPhase == CareStationCollectionPhase.Care)
+        data.currentState = CareStationState.PostCareCheck;
+
+      data.activeCollectionPhase = CareStationCollectionPhase.None;
+      data.pendingReturnPhase = CareStationCollectionPhase.None;
+      data.careCollectionReleased = false;
+      data.carePushAwayCompletion = CareStationPushAwayCompletion.None;
+      data.careReturnCompletion = CareStationReturnCompletion.None;
+      data.pushAwayCompleted = false;
+      data.pushAwayCompletion = CareStationPushAwayCompletion.None;
+      data.collectedCareBottleValue = 0;
+    }
+
+    private static void MigrateTransportV23(CareStationSaveData data)
+    {
+      if (data == null) return;
+      data.productionTransportMode = CareProductionTransportRules.HasBasicAutomationMilestone(data)
+        ? CareProductionTransportMode.BasicConveyor
+        : CareProductionTransportMode.ManualCarry;
+      // A pre-v23 L2 save already crossed its milestone before one-shot
+      // presentation existed. Adopt the correct transport without replaying an
+      // unlock banner on every load.
+      data.basicConveyorUnlockPresented =
+        data.productionTransportMode >= CareProductionTransportMode.BasicConveyor;
+    }
+
+    private static void MigrateRoutineV24(CareStationSaveData data)
+    {
+      if (data == null) return;
+      var recipe = data.currentRecipe;
+      var hadRecipe = recipe != null && recipe.ActionCount > 0;
+      var experienced = hadRecipe || data.trainingProgress > 0 || data.completedTrainingActionMask != 0 ||
+                        data.formalRecipesCreated > 0 || data.completedShifts > 0;
+      data.careRoutinesCreated = experienced ? Math.Max(4, data.formalRecipesCreated) : 0;
+      data.lastCompletedRoutineId = CareRoutineId.None;
+      if (!hadRecipe) return;
+
+      CareRecipeGenerator.RemoveRetiredBlinkReset(recipe, false);
+      if (!recipe.recipeCompleted) EnsureCompatibleFinalRest(recipe);
+      var routineId = InferRoutineId(recipe.actionList);
+      ApplyRoutineV24Parameters(recipe, routineId, data.inspectionActive || recipe.recipeType == CareRecipeType.Inspection);
+      if (recipe.recipeCompleted && recipe.routineId >= CareRoutineId.FocusFlow &&
+          recipe.routineId <= CareRoutineId.FullCare)
+        data.lastCompletedRoutineId = recipe.routineId;
+      else if (data.recentRecipeHistory != null && data.recentRecipeHistory.Length > 0)
+        data.lastCompletedRoutineId = InferRoutineIdFromSignature(
+          data.recentRecipeHistory[data.recentRecipeHistory.Length - 1]);
+
+      var oldRewardAlreadySettled = recipe.careEnergyGranted;
+      recipe.plannedSlotCount = Mathf.Clamp(recipe.ActionCount, 1, 4);
+      recipe.plannedSlotRewards = EvenRoutineRewards(recipe.plannedSlotCount);
+      recipe.rewardSlotMasks = Enumerable.Range(0, recipe.ActionCount).Select(index => 1 << index).ToArray();
+      recipe.rewardedStepMask = oldRewardAlreadySettled ? (1 << recipe.plannedSlotCount) - 1 : 0;
+      recipe.careEnergyRewardedTotal = oldRewardAlreadySettled
+        ? CareEconomyConfiguration.DefaultRoutineCareEnergy
+        : 0;
+      recipe.careEnergyGranted = oldRewardAlreadySettled;
+      recipe.careEnergyGrantedAmount = recipe.careEnergyRewardedTotal;
+      CareRecipeGenerator.SanitizeRecipe(recipe);
+
+      // Pre-v24 steps were rewarded only at Recipe completion. Credit completed
+      // but unsettled slots once during migration, while a previously settled
+      // 12/24/36 reward remains untouched and can never be paid again.
+      if (!oldRewardAlreadySettled)
+        CareEconomyRules.TryGrantAllCompletedRecipeSteps(data, out _);
+    }
+
+    private static void EnsureCompatibleFinalRest(CareRecipeSaveData recipe)
+    {
+      if (recipe?.actionList == null || recipe.actionList.Length == 0) return;
+      var actions = recipe.actionList.ToList();
+      var originals = (recipe.originalActionList != null &&
+                       recipe.originalActionList.Length == recipe.actionList.Length
+        ? recipe.originalActionList
+        : recipe.actionList).ToList();
+      var pilot = actions.IndexOf(CareActionType.PilotEyeRoutine);
+      if (pilot >= 0 && (pilot + 1 >= actions.Count || actions[pilot + 1] != CareActionType.GuidedEyeCircles) &&
+          actions.Count < 4)
+      {
+        actions.Insert(pilot + 1, CareActionType.GuidedEyeCircles);
+        originals.Insert(pilot + 1, CareActionType.GuidedEyeCircles);
+        recipe.completedActionMask = InsertEmptyMaskBit(recipe.completedActionMask, pilot + 1);
+        recipe.developerSkippedActionMask = InsertEmptyMaskBit(recipe.developerSkippedActionMask, pilot + 1);
+        recipe.replacedActionMask = InsertEmptyMaskBit(recipe.replacedActionMask, pilot + 1);
+        if (recipe.currentActionIndex > pilot) recipe.currentActionIndex++;
+      }
+      if (!actions.Contains(CareActionType.ClosedEyeRest) && actions.Count < 4)
+      {
+        actions.Add(CareActionType.ClosedEyeRest);
+        originals.Add(CareActionType.ClosedEyeRest);
+      }
+      recipe.actionList = actions.Take(4).ToArray();
+      recipe.originalActionList = originals.Take(4).ToArray();
+      recipe.recipeType = recipe.actionList.Length >= 4 ? CareRecipeType.Full
+        : recipe.actionList.Length == 3 ? CareRecipeType.Triple
+        : recipe.actionList.Length == 2 ? CareRecipeType.Double
+        : CareRecipeType.Single;
+      recipe.currentActionIndex = Mathf.Clamp(recipe.currentActionIndex, 0, recipe.actionList.Length);
+    }
+
+    private static int InsertEmptyMaskBit(int mask, int index)
+    {
+      var lower = mask & ((1 << index) - 1);
+      var upper = (mask & ~((1 << index) - 1)) << 1;
+      return lower | upper;
+    }
+
+    private static CareRoutineId InferRoutineId(CareActionType[] actions)
+    {
+      var signature = CareRecipeGenerator.Signature(actions);
+      if (signature == CareRecipeGenerator.Signature(new[]
+          { CareActionType.FocusShift, CareActionType.GuidedEyeCircles, CareActionType.ClosedEyeRest }))
+        return CareRoutineId.FocusFlow;
+      if (signature == CareRecipeGenerator.Signature(new[]
+          { CareActionType.PilotEyeRoutine, CareActionType.GuidedEyeCircles, CareActionType.ClosedEyeRest }))
+        return CareRoutineId.PilotFlow;
+      if (signature == CareRecipeGenerator.Signature(new[]
+          { CareActionType.FocusShift, CareActionType.ClosedEyeRest }))
+        return CareRoutineId.DeepReset;
+      if (signature == CareRecipeGenerator.Signature(new[]
+          { CareActionType.FocusShift, CareActionType.PilotEyeRoutine, CareActionType.GuidedEyeCircles, CareActionType.ClosedEyeRest }))
+        return CareRoutineId.FullCare;
+      return CareRoutineId.LegacyCompatible;
+    }
+
+    private static CareRoutineId InferRoutineIdFromSignature(string signature)
+    {
+      if (string.IsNullOrEmpty(signature)) return CareRoutineId.None;
+      foreach (var routineId in new[]
+      {
+        CareRoutineId.FocusFlow,
+        CareRoutineId.PilotFlow,
+        CareRoutineId.DeepReset,
+        CareRoutineId.FullCare,
+      })
+      {
+        var recipe = CareRecipeGenerator.CreateRoutine(routineId, 1, 0);
+        if (string.Equals(CareRecipeGenerator.Signature(recipe.actionList), signature, StringComparison.Ordinal))
+          return routineId;
+      }
+      return CareRoutineId.None;
+    }
+
+    private static void ApplyRoutineV24Parameters(
+      CareRecipeSaveData recipe,
+      CareRoutineId routineId,
+      bool inspection)
+    {
+      var parameterId = inspection ? CareRoutineId.PilotFlow : routineId;
+      recipe.routineId = parameterId;
+      if (inspection) recipe.recipeType = CareRecipeType.Inspection;
+      recipe.focusCycleCount = parameterId == CareRoutineId.FullCare ? 4 : 6;
+      recipe.pilotRoundsPerAxis = parameterId == CareRoutineId.FullCare ? 2 : 3;
+      recipe.guidedLapsPerDirection = parameterId == CareRoutineId.FullCare ? 2 : 3;
+      recipe.closedEyeRestSeconds = parameterId == CareRoutineId.DeepReset ? 90f : 60f;
+      recipe.deepRest = recipe.closedEyeRestSeconds > CareActionLibrary.NormalRestSeconds;
+    }
+
+    private static int[] EvenRoutineRewards(int count)
+    {
+      count = Mathf.Clamp(count, 1, 4);
+      var rewards = new int[count];
+      for (var index = 0; index < count; index++)
+        rewards[index] = CareEconomyConfiguration.DefaultRoutineCareEnergy / count;
+      return rewards;
+    }
+
+    private static void MigrateStaleUiStateAfterLoad(CareStationSaveData data)
+    {
+      if (data == null) return;
+
+      if (data.currentState == CareStationState.UpgradeSelection &&
+          !CareStationShiftRules.CanPurchaseAnyUpgrade(data, new CareStationUpgradeConfiguration()))
+      {
+        data.upgradeOffered = true;
+        data.upgradeDeferred = true;
+        data.currentState = CareStationState.StationWorking;
+      }
+
+      if (data.currentState != CareStationState.WaitStorageSpace) return;
+
+      var pendingCareReward = data.pendingFullBottleShipment > 0;
+      var pendingOfflineReward = data.pendingOfflineXP > data.collectedOfflineBottleValue;
+      if (pendingCareReward || pendingOfflineReward) return;
+
+      // WaitStorageSpace is a resumable collection gate, not the persistent
+      // representation of a merely full rack. Old saves could retain the gate
+      // and collection phase after their reward was already resolved, causing
+      // the controller to restore an input-blocking presentation forever.
+      // Preserve all economy and progression data; only repair the impossible
+      // presentation state while loading from disk.
+      data.currentState = CareStationState.StationWorking;
+      data.activeCollectionPhase = CareStationCollectionPhase.None;
+      data.pendingReturnPhase = CareStationCollectionPhase.None;
+      data.offlineCollectionResolved = true;
+      data.returnedNeutralAfterOffline = true;
+      data.offlineProductionPausedByFullStorage = CareStationStorageRules.Remaining(data) <= 0;
     }
 
     private static void MigrateRetiredBlinkReset(CareStationSaveData data, int loadedVersion)

@@ -45,8 +45,8 @@ namespace KeepBlinking.CareStation
     {
       switch (type)
       {
-        case CareActionType.FocusShift: return "RESTORE THE PRESS AND TANK";
-        case CareActionType.ClosedEyeRest: return "RESTORE THE TANK AND CARE CORE";
+        case CareActionType.FocusShift: return "RESTORE THE FILLER AND PACKER";
+        case CareActionType.ClosedEyeRest: return "RESTORE THE FILLER AND CARE CORE";
         case CareActionType.GuidedEyeCircles: return "STABILIZE THE CARE CORE";
         case CareActionType.PilotEyeRoutine: return "RESTORE THE FILTER AND CARE CORE";
         default: return string.Empty;
@@ -79,6 +79,37 @@ namespace KeepBlinking.CareStation
              Math.Max(0, list.Length - 1) * 0.75f;
     }
 
+    public static float EstimatedRecipeSeconds(CareRecipeSaveData recipe)
+    {
+      if (recipe?.actionList == null || recipe.actionList.Length == 0) return 0f;
+      var total = 0f;
+      foreach (var action in recipe.actionList)
+      {
+        switch (action)
+        {
+          case CareActionType.FocusShift:
+            total += 60f * Math.Max(1, recipe.focusCycleCount) / 6f;
+            break;
+          case CareActionType.PilotEyeRoutine:
+            // Authored defaults: 3 s intro, four axes at 3.5 s per
+            // round, then the 1.25 s Pilot-to-Guided transition.
+            total += 3f + 14f * Math.Max(1, recipe.pilotRoundsPerAxis) + 1.25f;
+            break;
+          case CareActionType.GuidedEyeCircles:
+            // 2.5 s preview, both five-second directions, center pause,
+            // reliable close/open holds, and the 12 s closed-eye relax.
+            total += 2.5f + 10f * Math.Max(1, recipe.guidedLapsPerDirection) +
+                     0.9f + 1.5f + 12f + 0.5f;
+            break;
+          case CareActionType.ClosedEyeRest:
+            total += Math.Max(1f, recipe.closedEyeRestSeconds) + 2f;
+            break;
+        }
+      }
+      return RoutineIntroSeconds + RecipeCompletionFeedbackSeconds + total +
+             Math.Max(0, recipe.actionList.Length - 1) * 0.75f;
+    }
+
     public static bool IsActiveAction(CareActionType type)
     {
       return type == CareActionType.FocusShift || type == CareActionType.GuidedEyeCircles ||
@@ -92,7 +123,7 @@ namespace KeepBlinking.CareStation
 
     public static bool HasValidFormalComposition(IReadOnlyCollection<CareActionType> actions)
     {
-      return actions != null && actions.Count >= 2 && actions.Count <= 3 &&
+      return actions != null && actions.Count >= 2 && actions.Count <= 4 &&
              actions.Count == actions.Distinct().Count() &&
              actions.All(action => !IsRetiredTask(action)) &&
              actions.Any(IsActiveAction) && actions.Any(IsRestOrOffscreenAction) &&

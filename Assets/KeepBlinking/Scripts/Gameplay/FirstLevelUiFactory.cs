@@ -1,6 +1,7 @@
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.InputSystem.UI;
 using UnityEngine.UI;
 
 namespace KeepBlinking.Gameplay
@@ -47,14 +48,20 @@ namespace KeepBlinking.Gameplay
       var canvasObject = new GameObject(name, typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster), typeof(CanvasGroup));
       canvasObject.transform.SetParent(parent, false);
       canvas = canvasObject.GetComponent<Canvas>();
+      canvas.enabled = true;
       canvas.renderMode = RenderMode.ScreenSpaceOverlay;
       canvas.sortingOrder = sortingOrder;
+      var raycaster = canvasObject.GetComponent<GraphicRaycaster>();
+      raycaster.enabled = true;
       var scaler = canvasObject.GetComponent<CanvasScaler>();
       scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
       scaler.referenceResolution = new Vector2(ReferenceWidth, ReferenceHeight);
       scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
       scaler.matchWidthOrHeight = 0.5f;
       canvasGroup = canvasObject.GetComponent<CanvasGroup>();
+      canvasGroup.alpha = 1f;
+      canvasGroup.interactable = true;
+      canvasGroup.blocksRaycasts = true;
 
       var safe = CreateObject("Safe Area", canvasObject.transform).GetComponent<RectTransform>();
       Stretch(safe);
@@ -158,18 +165,173 @@ namespace KeepBlinking.Gameplay
       rect.offsetMax = offsetMax;
     }
 
-    private static void EnsureEventSystem()
+    internal static void RecoverUiInput(Transform uiRoot, CanvasGroup canvasGroup = null)
     {
-      if (Object.FindFirstObjectByType<EventSystem>() != null)
+      EnsureEventSystem();
+      if (uiRoot == null) return;
+
+      var canvas = uiRoot.GetComponentInParent<Canvas>(true);
+      if (canvas == null) return;
+      canvas.gameObject.SetActive(true);
+      canvas.enabled = true;
+      var raycaster = canvas.GetComponent<GraphicRaycaster>();
+      if (raycaster == null) raycaster = canvas.gameObject.AddComponent<GraphicRaycaster>();
+      raycaster.enabled = true;
+
+      var group = canvasGroup != null ? canvasGroup : canvas.GetComponent<CanvasGroup>();
+      if (group == null) group = canvas.gameObject.AddComponent<CanvasGroup>();
+      group.alpha = 1f;
+      group.interactable = true;
+      group.blocksRaycasts = true;
+    }
+
+    internal static bool IsUiInputInfrastructureHealthy(Transform uiRoot)
+    {
+      if (uiRoot == null) return false;
+      var canvas = uiRoot.GetComponentInParent<Canvas>(true);
+      var raycaster = canvas != null ? canvas.GetComponent<GraphicRaycaster>() : null;
+      var eventSystem = EventSystem.current;
+      var module = eventSystem != null ? eventSystem.currentInputModule : null;
+      if (canvas == null || !canvas.isActiveAndEnabled ||
+          raycaster == null || !raycaster.isActiveAndEnabled ||
+          eventSystem == null || !eventSystem.isActiveAndEnabled ||
+          module == null || !module.isActiveAndEnabled || !module.IsModuleSupported())
+        return false;
+      if (module is StandaloneInputModule) return true;
+      if (!(module is InputSystemUIInputModule inputSystemModule)) return false;
+      return HasCompleteInputActions(inputSystemModule);
+    }
+
+    private static EventSystem EnsureEventSystem()
+    {
+      return EnsureEventSystem(null);
+    }
+
+    private static EventSystem EnsureEventSystem(EventSystem preferredEventSystem)
+    {
+      var eventSystems = Object.FindObjectsByType<EventSystem>(
+        FindObjectsInactive.Include,
+        FindObjectsSortMode.None);
+      var eventSystem = preferredEventSystem != null && preferredEventSystem.gameObject.activeInHierarchy
+        ? preferredEventSystem
+        : ChooseEventSystem(eventSystems);
+      if (eventSystem == null)
       {
-        return;
+        // Never reactivate an arbitrary disabled scene hierarchy just because it
+        // happens to contain an EventSystem. A dedicated root object is safer
+        // and remains available when the inactive scene object is destroyed.
+        var eventSystemObject = new GameObject("[KeepBlinking] EventSystem", typeof(EventSystem));
+        eventSystem = eventSystemObject.GetComponent<EventSystem>();
+        if (Application.isPlaying)
+        {
+          Object.DontDestroyOnLoad(eventSystemObject);
+        }
       }
 
-      var eventSystem = new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
+      eventSystem.enabled = true;
+      // EventSystem only registers itself in the static current list during Play Mode.
+      // Assigning current from an edit-time preview logs an error and cannot succeed.
       if (Application.isPlaying)
       {
-        Object.DontDestroyOnLoad(eventSystem);
+        EventSystem.current = eventSystem;
       }
+
+      EnsureCompatibleInputModule(eventSystem);
+      return eventSystem;
+    }
+
+    private static EventSystem ChooseEventSystem(EventSystem[] eventSystems)
+    {
+      if (EventSystem.current != null && EventSystem.current.gameObject.activeInHierarchy)
+      {
+        return EventSystem.current;
+      }
+
+      for (var index = 0; index < eventSystems.Length; index++)
+      {
+        var candidate = eventSystems[index];
+        if (candidate != null && candidate.gameObject.activeInHierarchy && candidate.enabled)
+        {
+          return candidate;
+        }
+      }
+
+      for (var index = 0; index < eventSystems.Length; index++)
+      {
+        var candidate = eventSystems[index];
+        if (candidate != null && candidate.gameObject.activeInHierarchy)
+        {
+          return candidate;
+        }
+      }
+
+      return null;
+    }
+
+    private static void EnsureCompatibleInputModule(EventSystem eventSystem)
+    {
+      var inputSystemModules = eventSystem.GetComponents<InputSystemUIInputModule>();
+      var standaloneModules = eventSystem.GetComponents<StandaloneInputModule>();
+      BaseInputModule selectedModule = null;
+
+      for (var index = 0; index < inputSystemModules.Length; index++)
+      {
+        if (inputSystemModules[index].enabled)
+        {
+          selectedModule = inputSystemModules[index];
+          break;
+        }
+      }
+
+      if (selectedModule == null)
+      {
+        for (var index = 0; index < standaloneModules.Length; index++)
+        {
+          if (standaloneModules[index].enabled)
+          {
+            selectedModule = standaloneModules[index];
+            break;
+          }
+        }
+      }
+
+      if (selectedModule == null && inputSystemModules.Length > 0)
+      {
+        selectedModule = inputSystemModules[0];
+      }
+      if (selectedModule == null && standaloneModules.Length > 0)
+      {
+        selectedModule = standaloneModules[0];
+      }
+      if (selectedModule == null)
+      {
+        selectedModule = eventSystem.gameObject.AddComponent<InputSystemUIInputModule>();
+      }
+
+      var allModules = eventSystem.GetComponents<BaseInputModule>();
+      for (var index = 0; index < allModules.Length; index++)
+      {
+        allModules[index].enabled = allModules[index] == selectedModule;
+      }
+
+      selectedModule.enabled = true;
+      if (selectedModule is InputSystemUIInputModule inputSystemModule &&
+          !HasCompleteInputActions(inputSystemModule))
+      {
+        inputSystemModule.AssignDefaultActions();
+      }
+    }
+
+    private static bool HasCompleteInputActions(InputSystemUIInputModule module)
+    {
+      return module != null &&
+             module.actionsAsset != null &&
+             module.point != null &&
+             module.leftClick != null &&
+             module.scrollWheel != null &&
+             module.move != null &&
+             module.submit != null &&
+             module.cancel != null;
     }
 
     private static Sprite CreateRoundedSprite()

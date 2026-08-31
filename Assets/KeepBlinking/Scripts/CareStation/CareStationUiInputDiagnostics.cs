@@ -5,6 +5,7 @@ using System.Text;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.UI;
 using UnityEngine.UI;
 
 namespace KeepBlinking.CareStation
@@ -89,7 +90,10 @@ namespace KeepBlinking.CareStation
     private static string ModuleDescription(BaseInputModule module)
     {
       if (module == null) return "NULL";
-      return $"type={module.GetType().FullName} path={HierarchyPath(module.transform)} enabled={module.enabled} active={module.gameObject.activeInHierarchy} supported={module.IsModuleSupported()} activeModule={module.IsPointerOverGameObject(-1) || EventSystem.current?.currentInputModule == module}";
+      var actions = module is InputSystemUIInputModule input
+        ? $" actionsAsset={(input.actionsAsset != null ? input.actionsAsset.name : "NULL")} point={input.point != null} click={input.leftClick != null} scroll={input.scrollWheel != null} move={input.move != null} submit={input.submit != null} cancel={input.cancel != null}"
+        : string.Empty;
+      return $"type={module.GetType().FullName} path={HierarchyPath(module.transform)} enabled={module.enabled} active={module.gameObject.activeInHierarchy} supported={module.IsModuleSupported()} activeModule={EventSystem.current?.currentInputModule == module}{actions}";
     }
 
     private static void AppendCanvases(StringBuilder report)
@@ -151,9 +155,10 @@ namespace KeepBlinking.CareStation
       }
     }
 
-    private static void AppendLockOwners(StringBuilder report)
+    private void AppendLockOwners(StringBuilder report)
     {
       var reasons = new List<string>();
+      report.AppendLine($"DECLARED_UI_LOCK {(_controller != null ? _controller.UiInputLockDescription : "owner=NO_CONTROLLER")}");
       var eventSystem = EventSystem.current;
       if (eventSystem == null) reasons.Add("Missing EventSystem owner=<scene>");
       else
@@ -180,7 +185,7 @@ namespace KeepBlinking.CareStation
       for (var index = 0; index < graphics.Length; index++)
       {
         var graphic = graphics[index];
-        if (!graphic.raycastTarget || graphic.canvasRenderer.GetAlpha() > 0.001f || !CoversScreen(graphic.rectTransform)) continue;
+        if (!graphic.raycastTarget || graphic.canvasRenderer.GetInheritedAlpha() > 0.001f || !CoversScreen(graphic.rectTransform)) continue;
         reasons.Add($"Invisible full-screen Graphic owner={HierarchyPath(graphic.transform)} type={graphic.GetType().Name}");
       }
 
@@ -217,7 +222,7 @@ namespace KeepBlinking.CareStation
     private static string GraphicDescription(Graphic graphic)
     {
       if (graphic == null) return "NULL";
-      return $"type={graphic.GetType().Name},enabled={graphic.enabled},active={graphic.gameObject.activeInHierarchy},raycastTarget={graphic.raycastTarget},rendererAlpha={graphic.canvasRenderer.GetAlpha():0.###},colorAlpha={graphic.color.a:0.###}";
+      return $"type={graphic.GetType().Name},enabled={graphic.enabled},active={graphic.gameObject.activeInHierarchy},raycastTarget={graphic.raycastTarget},rendererAlpha={graphic.canvasRenderer.GetAlpha():0.###},inheritedAlpha={graphic.canvasRenderer.GetInheritedAlpha():0.###},colorAlpha={graphic.color.a:0.###}";
     }
 
     private static string CanvasGroupChain(GameObject gameObject)

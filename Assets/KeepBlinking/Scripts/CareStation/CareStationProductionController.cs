@@ -25,43 +25,47 @@ namespace KeepBlinking.CareStation
   }
 
   /// <summary>
-  /// Authoritative offline logistics. Offline work is already transported by
-  /// the crew and therefore settles directly into available storage; care
-  /// rewards remain outside this service and still require their real flight.
+  /// Authoritative phase-one Cart and Auto Shift logistics.
   /// </summary>
   public sealed class CareStationProductionController
   {
+    public CareCartSettlementResult SettleCart(
+      CareStationSaveData save,
+      int throughput,
+      string settlementId,
+      CareEconomyConfiguration configuration)
+    {
+      return CareEconomyRules.SettleCart(save, throughput, settlementId, configuration);
+    }
+
+    // Legacy test/API wrapper. New runtime code uses SettleCart so Coins,
+    // inventory deduction and replay protection are one persisted transaction.
     public CareStationProductionSettlement Settle(
       CareStationSaveData save,
       int producedFullBottles)
     {
       if (save == null) return default;
-
-      var legacyStored = SettleLegacyPending(save);
-      var produced = Math.Max(0, producedFullBottles);
-      var available = CareStationStorageRules.RemainingForAutomaticOfflineSettlement(save);
-      var accepted = Math.Min(produced, available);
-      var discarded = produced - accepted;
-      save.storedFullBottles += accepted;
-      save.collectedExperienceCount = save.storedFullBottles + save.storedGoldBottles;
-      save.discardedOfflineBottleCount += discarded;
-      save.offlineProductionPausedByFullStorage =
-        CareStationStorageRules.Remaining(save) <= 0 || discarded > 0;
+      var result = SettleCart(
+        save,
+        producedFullBottles,
+        string.Empty,
+        new CareEconomyConfiguration());
       return new CareStationProductionSettlement(
-        legacyStored,
-        accepted,
-        discarded,
-        save.offlineProductionPausedByFullStorage);
+        0,
+        result.BottlesProduced,
+        0,
+        result.StorageFull);
     }
 
     public int SettleLegacyPending(CareStationSaveData save)
     {
       if (save == null || save.queuedOfflineXP <= 0) return 0;
-      var accepted = Math.Min(save.queuedOfflineXP, CareStationStorageRules.RemainingForAutomaticOfflineSettlement(save));
-      save.queuedOfflineXP -= accepted;
-      save.storedFullBottles += accepted;
-      save.collectedExperienceCount = save.storedFullBottles + save.storedGoldBottles;
-      return accepted;
+      // v21 migration no longer treats the legacy queue as producible output.
+      // Convert it to quota once, then clear it.
+      var converted = Math.Max(0, save.queuedOfflineXP);
+      save.careEnergy += converted;
+      save.queuedOfflineXP = 0;
+      return 0;
     }
   }
 }

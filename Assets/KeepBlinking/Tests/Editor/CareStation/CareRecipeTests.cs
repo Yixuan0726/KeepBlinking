@@ -11,48 +11,69 @@ namespace KeepBlinking.Tests
       new CareRecipeGenerationSettings(0.25f, 0.55f, 0.20f, 32);
 
     [Test]
-    public void FourTrainingRecipesAppearInFixedOrderAndPersistProgress()
+    public void FirstFourRoutinesAreFormalAThroughDAndPersistProgress()
     {
       var save = new CareStationSaveData { careShiftId = 1 };
-      var expected = new[]
+      var expectedIds = new[]
       {
-        CareActionType.FocusShift,
-        CareActionType.PilotEyeRoutine,
-        CareActionType.GuidedEyeCircles,
-        CareActionType.ClosedEyeRest,
+        CareRoutineId.FocusFlow,
+        CareRoutineId.PilotFlow,
+        CareRoutineId.DeepReset,
+        CareRoutineId.FullCare,
       };
-      for (var index = 0; index < expected.Length; index++)
+      var expectedActions = new[]
+      {
+        new[] { CareActionType.FocusShift, CareActionType.GuidedEyeCircles, CareActionType.ClosedEyeRest },
+        new[] { CareActionType.PilotEyeRoutine, CareActionType.GuidedEyeCircles, CareActionType.ClosedEyeRest },
+        new[] { CareActionType.FocusShift, CareActionType.ClosedEyeRest },
+        new[]
+        {
+          CareActionType.FocusShift,
+          CareActionType.PilotEyeRoutine,
+          CareActionType.GuidedEyeCircles,
+          CareActionType.ClosedEyeRest,
+        },
+      };
+      for (var index = 0; index < expectedIds.Length; index++)
       {
         save.careShiftId = index + 1;
         var recipe = CareRecipeGenerator.CreateForShift(save, 100 + index, Settings);
-        Assert.That(recipe.recipeType, Is.EqualTo(CareRecipeType.Training));
-        Assert.That(recipe.actionList, Is.EqualTo(new[] { expected[index] }));
+        Assert.That(recipe.recipeType, Is.Not.EqualTo(CareRecipeType.Training));
+        Assert.That(recipe.routineId, Is.EqualTo(expectedIds[index]));
+        Assert.That(recipe.actionList, Is.EqualTo(expectedActions[index]));
         var runtime = new CareRecipeRuntime(recipe);
-        Assert.That(runtime.CompleteCurrentAction(expected[index]).RecipeCompleted, Is.True);
+        while (!recipe.recipeCompleted)
+          Assert.That(runtime.CompleteCurrentAction(runtime.CurrentAction).Accepted, Is.True);
         CareRecipeGenerator.ApplyCompletionToProgress(save, recipe);
-        Assert.That(save.trainingProgress, Is.EqualTo(index + 1));
+        Assert.That(save.lastCompletedRoutineId, Is.EqualTo(expectedIds[index]));
       }
+      Assert.That(save.trainingProgress, Is.Zero);
+      Assert.That(save.careRoutinesCreated, Is.EqualTo(4));
     }
 
     [Test]
-    public void FirstTwoFormalRecipesUseTheFixedBlinkFreeCareOrder()
+    public void LaterRoutinesDoNotImmediatelyRepeatTheCompletedRoutine()
     {
-      var save = new CareStationSaveData { trainingProgress = 4, careShiftId = 5 };
-      var first = CareRecipeGenerator.CreateForShift(save, 41, Settings);
-      Assert.That(first.actionList, Is.EqualTo(new[]
+      foreach (var previous in new[]
       {
-        CareActionType.FocusShift,
-        CareActionType.ClosedEyeRest,
-      }));
-      CompleteAndApply(save, first);
-      save.careShiftId++;
-      var second = CareRecipeGenerator.CreateForShift(save, 42, Settings);
-      Assert.That(second.actionList, Is.EqualTo(new[]
+        CareRoutineId.FocusFlow,
+        CareRoutineId.PilotFlow,
+        CareRoutineId.DeepReset,
+        CareRoutineId.FullCare,
+      })
       {
-        CareActionType.PilotEyeRoutine,
-        CareActionType.GuidedEyeCircles,
-        CareActionType.ClosedEyeRest,
-      }));
+        for (var seed = 0; seed < 100; seed++)
+        {
+          var save = new CareStationSaveData
+          {
+            careRoutinesCreated = 4,
+            lastCompletedRoutineId = previous,
+            careShiftId = seed + 5,
+          };
+          var next = CareRecipeGenerator.CreateForShift(save, seed, Settings);
+          Assert.That(next.routineId, Is.Not.EqualTo(previous));
+        }
+      }
     }
 
     [TestCase(CareRecipeType.Single, 1)]
@@ -94,20 +115,19 @@ namespace KeepBlinking.Tests
     }
 
     [Test]
-    public void NewlyGeneratedFormalShiftsNeverUseSingleRecipesAndFitTwoToThreeMinutes()
+    public void NewlyGeneratedRoutinesFitTheAuthoredTimeRange()
     {
       for (var seed = 0; seed < 100; seed++)
       {
         var save = new CareStationSaveData
         {
-          trainingProgress = 4,
-          formalRecipesCreated = 2,
+          careRoutinesCreated = 4,
           careShiftId = 20 + seed,
         };
         var next = CareRecipeGenerator.CreateForShift(save, seed, Settings);
-        Assert.That(next.recipeType, Is.Not.EqualTo(CareRecipeType.Single));
-        var duration = CareActionLibrary.EstimatedRecipeSeconds(next.actionList, next.deepRest);
-        Assert.That(duration, Is.InRange(120f, 180f));
+        Assert.That(next.recipeType, Is.Not.EqualTo(CareRecipeType.Training));
+        var duration = CareActionLibrary.EstimatedRecipeSeconds(next);
+        Assert.That(duration, Is.InRange(155f, 180f));
       }
     }
 
@@ -272,29 +292,29 @@ namespace KeepBlinking.Tests
       Assert.That(recipe.actionList, Is.EqualTo(new[] { CareActionType.ClosedEyeRest }));
     }
 
-    [TestCase(0, 1, CareRecipePipeline.Filter | CareRecipePipeline.Tank | CareRecipePipeline.Press)]
+    [TestCase(0, 1, CareRecipePipeline.Filter | CareRecipePipeline.Filler | CareRecipePipeline.Packer)]
     [TestCase(0, 2, CareRecipePipeline.Filter)]
-    [TestCase(1, 2, CareRecipePipeline.Tank | CareRecipePipeline.Press)]
+    [TestCase(1, 2, CareRecipePipeline.Filler | CareRecipePipeline.Packer)]
     [TestCase(0, 3, CareRecipePipeline.Filter)]
-    [TestCase(1, 3, CareRecipePipeline.Tank)]
-    [TestCase(2, 3, CareRecipePipeline.Press)]
+    [TestCase(1, 3, CareRecipePipeline.Filler)]
+    [TestCase(2, 3, CareRecipePipeline.Packer)]
     public void PipelineFeedbackMatchesRecipeLength(int step, int count, int expectedMask)
     {
       Assert.That(CareRecipePipeline.StageMaskForCompletion(step, count), Is.EqualTo(expectedMask));
     }
 
     [Test]
-    public void PilotRestoresFilterAndCareCoreWithoutRetiredTasks()
+    public void ActionsMapOnlyToFilterFillerAndPacker()
     {
       Assert.That(
         CareRecipePipeline.StageMaskForAction(CareActionType.PilotEyeRoutine),
-        Is.EqualTo(CareRecipePipeline.Filter | CareRecipePipeline.CareCore));
+        Is.EqualTo(CareRecipePipeline.Filter));
       Assert.That(CareRecipePipeline.StageMaskForAction(CareActionType.GuidedEyeCircles),
-        Is.EqualTo(CareRecipePipeline.CareCore));
+        Is.EqualTo(CareRecipePipeline.Packer));
       Assert.That(CareRecipePipeline.StageMaskForAction(CareActionType.ClosedEyeRest),
-        Is.EqualTo(CareRecipePipeline.Tank | CareRecipePipeline.CareCore));
+        Is.EqualTo(CareRecipePipeline.Filler));
       Assert.That(CareRecipePipeline.StageMaskForAction(CareActionType.FocusShift),
-        Is.EqualTo(CareRecipePipeline.Press | CareRecipePipeline.Tank));
+        Is.EqualTo(CareRecipePipeline.Packer | CareRecipePipeline.Filler));
       Assert.That(CareRecipePipeline.StageMaskForAction(CareActionType.ScreenDown), Is.Zero);
       Assert.That(CareRecipePipeline.StageMaskForAction(CareActionType.BlinkReset), Is.Zero);
     }

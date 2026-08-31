@@ -130,11 +130,21 @@ namespace KeepBlinking.CareStation
 
       var original = Data.actionList[index];
       var existingRest = Array.IndexOf(Data.actionList, CareActionType.ClosedEyeRest);
+      var replacesPilotPair = original == CareActionType.PilotEyeRoutine &&
+                              index + 1 < Data.ActionCount &&
+                              Data.actionList[index + 1] == CareActionType.GuidedEyeCircles;
       if (existingRest >= 0 && existingRest < index && Data.IsStepCompleted(existingRest))
       {
+        if (replacesPilotPair)
+        {
+          MergeRewardSlots(Data, index + 1, existingRest);
+          RemoveStepAt(Data, index + 1);
+        }
+        MergeRewardSlots(Data, index, existingRest);
         RemoveStepAt(Data, index);
         Data.currentActionIndex = Mathf.Clamp(index, 0, Data.ActionCount);
         Data.recipeCompleted = Data.currentActionIndex >= Data.ActionCount;
+        CareRecipeGenerator.SanitizeRecipe(Data);
         return new CareRecipeReplacementResult(true, original, index, true, Data.recipeCompleted);
       }
 
@@ -143,9 +153,29 @@ namespace KeepBlinking.CareStation
         Data.originalActionList = (CareActionType[])Data.actionList.Clone();
       Data.originalActionList[index] = original;
       Data.replacedActionMask |= 1 << index;
-      if (existingRest > index) RemoveStepAt(Data, existingRest);
+      if (replacesPilotPair)
+      {
+        // Pilot and Guided are one indivisible cadence. If Pilot detection is
+        // replaced, the same Rest satisfies both planned slots so Guided can
+        // never survive as a standalone action.
+        MergeRewardSlots(Data, index + 1, index);
+        RemoveStepAt(Data, index + 1);
+        existingRest = Array.IndexOf(Data.actionList, CareActionType.ClosedEyeRest, index + 1);
+      }
+      if (existingRest > index)
+      {
+        MergeRewardSlots(Data, existingRest, index);
+        RemoveStepAt(Data, existingRest);
+      }
       CareRecipeGenerator.SanitizeRecipe(Data);
       return new CareRecipeReplacementResult(true, original, index, false, Data.recipeCompleted);
+    }
+
+    private static void MergeRewardSlots(CareRecipeSaveData recipe, int fromIndex, int intoIndex)
+    {
+      if (recipe?.rewardSlotMasks == null || fromIndex < 0 || intoIndex < 0 ||
+          fromIndex >= recipe.rewardSlotMasks.Length || intoIndex >= recipe.rewardSlotMasks.Length) return;
+      recipe.rewardSlotMasks[intoIndex] |= recipe.rewardSlotMasks[fromIndex];
     }
 
     private static void RemoveStepAt(CareRecipeSaveData recipe, int index)
@@ -155,10 +185,15 @@ namespace KeepBlinking.CareStation
       var originals = (recipe.originalActionList != null && recipe.originalActionList.Length == recipe.actionList.Length
         ? recipe.originalActionList
         : recipe.actionList).ToList();
+      var rewardMasks = (recipe.rewardSlotMasks != null && recipe.rewardSlotMasks.Length == recipe.actionList.Length
+        ? recipe.rewardSlotMasks
+        : Enumerable.Range(0, recipe.actionList.Length).Select(slot => 1 << slot).ToArray()).ToList();
       actions.RemoveAt(index);
       originals.RemoveAt(index);
+      rewardMasks.RemoveAt(index);
       recipe.actionList = actions.ToArray();
       recipe.originalActionList = originals.ToArray();
+      recipe.rewardSlotMasks = rewardMasks.ToArray();
       recipe.completedActionMask = RemoveMaskBit(recipe.completedActionMask, index);
       recipe.developerSkippedActionMask = RemoveMaskBit(recipe.developerSkippedActionMask, index);
       recipe.replacedActionMask = RemoveMaskBit(recipe.replacedActionMask, index);
@@ -174,6 +209,14 @@ namespace KeepBlinking.CareStation
 
   public static class CareRecipeGenerator
   {
+    private static readonly CareRoutineId[] RoutineSequence =
+    {
+      CareRoutineId.FocusFlow,
+      CareRoutineId.PilotFlow,
+      CareRoutineId.DeepReset,
+      CareRoutineId.FullCare,
+    };
+
     private static readonly CareActionType[] TrainingActions =
     {
       CareActionType.FocusShift,
@@ -208,33 +251,14 @@ namespace KeepBlinking.CareStation
       CareRecipeGenerationSettings settings)
     {
       if (save == null) throw new ArgumentNullException(nameof(save));
-      if (!HasCompletedTraining(save))
-        return CreateTraining(NextTrainingIndex(save), save.careShiftId, seed);
-
-      if (save.formalRecipesCreated == 0)
-      {
-        save.formalRecipesCreated++;
-        return Build(CareRecipeType.Double, save.careShiftId, seed,
-          new[] { CareActionType.FocusShift, CareActionType.ClosedEyeRest },
-          $"recipe_{save.careShiftId}_{seed}_first_formal");
-      }
-      if (save.formalRecipesCreated == 1)
-      {
-        save.formalRecipesCreated++;
-        return Build(CareRecipeType.Triple, save.careShiftId, seed,
-          new[] { CareActionType.PilotEyeRoutine, CareActionType.GuidedEyeCircles, CareActionType.ClosedEyeRest },
-          $"recipe_{save.careShiftId}_{seed}_second_formal");
-      }
-
-      var type = PickType(seed, settings);
-      var recipe = CreateFormal(
-        type,
-        save.careShiftId,
-        seed,
-        save.recentRecipeHistory,
-        save.focusShiftCooldownUntilShiftId,
-        save.guidedEyeCirclesCooldownUntilShiftId,
-        settings.MaximumAttempts);
+      var ordinal = Math.Max(0, save.careRoutinesCreated);
+      var routineId = ordinal < RoutineSequence.Length
+        ? RoutineSequence[ordinal]
+        : PickRoutine(seed, save.lastCompletedRoutineId);
+      var recipe = CreateRoutine(routineId, save.careShiftId, seed);
+      save.careRoutinesCreated = ordinal + 1;
+      // Keep the retired counter monotonic for migration diagnostics and old
+      // analytics readers; it no longer controls Recipe selection.
       save.formalRecipesCreated++;
       return recipe;
     }
@@ -244,6 +268,62 @@ namespace KeepBlinking.CareStation
       var index = Mathf.Clamp(trainingIndex, 0, TrainingActions.Length - 1);
       var actions = new[] { TrainingActions[index] };
       return Build(CareRecipeType.Training, shiftId, seed, actions, $"training_{index + 1}_shift_{shiftId}");
+    }
+
+    public static CareRecipeSaveData CreateRoutine(
+      CareRoutineId routineId,
+      int shiftId,
+      int seed,
+      bool inspection = false)
+    {
+      shiftId = Math.Max(1, shiftId);
+      switch (routineId)
+      {
+        case CareRoutineId.FocusFlow:
+          return BuildRoutine(
+            inspection ? CareRecipeType.Inspection : CareRecipeType.Triple,
+            routineId,
+            shiftId,
+            seed,
+            new[] { CareActionType.FocusShift, CareActionType.GuidedEyeCircles, CareActionType.ClosedEyeRest },
+            6, 3, 3, 60f, 4,
+            inspection ? $"station_inspection_{shiftId}" : $"routine_a_{shiftId}_{seed}");
+        case CareRoutineId.PilotFlow:
+          return BuildRoutine(
+            inspection ? CareRecipeType.Inspection : CareRecipeType.Triple,
+            routineId,
+            shiftId,
+            seed,
+            new[] { CareActionType.PilotEyeRoutine, CareActionType.GuidedEyeCircles, CareActionType.ClosedEyeRest },
+            6, 3, 3, 60f, 4,
+            inspection ? $"station_inspection_{shiftId}" : $"routine_b_{shiftId}_{seed}");
+        case CareRoutineId.DeepReset:
+          return BuildRoutine(
+            CareRecipeType.Double,
+            routineId,
+            shiftId,
+            seed,
+            new[] { CareActionType.FocusShift, CareActionType.ClosedEyeRest },
+            6, 3, 3, 90f, 6,
+            $"routine_c_{shiftId}_{seed}");
+        case CareRoutineId.FullCare:
+          return BuildRoutine(
+            CareRecipeType.Full,
+            routineId,
+            shiftId,
+            seed,
+            new[]
+            {
+              CareActionType.FocusShift,
+              CareActionType.PilotEyeRoutine,
+              CareActionType.GuidedEyeCircles,
+              CareActionType.ClosedEyeRest,
+            },
+            4, 2, 2, 60f, 3,
+            $"routine_d_{shiftId}_{seed}");
+        default:
+          return CreateRoutine(CareRoutineId.FocusFlow, shiftId, seed, inspection);
+      }
     }
 
     public static CareRecipeSaveData CreateFormal(
@@ -313,6 +393,8 @@ namespace KeepBlinking.CareStation
       }
       if (recipe.actionList.Contains(CareActionType.GuidedEyeCircles))
         save.guidedEyeCirclesCooldownUntilShiftId = Mathf.Max(save.guidedEyeCirclesCooldownUntilShiftId, recipe.createdShiftId + 1);
+      if (recipe.routineId >= CareRoutineId.FocusFlow && recipe.routineId <= CareRoutineId.FullCare)
+        save.lastCompletedRoutineId = recipe.routineId;
       AddHistory(save, Signature(recipe.actionList));
     }
 
@@ -320,10 +402,10 @@ namespace KeepBlinking.CareStation
     {
       if (recipe == null) return;
       if (recipe.actionList == null) recipe.actionList = Array.Empty<CareActionType>();
-      // Normal generated recipes contain at most three actions. Inspection is
-      // also deterministic and currently uses the atomic Pilot -> Guided pair
-      // followed by deep Rest.
-      var maximumActions = recipe.recipeType == CareRecipeType.Inspection ? 4 : 3;
+      // Full Care deliberately contains four planned actions. Older serialized
+      // enum values remain valid, while all retired tasks are still rejected.
+      var maximumActions = recipe.recipeType == CareRecipeType.Full ||
+                           recipe.recipeType == CareRecipeType.Inspection ? 4 : 3;
       recipe.actionList = recipe.actionList
         .Where(action => action != CareActionType.None && Enum.IsDefined(typeof(CareActionType), action) &&
                          !CareActionLibrary.IsRetiredTask(action))
@@ -344,10 +426,86 @@ namespace KeepBlinking.CareStation
       recipe.replacedActionMask &= validMask;
       recipe.createdShiftId = Mathf.Max(0, recipe.createdShiftId);
       recipe.routineIntroElapsedSeconds = Mathf.Max(0f, recipe.routineIntroElapsedSeconds);
+      if (!Enum.IsDefined(typeof(CareRoutineId), recipe.routineId))
+        recipe.routineId = CareRoutineId.LegacyCompatible;
+      recipe.focusCycleCount = Mathf.Clamp(recipe.focusCycleCount <= 0 ? 6 : recipe.focusCycleCount, 1, 8);
+      recipe.pilotRoundsPerAxis = Mathf.Clamp(recipe.pilotRoundsPerAxis <= 0 ? 3 : recipe.pilotRoundsPerAxis, 1, 4);
+      recipe.guidedLapsPerDirection = Mathf.Clamp(recipe.guidedLapsPerDirection <= 0 ? 3 : recipe.guidedLapsPerDirection, 1, 6);
+      recipe.closedEyeRestSeconds = Mathf.Clamp(recipe.closedEyeRestSeconds <= 0f ? 60f : recipe.closedEyeRestSeconds, 1f, 180f);
+      SanitizeRewardSlots(recipe);
       if (recipe.currentActionIndex >= recipe.actionList.Length && recipe.actionList.Length > 0)
         recipe.recipeCompleted = true;
       if (!recipe.recipeCompleted) recipe.completionConsumed = false;
       if (!Enum.IsDefined(typeof(CareRecipeType), recipe.recipeType)) recipe.recipeType = CareRecipeType.Single;
+    }
+
+    private static void SanitizeRewardSlots(CareRecipeSaveData recipe)
+    {
+      if (recipe.ActionCount <= 0)
+      {
+        recipe.plannedSlotCount = 0;
+        recipe.plannedSlotRewards = Array.Empty<int>();
+        recipe.rewardSlotMasks = Array.Empty<int>();
+        recipe.rewardedStepMask = 0;
+        recipe.careEnergyRewardedTotal = 0;
+        recipe.careEnergyGranted = false;
+        recipe.careEnergyGrantedAmount = 0;
+        return;
+      }
+
+      recipe.plannedSlotCount = Mathf.Clamp(
+        recipe.plannedSlotCount <= 0 ? recipe.ActionCount : recipe.plannedSlotCount,
+        1,
+        4);
+      if (recipe.plannedSlotRewards == null ||
+          recipe.plannedSlotRewards.Length != recipe.plannedSlotCount ||
+          recipe.plannedSlotRewards.Sum(value => Math.Max(0, value)) !=
+          CareEconomyConfiguration.DefaultRoutineCareEnergy)
+      {
+        recipe.plannedSlotRewards = EvenRewards(recipe.plannedSlotCount);
+      }
+
+      var validSlots = (1 << recipe.plannedSlotCount) - 1;
+      if (recipe.rewardSlotMasks == null || recipe.rewardSlotMasks.Length != recipe.ActionCount)
+      {
+        recipe.rewardSlotMasks = new int[recipe.ActionCount];
+        for (var index = 0; index < recipe.ActionCount; index++)
+          recipe.rewardSlotMasks[index] = 1 << Mathf.Min(index, recipe.plannedSlotCount - 1);
+      }
+      else
+      {
+        for (var index = 0; index < recipe.rewardSlotMasks.Length; index++)
+          recipe.rewardSlotMasks[index] &= validSlots;
+      }
+
+      var represented = recipe.rewardSlotMasks.Aggregate(0, (mask, entry) => mask | entry);
+      var missing = validSlots & ~represented;
+      if (missing != 0) recipe.rewardSlotMasks[recipe.rewardSlotMasks.Length - 1] |= missing;
+      recipe.rewardedStepMask &= validSlots;
+      if (recipe.careEnergyGranted)
+        recipe.rewardedStepMask = validSlots;
+      var rewardedTotal = 0;
+      for (var slot = 0; slot < recipe.plannedSlotCount; slot++)
+        if ((recipe.rewardedStepMask & (1 << slot)) != 0)
+          rewardedTotal += Math.Max(0, recipe.plannedSlotRewards[slot]);
+      recipe.careEnergyRewardedTotal = Mathf.Clamp(
+        Math.Max(recipe.careEnergyRewardedTotal, rewardedTotal),
+        0,
+        CareEconomyConfiguration.DefaultRoutineCareEnergy);
+      recipe.careEnergyGrantedAmount = recipe.careEnergyRewardedTotal;
+      recipe.careEnergyGranted = recipe.careEnergyRewardedTotal >=
+                                 CareEconomyConfiguration.DefaultRoutineCareEnergy;
+    }
+
+    private static int[] EvenRewards(int count)
+    {
+      count = Mathf.Clamp(count, 1, 4);
+      var rewards = new int[count];
+      var quotient = CareEconomyConfiguration.DefaultRoutineCareEnergy / count;
+      var remainder = CareEconomyConfiguration.DefaultRoutineCareEnergy % count;
+      for (var index = 0; index < count; index++)
+        rewards[index] = quotient + (index < remainder ? 1 : 0);
+      return rewards;
     }
 
     public static int TrainingBit(CareActionType action)
@@ -613,6 +771,20 @@ namespace KeepBlinking.CareStation
       return CareRecipeType.Triple;
     }
 
+    private static CareRoutineId PickRoutine(int seed, CareRoutineId lastCompleted)
+    {
+      var random = new System.Random(seed ^ 0x65f14a21);
+      var picked = RoutineSequence[random.Next(RoutineSequence.Length)];
+      if (picked != lastCompleted) return picked;
+      // Conditional on the previous Routine, each of the other three choices
+      // is equally likely. Across a uniform history the long-run marginal
+      // distribution remains exactly 25% per authored Recipe.
+      var offset = 1 + random.Next(RoutineSequence.Length - 1);
+      var lastIndex = Array.IndexOf(RoutineSequence, lastCompleted);
+      if (lastIndex < 0) return picked;
+      return RoutineSequence[(lastIndex + offset) % RoutineSequence.Length];
+    }
+
     private static IEnumerable<CareActionType[]> CandidatesForLength(int length)
     {
       switch (length)
@@ -630,7 +802,10 @@ namespace KeepBlinking.CareStation
 
     private static CareRecipeType TypeForLength(int length)
     {
-      return length >= 3 ? CareRecipeType.Triple : length == 2 ? CareRecipeType.Double : CareRecipeType.Single;
+      return length >= 4 ? CareRecipeType.Full
+        : length == 3 ? CareRecipeType.Triple
+        : length == 2 ? CareRecipeType.Double
+        : CareRecipeType.Single;
     }
 
     private static bool IsAvailable(
@@ -689,6 +864,46 @@ namespace KeepBlinking.CareStation
       };
     }
 
+    private static CareRecipeSaveData BuildRoutine(
+      CareRecipeType type,
+      CareRoutineId routineId,
+      int shiftId,
+      int seed,
+      IReadOnlyList<CareActionType> actions,
+      int focusCycles,
+      int pilotRounds,
+      int guidedLaps,
+      float restSeconds,
+      int rewardPerSlot,
+      string id)
+    {
+      var actionArray = actions.ToArray();
+      var rewards = Enumerable.Repeat(Math.Max(0, rewardPerSlot), actionArray.Length).ToArray();
+      var rewardMasks = Enumerable.Range(0, actionArray.Length).Select(index => 1 << index).ToArray();
+      var recipe = new CareRecipeSaveData
+      {
+        recipeId = id,
+        recipeSeed = seed,
+        recipeType = type,
+        routineId = routineId,
+        actionList = actionArray,
+        originalActionList = (CareActionType[])actionArray.Clone(),
+        currentActionIndex = 0,
+        completedActionMask = 0,
+        createdShiftId = Math.Max(1, shiftId),
+        deepRest = restSeconds > CareActionLibrary.NormalRestSeconds,
+        focusCycleCount = focusCycles,
+        pilotRoundsPerAxis = pilotRounds,
+        guidedLapsPerDirection = guidedLaps,
+        closedEyeRestSeconds = restSeconds,
+        plannedSlotCount = actionArray.Length,
+        plannedSlotRewards = rewards,
+        rewardSlotMasks = rewardMasks,
+      };
+      SanitizeRecipe(recipe);
+      return recipe;
+    }
+
     private static void AddHistory(CareStationSaveData save, string signature)
     {
       if (string.IsNullOrEmpty(signature)) return;
@@ -703,8 +918,13 @@ namespace KeepBlinking.CareStation
   public static class CareRecipePipeline
   {
     public const int Filter = 1;
-    public const int Tank = 2;
-    public const int Press = 4;
+    public const int Filler = 2;
+    public const int Packer = 4;
+    // Numeric aliases are migration-only: old serialized masks keep meaning.
+    [Obsolete("Use Filler. Retained for legacy serialized masks only.")]
+    public const int Tank = Filler;
+    [Obsolete("Use Packer. Retained for legacy serialized masks only.")]
+    public const int Press = Packer;
     public const int Rail = 8;
     public const int CareCore = 16;
 
@@ -712,10 +932,10 @@ namespace KeepBlinking.CareStation
     {
       switch (action)
       {
-        case CareActionType.FocusShift: return Tank | Press;
-        case CareActionType.ClosedEyeRest: return Tank | CareCore;
-        case CareActionType.GuidedEyeCircles: return CareCore;
-        case CareActionType.PilotEyeRoutine: return Filter | CareCore;
+        case CareActionType.FocusShift: return Filler | Packer;
+        case CareActionType.ClosedEyeRest: return Filler;
+        case CareActionType.GuidedEyeCircles: return Packer;
+        case CareActionType.PilotEyeRoutine: return Filter;
         default: return 0;
       }
     }
@@ -723,9 +943,9 @@ namespace KeepBlinking.CareStation
     public static int StageMaskForCompletion(int completedStepIndex, int actionCount)
     {
       if (completedStepIndex < 0 || actionCount <= 0 || completedStepIndex >= actionCount) return 0;
-      if (actionCount == 1) return Filter | Tank | Press;
-      if (actionCount == 2) return completedStepIndex == 0 ? Filter : Tank | Press;
-      return completedStepIndex == 0 ? Filter : completedStepIndex == 1 ? Tank : Press;
+      if (actionCount == 1) return Filter | Filler | Packer;
+      if (actionCount == 2) return completedStepIndex == 0 ? Filter : Filler | Packer;
+      return completedStepIndex == 0 ? Filter : completedStepIndex == 1 ? Filler : Packer;
     }
   }
 }

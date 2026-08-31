@@ -92,6 +92,7 @@ namespace KeepBlinking.Tests
       {
         pendingOfflineXP = 72,
         pendingIncidentXP = 24,
+        careEnergy = 72,
         careActionCompleted = false,
         offlineCollectionResolved = false,
       };
@@ -100,7 +101,9 @@ namespace KeepBlinking.Tests
       var settlement = new CareStationProductionController().Settle(save, save.pendingOfflineXP);
       save.pendingOfflineXP = 0;
       Assert.That(settlement.ProducedStored, Is.EqualTo(48));
-      Assert.That(settlement.ProducedDiscarded, Is.EqualTo(24));
+      Assert.That(settlement.ProducedDiscarded, Is.Zero,
+        "Full Storage pauses production instead of discarding the remaining Care Energy.");
+      Assert.That(save.careEnergy, Is.EqualTo(24));
       save.offlineCollectionResolved = true;
       Assert.That(CareStationStateRules.CanPresentIncident(save.offlineCollectionResolved, false), Is.False);
 
@@ -220,6 +223,7 @@ namespace KeepBlinking.Tests
         careShiftId = 3,
         currentShift = 3,
         pendingOfflineXP = 72,
+        careEnergy = 72,
         offlineCollectionResolved = false,
       };
       save.storageHours = 48;
@@ -228,8 +232,10 @@ namespace KeepBlinking.Tests
       save.pendingOfflineXP = 0;
       save.offlineCollectionResolved = true;
       Assert.That(settlement.ProducedStored, Is.EqualTo(48));
-      Assert.That(settlement.ProducedDiscarded, Is.EqualTo(24));
+      Assert.That(settlement.ProducedDiscarded, Is.Zero);
       Assert.That(save.storedFullBottles, Is.EqualTo(48));
+      Assert.That(save.careEnergy, Is.EqualTo(24),
+        "Storage Full preserves production quota for a later Cart cycle.");
       Assert.That(save.activeCollectionPhase, Is.EqualTo(CareStationCollectionPhase.None));
       save.returnedNeutralAfterOffline = true;
       save.careActionCompleted = true;
@@ -239,7 +245,7 @@ namespace KeepBlinking.Tests
     }
 
     [UnityTest]
-    public IEnumerator FormalStationViewUsesIndependentApprovedWorkerArt()
+    public IEnumerator WorkshopStationVisualPassHidesLegacyWorkers()
     {
       var root = new GameObject("Care Station Graybox Test");
       try
@@ -254,21 +260,17 @@ namespace KeepBlinking.Tests
         yield return null;
 
         var workers = root.GetComponentsInChildren<CareStationWorkerArtView>(true);
-        Assert.That(workers, Has.Length.EqualTo(3));
-        Assert.That(workers.Count(item => item.gameObject.activeSelf), Is.EqualTo(2),
-          "Worker Level 2 must display two independent Worker instances, regardless of the economic crewCount field.");
-        Assert.That(workers.Where(item => item.gameObject.activeSelf).All(item => item.UsesFormalArt), Is.True,
-          "Every visible formal Worker must use the approved no-accessory art catalog.");
-        Assert.That(workers.Where(item => item.gameObject.activeSelf)
-          .All(item => item.Expression == CareStationWorkerExpression.Focused), Is.True);
+        Assert.That(workers, Is.Empty,
+          "The Station workshop pass reserves handoff anchors but must not render the retired droplet workers.");
         Assert.That(root.GetComponentsInChildren<CareCrewArtView>(true), Is.Empty,
           "The formal station view must not fall back to the retired role-based character art.");
         Assert.That(root.GetComponentsInChildren<MonoBehaviour>(true)
           .Any(item => item != null && item.GetType().Name == "CareCrewPlaceholderView"), Is.False,
           "The formal station view must not fall back to the retired graybox Worker.");
         var cart = root.GetComponentsInChildren<Transform>(true).First(item => item.name == "Bottle Cart");
-        Assert.That(cart.localScale.x, Is.GreaterThan(1.3f));
-        Assert.That(root.GetComponentsInChildren<Transform>(true).Any(item => item.name == "Care Core Platform"), Is.True);
+        Assert.That(cart.localScale.x, Is.GreaterThan(1f));
+        Assert.That(root.GetComponentsInChildren<Transform>(true).Any(item => item.name == "Care Core Platform"), Is.False);
+        Assert.That(root.GetComponentsInChildren<Transform>(true).Any(item => item.name == "Worker Bottle Pickup Anchor"), Is.True);
         var visibleText = root.GetComponentsInChildren<Component>(true)
           .Where(item => item != null && item.GetType().FullName == "TMPro.TextMeshProUGUI")
           .Select(item => item.GetType().GetProperty("text")?.GetValue(item) as string ?? string.Empty)
@@ -322,7 +324,7 @@ namespace KeepBlinking.Tests
     }
 
     [UnityTest]
-    public IEnumerator WorkerLevelsMapToIndependentVisualInstancesWithoutChangingEconomy()
+    public IEnumerator WorkerLevelsRemainEconomicDataWhileWorkshopWorkersStayHidden()
     {
       var root = new GameObject("Formal Worker Level Test");
       try
@@ -344,38 +346,24 @@ namespace KeepBlinking.Tests
         var workers = root.GetComponentsInChildren<CareStationWorkerArtView>(true)
           .OrderBy(item => item.name)
           .ToArray();
-        Assert.That(workers, Has.Length.EqualTo(3));
-        Assert.That(workers.Distinct().Count(), Is.EqualTo(3));
-        Assert.That(workers.Select(item => item.GetComponent<RectTransform>().anchorMin).Distinct().Count(), Is.EqualTo(3),
-          "Workers must occupy independent station positions instead of sharing one merged sprite.");
-        Assert.That(workers.Select(item => item.AnimationPhase).Distinct().Count(), Is.EqualTo(3),
-          "Workers need independent animation phases so they do not move in lockstep.");
+        Assert.That(workers, Is.Empty);
 
         view.ApplyStation(save);
-        Assert.That(workers.Count(item => item.gameObject.activeSelf), Is.EqualTo(1));
-        Assert.That(workers[0].Expression, Is.EqualTo(CareStationWorkerExpression.Angry));
 
         save.workerLevel = 2;
         view.ApplyStation(save);
-        Assert.That(workers.Count(item => item.gameObject.activeSelf), Is.EqualTo(2));
-        Assert.That(workers.Where(item => item.gameObject.activeSelf)
-          .All(item => item.Expression == CareStationWorkerExpression.Focused), Is.True);
 
         save.workerLevel = 3;
         view.ApplyStation(save);
-        Assert.That(workers.Count(item => item.gameObject.activeSelf), Is.EqualTo(3));
-        Assert.That(workers.All(item => item.Expression == CareStationWorkerExpression.Happy), Is.True);
-        Assert.That(workers.All(item => item.UsesFormalArt), Is.True);
-
-        workers[0].SetState(CareCrewState.Work, "FILTER");
-        workers[1].SetState(CareCrewState.Rest);
-        workers[2].SetState(CareCrewState.Walk);
-        workers[0].SetTargetPosition(new Vector2(40f, 0f));
-        workers[1].SetTargetPosition(new Vector2(-40f, 0f));
-        Assert.That(workers.Select(item => item.AnimationState).Distinct().Count(), Is.EqualTo(3));
-        Assert.That(workers[0].Facing, Is.EqualTo(CareStationWorkerFacing.Right));
-        Assert.That(workers[1].Facing, Is.EqualTo(CareStationWorkerFacing.Left));
-        Assert.That(workers[0].WorkTarget, Is.EqualTo("FILTER"));
+        var handoffAnchors = new[]
+        {
+          "Worker Bottle Pickup Anchor",
+          "Worker Packer Handoff Anchor",
+          "Worker Storage Handoff Anchor",
+        };
+        Assert.That(handoffAnchors.All(anchorName => root.GetComponentsInChildren<Transform>(true)
+          .Any(item => item.name == anchorName && item.gameObject.activeInHierarchy)), Is.True,
+          "The visual pass keeps only the invisible Worker handoff interface anchors.");
 
         Assert.That(root.GetComponentsInChildren<CareCrewArtView>(true), Is.Empty);
         Assert.That(root.GetComponentsInChildren<MonoBehaviour>(true)
@@ -535,7 +523,6 @@ namespace KeepBlinking.Tests
         var transport = transforms.First(item => item.name == "Bottle Transport");
         var content = transforms.First(item => item.name == "Comfort Padded Content");
         var filterLabel = transforms.First(item => item.name == "FILTER Label");
-        var sideCrew = transforms.First(item => item.name == "Care Crew 1");
 
         Assert.That(overlay.gameObject.activeSelf, Is.True);
         Assert.That(guide.rect.width / safe.rect.width, Is.GreaterThanOrEqualTo(0.76f));
@@ -550,7 +537,7 @@ namespace KeepBlinking.Tests
         Assert.That(routine.gameObject.activeSelf, Is.False);
         Assert.That(transport.gameObject.activeSelf, Is.False);
         Assert.That(filterLabel.gameObject.activeSelf, Is.False);
-        Assert.That(sideCrew.gameObject.activeSelf, Is.False);
+        Assert.That(root.GetComponentsInChildren<CareStationWorkerArtView>(true), Is.Empty);
         Assert.That(content.GetComponent<CanvasGroup>().blocksRaycasts, Is.False);
         Assert.That(VisibleText(root).Count(text => text == "LOOK UP AND DOWN"), Is.EqualTo(1));
       }
@@ -715,7 +702,7 @@ namespace KeepBlinking.Tests
     }
 
     [UnityTest]
-    public IEnumerator RecipeViewShowsTrainingAndPipelineProgressWithoutChangingResources()
+    public IEnumerator RecipeViewShowsFormalRoutineAndPipelineProgressWithoutChangingResources()
     {
       var root = new GameObject("Care Recipe View Test");
       var save = new CareStationSaveData { pendingIncidentXP = 24, collectedExperienceCount = 3 };
@@ -723,18 +710,18 @@ namespace KeepBlinking.Tests
       {
         var view = root.AddComponent<CareStationView>();
         view.Build();
-        var recipe = CareRecipeGenerator.CreateTraining(2, 3, 13);
+        var recipe = CareRecipeGenerator.CreateRoutine(CareRoutineId.FocusFlow, 3, 13);
         view.ConfigureRecipe(recipe);
         view.RestoreRecipePipeline(recipe);
-        view.PlayRecipePipelineStep(0, 1);
+        view.PlayRecipePipelineStep(0, recipe.ActionCount);
         yield return null;
 
         var visibleText = root.GetComponentsInChildren<Component>(true)
           .Where(item => item != null && item.GetType().FullName == "TMPro.TextMeshProUGUI")
           .Select(item => item.GetType().GetProperty("text")?.GetValue(item) as string ?? string.Empty)
           .ToArray();
-        Assert.That(visibleText, Does.Contain("TRAINING 3 / 4"));
-        Assert.That(visibleText, Does.Contain("STEP 1 / 1"));
+        Assert.That(visibleText, Does.Contain("A · FOCUS FLOW"));
+        Assert.That(visibleText, Does.Contain("STEP 1 / 3"));
         Assert.That(save.pendingIncidentXP, Is.EqualTo(24));
         Assert.That(save.collectedExperienceCount, Is.EqualTo(3));
       }
@@ -746,11 +733,61 @@ namespace KeepBlinking.Tests
     }
 
     [UnityTest]
-    public IEnumerator StationInspectionCompletesFourActionsBeforeRewardCanSettle()
+    public IEnumerator CompletedStepShowsImmediateEnergyFeedbackMintProgressAndFinalTotal()
+    {
+      var root = new GameObject("Routine Step Reward Feedback Test");
+      try
+      {
+        var view = root.AddComponent<CareStationView>();
+        view.Build();
+        var save = new CareStationSaveData { careEnergy = 4 };
+        view.ApplyStation(save);
+        var recipe = CareRecipeGenerator.CreateRoutine(CareRoutineId.FocusFlow, 4, 14);
+        recipe.completedActionMask = 1;
+        recipe.currentActionIndex = 1;
+
+        view.ConfigureRecipe(recipe);
+        view.ShowRecipeStepFeedback(recipe, CareActionType.FocusShift, 4);
+        yield return null;
+
+        var visibleText = root.GetComponentsInChildren<Component>(true)
+          .Where(item => item != null && item.GetType().FullName == "TMPro.TextMeshProUGUI")
+          .Select(item => item.GetType().GetProperty("text")?.GetValue(item) as string ?? string.Empty)
+          .ToArray();
+        Assert.That(visibleText, Does.Contain("+4 CARE ENERGY"));
+        Assert.That(root.GetComponentsInChildren<Transform>(true)
+          .Any(item => item.name.StartsWith("Care Energy Reward Particle")), Is.True);
+        var completedDot = root.GetComponentsInChildren<Image>(true)
+          .First(item => item.name == "Recipe Step Dot" && item.gameObject.activeSelf);
+        Assert.That(completedDot.color.g, Is.GreaterThan(completedDot.color.r),
+          "The completed slot uses the mint success color.");
+
+        save.careEnergy = 12;
+        recipe.completedActionMask = 0b111;
+        recipe.currentActionIndex = 3;
+        recipe.recipeCompleted = true;
+        view.ApplyStation(save);
+        view.ShowRecipeStepFeedback(recipe, CareActionType.ClosedEyeRest, 4);
+        yield return null;
+        visibleText = root.GetComponentsInChildren<Component>(true)
+          .Where(item => item != null && item.GetType().FullName == "TMPro.TextMeshProUGUI")
+          .Select(item => item.GetType().GetProperty("text")?.GetValue(item) as string ?? string.Empty)
+          .ToArray();
+        Assert.That(visibleText, Does.Contain("ROUTINE COMPLETE · 12 ENERGY"));
+      }
+      finally
+      {
+        Object.Destroy(root);
+      }
+      yield return null;
+    }
+
+    [UnityTest]
+    public IEnumerator StationInspectionCompletesPilotFlowBeforeLevelOrRewardCanSettle()
     {
       var save = new CareStationSaveData
       {
-        trainingProgress = 4,
+        trainingProgress = 0,
         workerLevel = 2,
         storageLevel = 2,
         cartLevel = 2,
@@ -765,8 +802,14 @@ namespace KeepBlinking.Tests
       {
         var result = runtime.CompleteCurrentAction(action);
         Assert.That(result.Accepted, Is.True);
+        Assert.That(CareEconomyRules.TryGrantCompletedRecipeStep(
+          save, result.CompletedStepIndex, out var granted), Is.True);
+        Assert.That(granted, Is.EqualTo(4));
       }
       Assert.That(save.currentRecipe.recipeCompleted, Is.True);
+      Assert.That(save.careEnergy, Is.EqualTo(12));
+      Assert.That(save.stationLevel, Is.EqualTo(1),
+        "Completing the Recipe data alone cannot bypass the inspected controller settlement.");
       Assert.That(runtime.TryConsumeForProduction(), Is.True);
       Assert.That(runtime.TryConsumeForProduction(), Is.False);
 
@@ -896,7 +939,9 @@ namespace KeepBlinking.Tests
           .Select(item => item.GetType().GetProperty("text")?.GetValue(item) as string ?? string.Empty)
           .ToArray();
         Assert.That(visibleText.Any(text => text.Contains("CARE ROUTINE COMPLETE")), Is.True);
-        Assert.That(visibleText.Any(text => text.Contains("FULL BOTTLES  18")), Is.True);
+        Assert.That(visibleText.Any(text => text.Contains("CARE ENERGY")), Is.True);
+        Assert.That(visibleText.Any(text => text.Contains("FULL BOTTLES")), Is.False,
+          "Routine completion reports the granted production quota, not a direct Bottle reward.");
       }
       finally
       {
@@ -968,6 +1013,7 @@ namespace KeepBlinking.Tests
           storageHours = 72,
           storedFullBottles = 35,
           storedGoldBottles = 1,
+          coins = 0,
         });
         yield return null;
 
@@ -975,7 +1021,7 @@ namespace KeepBlinking.Tests
           .Where(item => item != null && item.GetType().FullName == "TMPro.TextMeshProUGUI")
           .Select(item => item.GetType().GetProperty("text")?.GetValue(item) as string ?? string.Empty)
           .ToArray();
-        Assert.That(visibleText.Any(text => text.Contains("NEED 5 FULL + 1 GOLD")), Is.True);
+        Assert.That(visibleText.Any(text => text.Contains("NEED 50 COINS")), Is.True);
         Assert.That(view.IsUpgradeInteractable(CareStationUpgradeId.MoreWorkers), Is.False);
         var clicked = CareStationUpgradeId.None;
         view.UpgradeSelected += upgrade => clicked = upgrade;
@@ -985,7 +1031,7 @@ namespace KeepBlinking.Tests
           "Unavailable cards remain clickable so they can explain the shortfall.");
         unavailableCard.onClick.Invoke();
         Assert.That(clicked, Is.EqualTo(CareStationUpgradeId.MoreWorkers));
-        view.ShowUpgradeFeedback(CareStationUpgradeId.MoreWorkers, "NEED 5 FULL + 1 GOLD");
+        view.ShowUpgradeFeedback(CareStationUpgradeId.MoreWorkers, "NEED 50 COINS");
       }
       finally
       {
@@ -1008,6 +1054,7 @@ namespace KeepBlinking.Tests
           storageHours = 36,
           storedFullBottles = 36,
           storedGoldBottles = 0,
+          coins = 36,
           upgradeOffered = true,
         });
         yield return null;
@@ -1017,7 +1064,7 @@ namespace KeepBlinking.Tests
           .Where(item => item != null && item.GetType().FullName == "TMPro.TextMeshProUGUI")
           .Select(item => item.GetType().GetProperty("text")?.GetValue(item) as string ?? string.Empty)
           .ToArray();
-        Assert.That(upgradeText.Any(text => text.Contains("36 -> 48") && text.Contains("20 FULL")), Is.True);
+        Assert.That(upgradeText.Any(text => text.Contains("36 -> 48") && text.Contains("20 COINS")), Is.True);
         Assert.That(view.IsUpgradeInteractable(CareStationUpgradeId.LargerStorage), Is.True);
         var navigation = new[] { "STATION Tab", "UPGRADES Tab", "REPORTS Tab" };
         var selected = -1;
@@ -1105,12 +1152,13 @@ namespace KeepBlinking.Tests
         var routine = transforms.First(item => item.name == "Care Routine Dock");
         var navigation = transforms.First(item => item.name == "Station Navigation");
         var representative = transforms.First(item => item.name == "Representative Production Bottle");
-        Assert.That(stage.anchorMin.y, Is.EqualTo(0.31f).Within(0.001f));
-        Assert.That(stage.anchorMax.y, Is.EqualTo(0.88f).Within(0.001f));
-        Assert.That(routine.anchorMin.y, Is.EqualTo(0.09f).Within(0.001f));
-        Assert.That(routine.anchorMax.y, Is.EqualTo(0.29f).Within(0.001f));
-        Assert.That(navigation.anchorMax.y, Is.EqualTo(0.075f).Within(0.001f));
-        Assert.That(representative.gameObject.activeSelf, Is.True);
+        Assert.That(stage.anchorMin.y, Is.EqualTo(0.205f).Within(0.001f));
+        Assert.That(stage.anchorMax.y, Is.EqualTo(0.90f).Within(0.001f));
+        Assert.That(routine.anchorMin.y, Is.EqualTo(0.082f).Within(0.001f));
+        Assert.That(routine.anchorMax.y, Is.EqualTo(0.19f).Within(0.001f));
+        Assert.That(navigation.anchorMax.y, Is.EqualTo(0.069f).Within(0.001f));
+        Assert.That(representative.gameObject.activeSelf, Is.False,
+          "Opening Auto Shift is informational and cannot manufacture a production animation.");
         Assert.That(save.storedFullBottles, Is.EqualTo(15));
         Assert.That(save.storedGoldBottles, Is.EqualTo(1));
       }
@@ -1124,6 +1172,7 @@ namespace KeepBlinking.Tests
     public IEnumerator FilterArtUsesStationLevelAndProductionStateWithoutChangingEconomy()
     {
       var root = new GameObject("FILTER Art Runtime Test");
+      var previousTimeScale = Time.timeScale;
       try
       {
         var save = new CareStationSaveData
@@ -1145,8 +1194,8 @@ namespace KeepBlinking.Tests
         Assert.That(filter.Level, Is.EqualTo(1));
         Assert.That(filter.HitRect.raycastTarget, Is.False);
         var filterRect = filter.GetComponent<RectTransform>();
-        Assert.That(filterRect.sizeDelta.x, Is.EqualTo(250f).Within(0.001f));
-        Assert.That(filterRect.sizeDelta.y, Is.EqualTo(375f).Within(0.001f));
+        Assert.That(filterRect.sizeDelta.x, Is.EqualTo(300f).Within(0.001f));
+        Assert.That(filterRect.sizeDelta.y, Is.EqualTo(450f).Within(0.001f));
         Assert.That(filterRect.parent.localScale, Is.EqualTo(Vector3.one));
         Assert.That(filterRect.localScale, Is.EqualTo(Vector3.one));
         Assert.That(filter.Levels[0].root.localScale, Is.EqualTo(Vector3.one));
@@ -1161,26 +1210,46 @@ namespace KeepBlinking.Tests
           "Every authored FILTER layer must preserve its source aspect ratio.");
         Assert.That(filter.Levels[0].crankImage, Is.Null,
           "The approved Level 1 FILTER design does not contain a crank.");
-        Assert.That(filter.Levels[0].rawLiquidImage, Is.Not.Null);
-        Assert.That(filter.Levels[0].rawParticlesImage, Is.Not.Null);
-        Assert.That(filter.Levels[0].filterCartridgeImage, Is.Not.Null);
-        Assert.That(filter.Levels[0].funnelAndPipeImage, Is.Not.Null);
-        Assert.That(filter.Levels[0].bottleImage, Is.Not.Null);
-        Assert.That(filter.Levels[0].bottleFillImage, Is.Not.Null);
+        var levelOne = filter.Levels[0];
+        Assert.That(levelOne.machineRoot, Is.Not.Null);
+        Assert.That(levelOne.machineBaseImage, Is.Not.Null);
+        Assert.That(levelOne.rawLiquidMask, Is.Not.Null);
+        Assert.That(levelOne.rawLiquidBodyImage, Is.Not.Null);
+        Assert.That(levelOne.rawLiquidSurfaceImage, Is.Not.Null);
+        Assert.That(levelOne.filterBedImage, Is.Not.Null);
+        Assert.That(levelOne.filterDripImage, Is.Not.Null);
+        Assert.That(levelOne.outletFlowImage, Is.Not.Null);
+        Assert.That(levelOne.bottleFillAnchor, Is.Not.Null);
+        Assert.That(levelOne.bottleRoot, Is.Not.Null);
+        Assert.That(levelOne.bottlePickupAnchor, Is.Not.Null);
+        Assert.That(levelOne.bottleLiquidMask, Is.Not.Null);
+        Assert.That(levelOne.bottleGlassImage, Is.Not.Null);
+        Assert.That(levelOne.bottleLiquidBodyImage, Is.Not.Null);
+        Assert.That(levelOne.bottleLiquidSurfaceImage, Is.Not.Null);
+        Assert.That(levelOne.filterDripFrames, Has.Length.EqualTo(4));
+        Assert.That(levelOne.outletFlowFrames, Has.Length.EqualTo(4));
+        Assert.That(levelOne.machineRoot.parent, Is.SameAs(levelOne.contentRoot));
+        Assert.That(levelOne.bottleFillAnchor.parent, Is.SameAs(levelOne.contentRoot));
+        Assert.That(levelOne.bottleRoot.parent, Is.SameAs(levelOne.bottleFillAnchor));
+        Assert.That(levelOne.bottleRoot.IsChildOf(levelOne.machineRoot), Is.False,
+          "The bottle must never be baked into or parented under MachineRoot.");
+        Assert.That(levelOne.bottlePickupAnchor.IsChildOf(levelOne.bottleRoot), Is.True);
         Assert.That(filter.Levels[0].root.GetComponentsInChildren<Image>(true)
           .All(image => !image.raycastTarget), Is.True,
           "Authored FILTER layers must not intercept Station input.");
         Assert.That(filter.Levels[0].normalizedHitBounds.width, Is.LessThan(1f));
         Assert.That(filter.Levels[0].normalizedHitBounds.height, Is.LessThan(1f));
-        Assert.That(filter.Levels[0].flowImage.gameObject.activeSelf, Is.False,
-          "Idle Level 1 keeps the clean flow disabled.");
+        Assert.That(levelOne.filterDripImage.gameObject.activeSelf, Is.False);
+        Assert.That(levelOne.outletFlowImage.gameObject.activeSelf, Is.False,
+          "Idle Level 1 keeps both filtering stages disabled.");
         var levelOneBase = filter.Levels[0].baseImage.sprite;
 
         view.ShowAutoShift();
         yield return null;
-        Assert.That(filter.Running, Is.True);
-        Assert.That(filter.Levels[0].flowImage.gameObject.activeSelf, Is.True,
-          "Filtering enables the clean-flow animation without settling resources.");
+        Assert.That(filter.Running, Is.False,
+          "The FILTER animates only from a persisted production stage, never from the Auto Shift page itself.");
+        Assert.That(levelOne.filterDripImage.gameObject.activeSelf ||
+                    levelOne.outletFlowImage.gameObject.activeSelf, Is.False);
         filter.SetPipelineHighlighted(true);
         yield return null;
         Assert.That(filter.Levels[0].root.localScale, Is.EqualTo(Vector3.one));
@@ -1190,14 +1259,40 @@ namespace KeepBlinking.Tests
           "Pipeline feedback may tint authored art but must not rescale its raster layers.");
         filter.SetPipelineHighlighted(false);
         filter.SetRunning(false);
-        Assert.That(filter.Levels[0].flowImage.gameObject.activeSelf, Is.False,
+        Assert.That(levelOne.filterDripImage.gameObject.activeSelf, Is.False);
+        Assert.That(levelOne.outletFlowImage.gameObject.activeSelf, Is.False,
           "Returning to Idle stops the flow without changing the economy.");
+        view.ShowStationWorking();
+        yield return null;
+        Assert.That(filter.isActiveAndEnabled, Is.True,
+          "Real-time animation assertions must run while the Station FILTER view is visible.");
+        // This test now drives explicit presentation states. Freeze the
+        // representative logistics loop so it cannot overwrite them per-frame.
+        view.enabled = false;
+        filter.SetRunning(false);
+        filter.SetProductionVisual(FilterProductionVisualState.Filtering, 0.05f);
+        Assert.That(levelOne.filterDripImage.gameObject.activeSelf, Is.True,
+          "Filtering begins with droplets from the filter bed into the funnel.");
+        Assert.That(levelOne.outletFlowImage.gameObject.activeSelf, Is.False);
         filter.SetProductionVisual(FilterProductionVisualState.Filtering, 0.55f);
         Assert.That(filter.ProductionVisualState, Is.EqualTo(FilterProductionVisualState.Filtering));
         Assert.That(filter.ProductionVisualProgress, Is.EqualTo(0.55f).Within(0.001f));
         Assert.That(filter.Running, Is.True);
-        Assert.That(filter.Levels[0].flowImage.gameObject.activeSelf, Is.True);
-        Assert.That(filter.Levels[0].bottleFillImage.gameObject.activeSelf, Is.True);
+        Assert.That(levelOne.filterDripImage.gameObject.activeSelf, Is.False);
+        Assert.That(levelOne.outletFlowImage.gameObject.activeSelf, Is.False,
+          "The Station sends filtered liquid through its side hose instead of the retired downward Bottle outlet.");
+        Assert.That(levelOne.bottleRoot.gameObject.activeSelf, Is.False,
+          "A Bottle may not appear before the FILLER stage.");
+        Assert.That(levelOne.rawLiquidMask.rectTransform.sizeDelta.y,
+          Is.EqualTo(levelOne.rawLiquidMaxHeight * 0.45f).Within(0.01f));
+        Assert.That(levelOne.bottleLiquidMask.rectTransform.sizeDelta.y,
+          Is.Zero.Within(0.01f));
+        Assert.That(levelOne.rawLiquidSurfaceImage.rectTransform.anchoredPosition.y,
+          Is.EqualTo(levelOne.rawLiquidMaxHeight * 0.45f).Within(0.01f));
+        Assert.That(levelOne.bottleLiquidSurfaceImage.rectTransform.anchoredPosition.y,
+          Is.Zero.Within(0.01f));
+        Assert.That(levelOne.rawLiquidBodyImage.rectTransform.localScale, Is.EqualTo(Vector3.one));
+        Assert.That(levelOne.bottleLiquidBodyImage.rectTransform.localScale, Is.EqualTo(Vector3.one));
         Assert.That(filter.Levels[0].baseImage.sprite, Is.SameAs(levelOneBase));
         Assert.That(filter.Levels[0].root.localScale, Is.EqualTo(Vector3.one));
         Assert.That(filter.Levels[0].contentRoot.localScale, Is.EqualTo(Vector3.one));
@@ -1208,8 +1303,12 @@ namespace KeepBlinking.Tests
         Assert.That(filter.ProductionVisualState, Is.EqualTo(FilterProductionVisualState.BottleComplete));
         Assert.That(filter.ProductionVisualProgress, Is.EqualTo(1f));
         Assert.That(filter.Running, Is.False);
-        Assert.That(filter.Levels[0].flowImage.gameObject.activeSelf, Is.False);
-        Assert.That(filter.Levels[0].bottleFillImage.gameObject.activeSelf, Is.True);
+        Assert.That(levelOne.outletFlowImage.gameObject.activeSelf, Is.False,
+          "FILTER completion remains bottle-free in the Station production line.");
+        Assert.That(levelOne.bottleRoot.gameObject.activeSelf, Is.False);
+        Assert.That(levelOne.rawLiquidBodyImage.gameObject.activeSelf, Is.False);
+        Assert.That(levelOne.bottleLiquidMask.rectTransform.sizeDelta.y,
+          Is.Zero.Within(0.01f));
         Assert.That(filter.Levels[0].baseImage.sprite, Is.SameAs(levelOneBase),
           "Idle, Filtering, and Bottle Complete must share the same high-resolution Base sprite.");
         Assert.That(filter.Levels[0].root.localScale, Is.EqualTo(Vector3.one));
@@ -1217,6 +1316,26 @@ namespace KeepBlinking.Tests
         Assert.That(filter.Levels[0].baseImage.rectTransform.localScale, Is.EqualTo(Vector3.one));
         Assert.That(filter.Levels[0].root.GetComponentsInChildren<Image>(true)
           .All(image => image.rectTransform.localScale == Vector3.one), Is.True);
+        Time.timeScale = 0f;
+        yield return new WaitForSecondsRealtime(0.7f);
+        Assert.That(levelOne.outletFlowImage.gameObject.activeSelf, Is.False,
+          "The retired downward FILTER outlet stays hidden even when timeScale is zero.");
+        Time.timeScale = previousTimeScale;
+        filter.SetProductionVisual(FilterProductionVisualState.Idle, 0f);
+        Assert.That(levelOne.machineBaseImage.sprite, Is.SameAs(levelOneBase),
+          "Post-collection Idle must not restore the retired Level 1 artwork.");
+        Assert.That(levelOne.rawLiquidMask.rectTransform.sizeDelta.y,
+          Is.EqualTo(levelOne.rawLiquidMaxHeight).Within(0.01f));
+        Assert.That(levelOne.bottleLiquidBodyImage.gameObject.activeSelf, Is.False);
+
+        var carryParent = new GameObject("Future Worker Carry Root", typeof(RectTransform))
+          .GetComponent<RectTransform>();
+        carryParent.SetParent(levelOne.contentRoot, false);
+        levelOne.bottleRoot.SetParent(carryParent, false);
+        Assert.That(levelOne.bottleRoot.parent, Is.SameAs(carryParent),
+          "BottleRoot must be detachable from BottleFillAnchor for a future Worker pickup.");
+        Assert.That(levelOne.bottlePickupAnchor.IsChildOf(levelOne.bottleRoot), Is.True);
+        levelOne.bottleRoot.SetParent(levelOne.bottleFillAnchor, false);
         filter.SetHitTestEnabled(true);
         Assert.That(filter.HitRect.raycastTarget, Is.True);
         Assert.That(filter.Levels[0].root.GetComponentsInChildren<Image>(true)
@@ -1231,12 +1350,12 @@ namespace KeepBlinking.Tests
         save.stationLevel = 2;
         view.ApplyStation(save);
         yield return new WaitForSecondsRealtime(0.35f);
-        Assert.That(filter.Level, Is.EqualTo(2));
+        Assert.That(filter.Level, Is.EqualTo(1));
 
         save.stationLevel = 3;
         view.ApplyStation(save);
         yield return new WaitForSecondsRealtime(0.35f);
-        Assert.That(filter.Level, Is.EqualTo(3));
+        Assert.That(filter.Level, Is.EqualTo(1));
         Assert.That(filter.Levels[2].brushImage, Is.Not.Null);
         Assert.That(filter.Levels[2].gaugeNeedleImage, Is.Not.Null);
         Assert.That(save.storedFullBottles, Is.EqualTo(15));
@@ -1247,6 +1366,7 @@ namespace KeepBlinking.Tests
       }
       finally
       {
+        Time.timeScale = previousTimeScale;
         Object.Destroy(root);
       }
     }

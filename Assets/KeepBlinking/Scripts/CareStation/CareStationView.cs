@@ -5,6 +5,8 @@ using System.IO;
 using KeepBlinking.Gameplay;
 using TMPro;
 using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.Events;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
@@ -48,23 +50,39 @@ namespace KeepBlinking.CareStation
     private Image _distanceWave;
     private readonly List<Image> _distanceStepLights = new List<Image>(4);
     private readonly List<RectTransform> _distanceGuideDots = new List<RectTransform>(4);
-    private readonly List<Image> _recipeStepDots = new List<Image>(3);
+    private readonly List<Image> _recipeStepDots = new List<Image>(4);
     private readonly List<Image> _routineDockDots = new List<Image>(4);
     private readonly List<TextMeshProUGUI> _routineDockLabels = new List<TextMeshProUGUI>(4);
     private readonly List<Image> _navigationTabs = new List<Image>(3);
     private readonly List<Button> _navigationButtons = new List<Button>(3);
     private readonly List<TextMeshProUGUI> _navigationLabels = new List<TextMeshProUGUI>(3);
+    private readonly List<Button> _deviceButtons = new List<Button>(3);
+    private readonly Dictionary<Button, UnityAction> _ownedButtonBindings = new Dictionary<Button, UnityAction>();
+    private readonly Dictionary<RectTransform, CanvasGroup> _panelGroups = new Dictionary<RectTransform, CanvasGroup>();
+    private readonly Dictionary<Graphic, bool> _panelGraphicRaycastDefaults = new Dictionary<Graphic, bool>();
     private readonly List<Image> _stationTracks = new List<Image>(3);
-    private readonly List<Image> _pressLayers = new List<Image>(2);
-    private readonly Vector2[] _productionRoute =
-    {
-      new Vector2(0.12f, 0.29f),
-      new Vector2(0.22f, 0.75f),
-      new Vector2(0.78f, 0.74f),
-      new Vector2(0.50f, 0.82f),
-      new Vector2(0.82f, 0.12f),
-      new Vector2(0.14f, 0.12f),
-    };
+    private readonly List<Image> _packerLayers = new List<Image>(2);
+    private readonly List<Image> _liquidTransportSegments = new List<Image>(8);
+    private readonly List<Image> _manualCarryMarkers = new List<Image>(12);
+    private readonly List<Image> _conveyorSegments = new List<Image>(16);
+    private static readonly Vector2 FillerBottleAnchor = new Vector2(0.73f, 0.655f);
+    private static readonly Vector2 PackerBottleAnchor = new Vector2(0.73f, 0.335f);
+    private static readonly Vector2 StorageBottleAnchor = new Vector2(0.27f, 0.295f);
+    private static readonly Vector2 ManualFillerPickupAnchor = new Vector2(0.86f, 0.58f);
+    private static readonly Vector2 ManualPackerHandoffAnchor = new Vector2(0.84f, 0.39f);
+    private static readonly Vector2 ManualStoragePickupAnchor = new Vector2(0.55f, 0.31f);
+    private static readonly Color WorkshopBackdrop = new Color32(24, 53, 49, 255);
+    private static readonly Color WorkshopWall = new Color32(35, 72, 66, 255);
+    private static readonly Color WorkshopFloor = new Color32(43, 65, 57, 255);
+    private static readonly Color WorkshopOutline = new Color32(60, 43, 31, 255);
+    private static readonly Color WorkshopWood = new Color32(119, 77, 42, 255);
+    private static readonly Color WorkshopWoodLight = new Color32(151, 102, 56, 255);
+    private static readonly Color WorkshopMetal = new Color32(67, 103, 114, 255);
+    private static readonly Color WorkshopMetalLight = new Color32(100, 132, 137, 255);
+    private static readonly Color WorkshopPaper = new Color32(218, 196, 148, 255);
+    private static readonly Color WorkshopPaperDim = new Color32(174, 157, 122, 255);
+    private static readonly Color WorkshopInk = new Color32(68, 48, 34, 255);
+    private static readonly Color WorkshopMint = new Color32(101, 194, 171, 255);
     private RectTransform _guidedOrbitDot;
     private RectTransform _pilotRoot;
     private readonly List<Image> _pilotAxes = new List<Image>(4);
@@ -73,11 +91,33 @@ namespace KeepBlinking.CareStation
     private RectTransform _pilotRightPupil;
     private RectTransform _pilotGuideDot;
     private RectTransform _routineDock;
+    private Button _routinePrimaryButton;
     private TextMeshProUGUI _routineDockTitle;
+    private TextMeshProUGUI _routineHintText;
     private TextMeshProUGUI _routinePrimaryText;
     private RectTransform _navigationRoot;
     private Image _upgradeOpportunityDot;
     private RectTransform _productionBottle;
+    private Image _productionBottleBody;
+    private Image _productionBottleLiquid;
+    private RectTransform _productionBottleLiquidMask;
+    private Image _productionBottleLiquidSurface;
+    private Image _productionBottleCap;
+    private Image _productionBottleLabel;
+    private Image _productionPackage;
+    private Image _baseInputPipe;
+    private Image _filteredLiquidPipe;
+    private Image _bottleConveyor;
+    private Image _packedBottleRoute;
+    private Image _storageToCartRoute;
+    private RectTransform _manualCarryRoot;
+    private RectTransform _basicConveyorRoot;
+    private RectTransform _manualFilterHoseRoot;
+    private RectTransform _fixedFilterPipeRoot;
+    private RectTransform _workerFillerPickupAnchor;
+    private RectTransform _workerPackerHandoffAnchor;
+    private RectTransform _workerStorageHandoffAnchor;
+    private CareProductionTransportMode _transportMode = CareProductionTransportMode.ManualCarry;
     private Vector2 _productionCartHome;
     private Image _careDimmer;
     private RectTransform _phoneIcon;
@@ -87,6 +127,11 @@ namespace KeepBlinking.CareStation
     private TextMeshProUGUI _fullBottleText;
     private TextMeshProUGUI _goldBottleText;
     private TextMeshProUGUI _storageText;
+    private TextMeshProUGUI _filterStatusText;
+    private TextMeshProUGUI _fillerStatusText;
+    private TextMeshProUGUI _packerStatusText;
+    private TextMeshProUGUI _storageStatusText;
+    private TextMeshProUGUI _cartStatusText;
     private TextMeshProUGUI _toastText;
     private Image _storageFill;
     private RectTransform _welcomeRoot;
@@ -96,7 +141,7 @@ namespace KeepBlinking.CareStation
     private TextMeshProUGUI _upgradeTitle;
     private RectTransform _completeRoot;
     private TextMeshProUGUI _completeText;
-    private readonly List<Image> _completeStepIcons = new List<Image>(3);
+    private readonly List<Image> _completeStepIcons = new List<Image>(4);
     private RectTransform _surveyRoot;
     private TextMeshProUGUI _surveyTitle;
     private readonly List<TextMeshProUGUI> _surveyValues = new List<TextMeshProUGUI>(4);
@@ -117,8 +162,8 @@ namespace KeepBlinking.CareStation
     private RectTransform _restIcon;
     private CareStationFilterArtView _filterArt;
     private Image _filterBody;
-    private Image _tankBody;
-    private Image _tankLevel;
+    private Image _fillerBody;
+    private Image _fillerLevel;
     private Image _careCoreInner;
     private CareStationSaveData _stationSave;
     private int _pendingBottleValue;
@@ -131,13 +176,14 @@ namespace KeepBlinking.CareStation
     private float _actionStepPulseUntil;
     private float _pipelinePulseUntil;
     private float _focusLegPulseUntil;
+    private float _careEnergyPulseUntil;
     private CareDistanceDirection _focusLegPulseDirection;
     private bool _focusLegPulseActive;
     private int _pipelineMask;
     private Vector3 _storageBaseScale = Vector3.one;
     private bool _storageFull;
     private bool _productionAnimating;
-    private float _productionAnimationStartedAt;
+    private CareProductionStage _renderedProductionStage = CareProductionStage.None;
     private float _upgradeFeedbackUntil;
     private CareStationUpgradeId _upgradeFeedbackCard;
     private float _toastUntil;
@@ -150,8 +196,21 @@ namespace KeepBlinking.CareStation
     private bool _navigationWasVisible;
     private bool _actionWasVisible;
     private bool _incidentWasVisible;
+    private float _developmentGuidancePreviewUntil = -1f;
+    private readonly List<CareEnergyFlight> _careEnergyFlights = new List<CareEnergyFlight>(8);
+
+    private sealed class CareEnergyFlight
+    {
+      public RectTransform rect;
+      public Image image;
+      public Vector2 start;
+      public Vector2 end;
+      public float startedAt;
+      public float duration;
+    }
 
     public event Action IncidentSelected;
+    public event Action StartCareSelected;
     public event Action ContinueSelected;
     public event Action FallbackCollectSelected;
     public event Action ReturnFallbackSelected;
@@ -164,15 +223,23 @@ namespace KeepBlinking.CareStation
     public event Action<bool> SubjectiveScoresSkipped;
     public event Action CareReportDoneSelected;
     public event Action<int> NavigationSelected;
+    public event Action<string> DeviceSelected;
     public event Action UpgradeBackSelected;
     public event Action<CareStationUpgradeId> UpgradeSelected;
 
     public void Build()
     {
-      if (_safe != null) return;
+      if (_safe != null)
+      {
+        FirstLevelUiFactory.RecoverUiInput(_safe, _group);
+        BindInputHandlers();
+        RecoverBaseInputIfUnblocked();
+        return;
+      }
       _safe = FirstLevelUiFactory.CreateCanvas(transform, "Eye Care Station Canvas", 500, out _, out _group);
-      var background = FirstLevelUiFactory.CreateImage("Station Backdrop", _safe, KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.BackgroundPrimary, 0.08f));
+      var background = FirstLevelUiFactory.CreateImage("Station Backdrop", _safe, WorkshopBackdrop);
       FirstLevelUiFactory.Stretch(background.rectTransform);
+      BuildWorkshopBackdrop(background.transform);
 
       _content = FirstLevelUiFactory.CreateObject("Comfort Padded Content", _safe).GetComponent<RectTransform>();
       FirstLevelUiFactory.Stretch(_content, new Vector2(28f, 34f), new Vector2(-28f, -42f));
@@ -181,12 +248,13 @@ namespace KeepBlinking.CareStation
       BuildHud();
       BuildStationStage();
       BuildStorage();
-      BuildCrew();
       BuildCareRoutineDock();
       BuildNavigation();
-      BuildIncident();
+      // v21 removes Incident cards from the player flow. Legacy fields remain
+      // deserializable, but no Incident presentation is constructed.
       _careDimmer = FirstLevelUiFactory.CreateImage("Care Dimmer", _content, Color.clear);
       FirstLevelUiFactory.Stretch(_careDimmer.rectTransform);
+      _careDimmer.raycastTarget = false;
       BuildActionOverlay();
       _eyeMovementGuidance = EyeMovementGuidanceOverlay.Create(_safe);
       BuildChangeStepConfirmation();
@@ -200,24 +268,26 @@ namespace KeepBlinking.CareStation
       // Modal scrims must never cover the persistent bottom navigation.
       _navigationRoot.SetAsLastSibling();
       HideAllModals();
+      BindInputHandlers();
+      FirstLevelUiFactory.RecoverUiInput(_safe, _group);
     }
 
     public void ApplyStation(CareStationSaveData save)
     {
       if (save == null) return;
       _stationSave = save;
-      var visibleWorkerCount = CareStationWorkerVisualRules.VisibleCountForLevel(save.workerLevel);
-      var workerExpression = CareStationWorkerVisualRules.ExpressionForLevel(save.workerLevel);
+      // Formal workers are not part of the Station L1 visual pass. Keep every
+      // legacy droplet worker hidden while the persisted production state and
+      // reserved handoff anchors remain available for the future art hookup.
       for (var i = 0; i < _crew.Count; i++)
-      {
-        _crew[i].gameObject.SetActive(i < visibleWorkerCount);
-        _crew[i].SetExpression(workerExpression);
-      }
-      if (_filterArt != null) _filterArt.SetLevel(Mathf.Clamp(save.stationLevel, 1, 3), true);
-      var constructionScale = 1f + Mathf.Min(3, save.stationConstructionState) * 0.04f;
-      var storageScale = save.storageLevel == 2 ? new Vector3(1.16f, 1.08f, 1f)
-        : save.storageLevel == 3 ? new Vector3(1.34f, 1.14f, 1f)
-        : save.storageLevel >= 4 ? new Vector3(1.54f, 1.22f, 1f) : Vector3.one;
+        _crew[i].gameObject.SetActive(false);
+      if (_filterArt != null) _filterArt.SetLevel(1, true);
+      CareProductionTransportRules.Synchronize(save);
+      ApplyTransportModeVisuals(save.productionTransportMode);
+      var constructionScale = 1f + Mathf.Min(3, save.stationConstructionState) * 0.012f;
+      var storageScale = save.storageLevel == 2 ? new Vector3(1.03f, 1.02f, 1f)
+        : save.storageLevel == 3 ? new Vector3(1.06f, 1.04f, 1f)
+        : save.storageLevel >= 4 ? new Vector3(1.09f, 1.06f, 1f) : Vector3.one;
       _storageBaseScale = Vector3.Scale(storageScale, new Vector3(constructionScale, constructionScale, 1f));
       _storageTank.localScale = _storageBaseScale;
       var extraTank = _storageTank.Find("Extra Container");
@@ -236,9 +306,38 @@ namespace KeepBlinking.CareStation
       SetUpgradeOpportunity(save.upgradeOffered);
     }
 
+    internal CareProductionTransportMode VisibleTransportMode => _transportMode;
+
+    private void BuildWorkshopBackdrop(Transform parent)
+    {
+      var wall = FirstLevelUiFactory.CreateImage("Warm Teal Workshop Wall", parent, WorkshopWall);
+      FirstLevelUiFactory.SetRect(wall.rectTransform, Vector2.zero, new Vector2(1f, 0.72f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
+      wall.transform.SetAsFirstSibling();
+      var floor = FirstLevelUiFactory.CreateImage("Workshop Floor", parent, WorkshopFloor);
+      FirstLevelUiFactory.SetRect(floor.rectTransform, Vector2.zero, new Vector2(1f, 0.28f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
+      floor.transform.SetSiblingIndex(1);
+      for (var index = 0; index < 5; index++)
+      {
+        var seam = FirstLevelUiFactory.CreateImage(
+          "Irregular Wall Seam " + index,
+          parent,
+          new Color32(54, 86, 76, 96),
+          FirstLevelUiFactory.RoundedSprite);
+        var y = 0.15f + index * 0.145f;
+        FirstLevelUiFactory.SetRect(seam.rectTransform, new Vector2(0.02f, y), new Vector2(0.98f, y), new Vector2(0.5f, 0.5f), new Vector2(index % 2 == 0 ? -7f : 5f, 0f), new Vector2(-22f, 3f));
+        seam.rectTransform.localRotation = Quaternion.Euler(0f, 0f, index % 2 == 0 ? -0.35f : 0.28f);
+        seam.raycastTarget = false;
+      }
+    }
+
     public void SetCrewState(CareCrewState state)
     {
-      var workTargets = new[] { "FILTER", "TANK", "PRESS" };
+      var workTargets = new[]
+      {
+        CareStationDisplayNames.Filter,
+        CareStationDisplayNames.Filler,
+        CareStationDisplayNames.Packer,
+      };
       for (var i = 0; i < _crew.Count; i++)
         if (_crew[i].gameObject.activeSelf)
           _crew[i].SetState(state, state == CareCrewState.Work ? workTargets[i % workTargets.Length] : string.Empty);
@@ -247,12 +346,13 @@ namespace KeepBlinking.CareStation
     public void ShowWelcome(CareStationOfflineResult result)
     {
       HideAllModals();
-      _welcomeRoot.gameObject.SetActive(true);
+      SetPanelVisible(_welcomeRoot, true);
       if (_welcomeTitle != null) _welcomeTitle.text = "WHILE YOU WERE AWAY";
       var lines = new List<string>(5);
-      if (result.ExperienceMade > 0) lines.Add($"+{result.ExperienceMade} FULL BOTTLES");
-      var gold = _stationSave != null ? Mathf.Max(0, _stationSave.lastOfflineStoredGoldBottles) : 0;
-      if (gold > 0) lines.Add($"+{gold} GOLD {(gold == 1 ? "BOTTLE" : "BOTTLES")}");
+      if (_stationSave != null && _stationSave.lastCartCoinsEarned > 0)
+        lines.Add($"+{_stationSave.lastCartCoinsEarned} COINS");
+      if (_stationSave != null && _stationSave.lastAutoProducedBottles > 0)
+        lines.Add($"+{_stationSave.lastAutoProducedBottles} FULL BOTTLES");
       if (result.CreditedDuration > TimeSpan.Zero)
         lines.Add($"{(int)result.CreditedDuration.TotalHours}H {result.CreditedDuration.Minutes:D2}M WORKED");
       if (_stationSave != null && _stationSave.offlineProductionPausedByFullStorage)
@@ -261,34 +361,34 @@ namespace KeepBlinking.CareStation
         lines.Add("PRODUCTION PAUSED");
       }
       _welcomeLines.text = string.Join("\n", lines);
+      if (_stationSave != null && _stationSave.lastCartCoinsEarned > 0)
+        SetFactoryStatus(string.Empty, "IDLE", "IDLE", "IDLE", "IDLE", "SELLING");
+      else
+        SetFactoryStatus(string.Empty);
       SetRoutinePrimary("CONTINUE");
       SetProductionAnimation(false);
+      if (_storageToCartRoute != null)
+        _storageToCartRoute.color = KeepBlinkingTheme.WithAlpha(
+          _stationSave != null && _stationSave.lastCartCoinsEarned > 0
+            ? KeepBlinkingTheme.AccentWarm
+            : KeepBlinkingTheme.BorderReadable,
+          _stationSave != null && _stationSave.lastCartCoinsEarned > 0 ? 0.86f : 0.3f);
     }
 
     public void ShowIncident(CareStationIncidentType incident, bool selectable)
     {
-      HideAllModals();
-      _incidentRoot.gameObject.SetActive(true);
-      _incidentSelectable = selectable;
-      _incidentLabel.text = incident == CareStationIncidentType.DrySpot ? "DRY SPOT" : incident == CareStationIncidentType.EyeGunk ? "EYE GUNK" : "DUST";
-      var color = incident == CareStationIncidentType.DrySpot ? KeepBlinkingTheme.AccentWarm : KeepBlinkingTheme.TextPrimary;
-      _incidentCore.color = KeepBlinkingTheme.WithAlpha(color, incident == CareStationIncidentType.EyeGunk ? 0.82f : 0.35f);
-      _incidentRing.color = KeepBlinkingTheme.WithAlpha(color, selectable ? 0.68f : 0.25f);
-      _incidentCore.rectTransform.sizeDelta = incident == CareStationIncidentType.EyeGunk ? new Vector2(176f, 112f) : new Vector2(145f, 145f);
-      for (var i = 0; i < _dustGroups.Count; i++) _dustGroups[i].gameObject.SetActive(incident == CareStationIncidentType.Dust);
-      for (var i = 0; i < _dryCracks.Count; i++) _dryCracks[i].gameObject.SetActive(incident == CareStationIncidentType.DrySpot);
-      _statusText.text = selectable ? "TAP TO HELP" : string.Empty;
-      SetRoutinePrimary(selectable ? "START CARE" : "CARE NEEDED");
-      SetProductionAnimation(false);
+      // Legacy callable kept for binary/test compatibility. It deliberately
+      // renders the normal station instead of any retired Incident content.
+      ShowStationWorking();
     }
 
     public void ShowStationWorking()
     {
       HideAllModals();
-      _statusText.text = "STATION WORKING";
+      SetFactoryStatus(string.Empty);
       SetCrewState(CareCrewState.Work);
       SetRoutinePrimary("START CARE");
-      SetProductionAnimation(true);
+      SetProductionAnimation(false);
     }
 
     public void ShowInspectionIntro(CareStationSaveData save)
@@ -324,12 +424,12 @@ namespace KeepBlinking.CareStation
       if (_filterBody != null) _filterBody.color = filterCheckComplete
         ? KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.AccentPrimary, 0.72f)
         : KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.TextSecondary, 0.22f);
-      if (_tankBody != null) _tankBody.color = (save.inspectionCompletedMask & CareStationInspectionRules.FlowCheck) != 0
+      if (_fillerBody != null) _fillerBody.color = (save.inspectionCompletedMask & CareStationInspectionRules.FlowCheck) != 0
         ? KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.AccentPrimary, 0.72f)
         : KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.TextSecondary, 0.22f);
       var coreComplete = (save.inspectionCompletedMask & CareStationInspectionRules.CoreCheck) != 0;
-      for (var i = 0; i < _pressLayers.Count; i++)
-        _pressLayers[i].color = coreComplete
+      for (var i = 0; i < _packerLayers.Count; i++)
+        _packerLayers[i].color = coreComplete
           ? KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.AccentPrimary, 0.72f)
           : KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.TextSecondary, 0.22f);
       if (_careCoreInner != null) _careCoreInner.color = coreComplete
@@ -358,6 +458,128 @@ namespace KeepBlinking.CareStation
       SetProductionAnimation(false);
     }
 
+    public void ShowProductionStage(
+      CareProductionStage stage,
+      float progress,
+      CareStationSaveData save)
+    {
+      progress = Mathf.Clamp01(progress);
+      if (_renderedProductionStage != stage)
+      {
+        HideAllModals();
+        _renderedProductionStage = stage;
+      }
+      _stationSave = save ?? _stationSave;
+      SetProductionAnimation(stage != CareProductionStage.None);
+      if (_routinePrimaryButton != null) _routinePrimaryButton.interactable = false;
+
+      var bottleVisible = stage >= CareProductionStage.FillerCreateBottle;
+      if (_productionBottle != null) _productionBottle.gameObject.SetActive(bottleVisible);
+      if (_productionBottleLiquid != null)
+      {
+        var fill = stage == CareProductionStage.FillerFilling
+          ? progress
+          : stage > CareProductionStage.FillerFilling ? 1f : 0f;
+        SetProductionBottleFill(fill, bottleVisible);
+      }
+      if (_productionBottleBody != null)
+      {
+        var alpha = stage == CareProductionStage.FillerCreateBottle ? Mathf.Lerp(0.2f, 0.76f, progress) : 0.76f;
+        _productionBottleBody.color = KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.TextPrimary, alpha);
+      }
+      if (_productionBottleCap != null)
+      {
+        _productionBottleCap.gameObject.SetActive(stage >= CareProductionStage.PackerCapping);
+        _productionBottleCap.color = KeepBlinkingTheme.WithAlpha(
+          WorkshopMetal,
+          stage == CareProductionStage.PackerCapping ? progress : 1f);
+      }
+      if (_productionBottleLabel != null)
+      {
+        _productionBottleLabel.gameObject.SetActive(stage >= CareProductionStage.PackerLabeling);
+        _productionBottleLabel.color = KeepBlinkingTheme.WithAlpha(
+          WorkshopPaper,
+          stage == CareProductionStage.PackerLabeling ? progress : 0.88f);
+      }
+      if (_productionPackage != null)
+      {
+        _productionPackage.gameObject.SetActive(stage >= CareProductionStage.PackerPackaging);
+        _productionPackage.color = KeepBlinkingTheme.WithAlpha(
+          WorkshopPaper,
+          stage == CareProductionStage.PackerPackaging ? Mathf.Lerp(0.05f, 0.42f, progress) : 0.42f);
+      }
+
+      var anchor = FillerBottleAnchor;
+      if (stage == CareProductionStage.TransferToPacker)
+        anchor = _transportMode == CareProductionTransportMode.ManualCarry
+          ? EvaluatePolyline(
+            new[] { FillerBottleAnchor, ManualFillerPickupAnchor, ManualPackerHandoffAnchor, PackerBottleAnchor },
+            Mathf.SmoothStep(0f, 1f, progress))
+          : Vector2.Lerp(FillerBottleAnchor, PackerBottleAnchor, Mathf.SmoothStep(0f, 1f, progress));
+      else if (stage >= CareProductionStage.PackerCapping && stage < CareProductionStage.TransferToStorage)
+        anchor = PackerBottleAnchor;
+      else if (stage == CareProductionStage.TransferToStorage)
+        anchor = _transportMode == CareProductionTransportMode.ManualCarry
+          ? EvaluatePolyline(
+            new[] { PackerBottleAnchor, ManualStoragePickupAnchor, StorageBottleAnchor },
+            Mathf.SmoothStep(0f, 1f, progress))
+          : Vector2.Lerp(PackerBottleAnchor, StorageBottleAnchor, Mathf.SmoothStep(0f, 1f, progress));
+      else if (stage == CareProductionStage.WaitingForStorage)
+        anchor = StorageBottleAnchor;
+      if (_productionBottle != null)
+      {
+        _productionBottle.anchorMin = anchor;
+        _productionBottle.anchorMax = anchor;
+        _productionBottle.anchoredPosition = Vector2.zero;
+        _productionBottle.localScale = stage == CareProductionStage.FillerCreateBottle
+          ? Vector3.one * Mathf.Lerp(0.72f, 1f, progress)
+          : Vector3.one;
+      }
+
+      var filterActive = stage == CareProductionStage.FilterProcessing ||
+                         stage == CareProductionStage.TransferFilteredLiquid;
+      var fillerActive = stage >= CareProductionStage.FillerCreateBottle &&
+                         stage <= CareProductionStage.TransferToPacker;
+      var packerActive = stage >= CareProductionStage.PackerCapping &&
+                         stage <= CareProductionStage.TransferToStorage;
+      _pipelineMask = (filterActive ? CareRecipePipeline.Filter : 0) |
+                      (fillerActive ? CareRecipePipeline.Filler : 0) |
+                      (packerActive ? CareRecipePipeline.Packer : 0) |
+                      (stage != CareProductionStage.None ? CareRecipePipeline.Rail : 0);
+      ApplyPipelineVisuals();
+      if (_filterArt != null)
+      {
+        _filterArt.SetIntegratedBottleVisible(false);
+        _filterArt.SetProductionVisual(
+          filterActive ? FilterProductionVisualState.Filtering : FilterProductionVisualState.Idle,
+          stage == CareProductionStage.TransferFilteredLiquid ? 1f : progress);
+      }
+      if (_baseInputPipe != null)
+        _baseInputPipe.color = KeepBlinkingTheme.WithAlpha(
+          filterActive ? WorkshopMint : WorkshopPaperDim,
+          filterActive ? 0.92f : 0.34f);
+      SetRouteColor(
+        _liquidTransportSegments,
+        stage == CareProductionStage.TransferFilteredLiquid,
+        WorkshopMetalLight);
+      SetRouteColor(
+        _manualCarryMarkers,
+        stage == CareProductionStage.TransferToPacker || stage == CareProductionStage.TransferToStorage,
+        WorkshopPaperDim);
+      SetRouteColor(
+        _conveyorSegments,
+        stage == CareProductionStage.TransferToPacker || stage == CareProductionStage.TransferToStorage,
+        WorkshopMetal);
+      if (_storageToCartRoute != null)
+        _storageToCartRoute.color = KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.BorderReadable, 0.3f);
+
+      ApplyProductionStageStatus(stage);
+      SetRoutinePrimary(stage == CareProductionStage.WaitingForStorage
+        ? "START CARE"
+        : "CARE AFTER THIS BOTTLE");
+      RefreshResourceHud();
+    }
+
     public void ShowOfflineBottles(int value, bool includesShiftSupply = false)
     {
       HideAllModals();
@@ -372,11 +594,11 @@ namespace KeepBlinking.CareStation
     {
       ExitEyeMovementGuidance(true);
       _renderedCareActionType = CareActionType.None;
-      _welcomeRoot.gameObject.SetActive(false);
-      _upgradeRoot.gameObject.SetActive(false);
-      _completeRoot.gameObject.SetActive(false);
-      _incidentRoot.gameObject.SetActive(false);
-      _actionRoot.gameObject.SetActive(true);
+      SetPanelVisible(_welcomeRoot, false);
+      SetPanelVisible(_upgradeRoot, false);
+      SetPanelVisible(_completeRoot, false);
+      SetPanelVisible(_incidentRoot, false);
+      SetPanelVisible(_actionRoot, true);
       _actionPrompt.text = ResolveActionLabel(prompt, status);
       if (_actionPurpose != null) _actionPurpose.text = string.Empty;
       SetRoutinePrimary(_actionPrompt.text);
@@ -402,10 +624,7 @@ namespace KeepBlinking.CareStation
         return;
       }
 
-      var training = CareRecipeGenerator.TrainingIndex(recipe);
-      _recipeTitle.text = recipe.recipeType == CareRecipeType.Training && training >= 0
-        ? $"TRAINING {training + 1} / 4"
-        : "TODAY'S EYE CARE";
+      _recipeTitle.text = RoutineTitle(recipe);
       var visibleStep = recipe.recipeCompleted
         ? recipe.ActionCount
         : Mathf.Clamp(recipe.currentActionIndex + 1, 1, recipe.ActionCount);
@@ -426,14 +645,11 @@ namespace KeepBlinking.CareStation
 
     public void ShowCareRoutineIntro(CareRecipeSaveData recipe)
     {
-      var training = recipe != null && recipe.recipeType == CareRecipeType.Training;
-      ShowAction(training ? "EYE CARE TRAINING" : "EYE CARE ROUTINE", 0f, false);
+      ShowAction("EYE CARE ROUTINE", 0f, false);
       if (_actionPurpose != null)
-        _actionPurpose.text = training
-          ? "REST YOUR EYES. RESTORE THE STATION."
-          : "2–3 MINUTES\nREST YOUR EYES. RESTORE THE STATION.";
+        _actionPurpose.text = "2–3 MINUTES\nCOMPLETE EVERY PLANNED STEP.";
       ConfigureRecipe(recipe);
-      SetRoutinePrimary(training ? "EYE CARE TRAINING" : "EYE CARE ROUTINE");
+      SetRoutinePrimary("EYE CARE ROUTINE");
       if (_careCoreInner != null)
         _careCoreInner.color = KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.AccentPrimary, 0.42f);
     }
@@ -459,12 +675,12 @@ namespace KeepBlinking.CareStation
       var on = KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.AccentPrimary, 0.86f);
       if (direction == CareDistanceDirection.Closer)
       {
-        for (var i = 0; i < _pressLayers.Count; i++) _pressLayers[i].color = on;
+        for (var i = 0; i < _packerLayers.Count; i++) _packerLayers[i].color = on;
       }
       else
       {
-        if (_tankBody != null) _tankBody.color = on;
-        if (_tankLevel != null) _tankLevel.color = KeepBlinkingTheme.AccentPrimary;
+        if (_fillerBody != null) _fillerBody.color = on;
+        if (_fillerLevel != null) _fillerLevel.color = KeepBlinkingTheme.AccentPrimary;
       }
       if (_careCoreInner != null)
         _careCoreInner.color = KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.AccentPrimary, 0.5f);
@@ -482,28 +698,37 @@ namespace KeepBlinking.CareStation
       ApplyPipelineVisuals();
     }
 
-    public void ShowRecipeStepFeedback(CareRecipeSaveData recipe, CareActionType completedAction = CareActionType.None)
+    public void ShowRecipeStepFeedback(
+      CareRecipeSaveData recipe,
+      CareActionType completedAction = CareActionType.None,
+      int energyGranted = 0)
     {
       var continueToGuided = completedAction == CareActionType.PilotEyeRoutine && recipe != null &&
                              !recipe.recipeCompleted && recipe.CurrentAction == CareActionType.GuidedEyeCircles;
       if (continueToGuided)
       {
         EnterEyeMovementGuidance();
-        _eyeMovementGuidance.PresentPilotToGuidedHold();
-        _actionRoot.gameObject.SetActive(false);
-        _incidentRoot.gameObject.SetActive(false);
+        _eyeMovementGuidance.PresentPilotToGuidedHold(energyGranted);
+        SetPanelVisible(_actionRoot, false);
+        SetPanelVisible(_incidentRoot, false);
+        if (_goldBottleText != null && _stationSave != null)
+          _goldBottleText.text = Mathf.Max(0, _stationSave.careEnergy).ToString();
+        if (energyGranted > 0) PlayCareEnergyFlight(energyGranted);
         ConfigureRecipe(recipe);
         return;
       }
       ExitEyeMovementGuidance(false);
-      _actionRoot.gameObject.SetActive(false);
-      _incidentRoot.gameObject.SetActive(false);
+      SetPanelVisible(_actionRoot, false);
+      SetPanelVisible(_incidentRoot, false);
       _careDimmer.color = Color.clear;
-      _statusText.text = completedAction == CareActionType.ClosedEyeRest
-          ? "REST COMPLETE"
-          : recipe != null && recipe.recipeCompleted
-            ? "EYE CARE COMPLETE  ·  STATION RESTORED"
-            : "CARE ROUTINE";
+      _statusText.text = recipe != null && recipe.recipeCompleted
+        ? "ROUTINE COMPLETE · 12 ENERGY"
+        : energyGranted > 0
+          ? $"+{energyGranted} CARE ENERGY"
+          : completedAction == CareActionType.ClosedEyeRest ? "REST COMPLETE" : "STEP COMPLETE";
+      if (_goldBottleText != null && _stationSave != null)
+        _goldBottleText.text = Mathf.Max(0, _stationSave.careEnergy).ToString();
+      if (energyGranted > 0) PlayCareEnergyFlight(energyGranted);
       SetCrewState(CareCrewState.Work);
       ConfigureRecipe(recipe);
       SetRoutinePrimary("CONTINUE");
@@ -517,12 +742,12 @@ namespace KeepBlinking.CareStation
       var filterActive = (_pipelineMask & CareRecipePipeline.Filter) != 0;
       if (_filterArt != null) _filterArt.SetPipelineHighlighted(filterActive);
       if (_filterBody != null) _filterBody.color = filterActive ? on : off;
-      if (_tankBody != null) _tankBody.color = (_pipelineMask & CareRecipePipeline.Tank) != 0 ? on : off;
-      if (_tankLevel != null) _tankLevel.color = (_pipelineMask & CareRecipePipeline.Tank) != 0
+      if (_fillerBody != null) _fillerBody.color = (_pipelineMask & CareRecipePipeline.Filler) != 0 ? on : off;
+      if (_fillerLevel != null) _fillerLevel.color = (_pipelineMask & CareRecipePipeline.Filler) != 0
         ? KeepBlinkingTheme.AccentPrimary
         : KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.AccentPrimary, 0.28f);
-      for (var i = 0; i < _pressLayers.Count; i++)
-        _pressLayers[i].color = (_pipelineMask & CareRecipePipeline.Press) != 0
+      for (var i = 0; i < _packerLayers.Count; i++)
+        _packerLayers[i].color = (_pipelineMask & CareRecipePipeline.Packer) != 0
           ? on
           : KeepBlinkingTheme.WithAlpha(i == 0 ? KeepBlinkingTheme.TextSecondary : KeepBlinkingTheme.AccentSoft, 0.36f);
       if (_careCoreInner != null) _careCoreInner.color = (_pipelineMask & CareRecipePipeline.CareCore) != 0
@@ -530,8 +755,8 @@ namespace KeepBlinking.CareStation
         : KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.SurfaceElevated, 0.96f);
       for (var i = 0; i < _stationTracks.Count; i++)
       {
-        var bit = i == 0 ? CareRecipePipeline.Filter : i == 1 ? CareRecipePipeline.Tank : CareRecipePipeline.Press;
-        _stationTracks[i].color = (_pipelineMask & (bit | CareRecipePipeline.Rail)) != 0
+        var bit = i == 0 ? CareRecipePipeline.Filter : i == 1 ? CareRecipePipeline.Filler : CareRecipePipeline.Packer;
+        _stationTracks[i].color = (_pipelineMask & bit) != 0
           ? KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.AccentPrimary, 0.68f)
           : KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.BorderSubtle, 0.22f);
       }
@@ -562,8 +787,8 @@ namespace KeepBlinking.CareStation
       {
         EnterEyeMovementGuidance();
         _eyeMovementGuidance.Present(type, phase, prompt);
-        _actionRoot.gameObject.SetActive(false);
-        _incidentRoot.gameObject.SetActive(false);
+        SetPanelVisible(_actionRoot, false);
+        SetPanelVisible(_incidentRoot, false);
         _changeStepButton.gameObject.SetActive(false);
         _fallbackButton.gameObject.SetActive(false);
         _returnFallbackButton.gameObject.SetActive(false);
@@ -687,6 +912,7 @@ namespace KeepBlinking.CareStation
       RenderCareAction(data.actionType, data.internalPhase, CareActionRuntimePromptForPilot(axis),
         0.4f, 1f, 0f, CareDistanceDirection.None, 0);
       RenderCareActionMotionData(data);
+      _developmentGuidancePreviewUntil = Time.unscaledTime + 15f;
 #endif
     }
 
@@ -696,6 +922,7 @@ namespace KeepBlinking.CareStation
       Build();
       EnterEyeMovementGuidance();
       _eyeMovementGuidance?.PresentPilotToGuidedHold();
+      _developmentGuidancePreviewUntil = Time.unscaledTime + 15f;
 #endif
     }
 
@@ -771,18 +998,27 @@ namespace KeepBlinking.CareStation
 
     private void ExitEyeMovementGuidance(bool immediate)
     {
-      if (!_guidanceMode && (_eyeMovementGuidance == null || !_eyeMovementGuidance.IsVisible)) return;
+      var ownedGuidanceWasVisible = _guidanceMode || (_eyeMovementGuidance != null && _eyeMovementGuidance.IsVisible);
       _guidanceMode = false;
-      RestoreStationHudAfterGuidance();
+      _developmentGuidancePreviewUntil = -1f;
+      if (ownedGuidanceWasVisible) RestoreStationHudAfterGuidance();
       if (_contentGroup != null)
       {
         _contentGroup.alpha = 1f;
         _contentGroup.interactable = true;
         _contentGroup.blocksRaycasts = true;
       }
-      if (_eyeMovementGuidance == null) return;
-      if (immediate) _eyeMovementGuidance.HideImmediate();
-      else _eyeMovementGuidance.HideAnimated();
+      if (_group != null)
+      {
+        _group.alpha = 1f;
+        _group.interactable = true;
+        _group.blocksRaycasts = true;
+      }
+      if (_eyeMovementGuidance != null)
+      {
+        if (immediate) _eyeMovementGuidance.HideImmediate();
+        else _eyeMovementGuidance.HideAnimated();
+      }
     }
 
     private void SetStationHudForGuidance(bool visible)
@@ -791,8 +1027,8 @@ namespace KeepBlinking.CareStation
       if (_transportRoot != null) _transportRoot.gameObject.SetActive(visible);
       if (_routineDock != null) _routineDock.gameObject.SetActive(visible);
       if (_navigationRoot != null) _navigationRoot.gameObject.SetActive(visible);
-      if (_actionRoot != null) _actionRoot.gameObject.SetActive(false);
-      if (_incidentRoot != null) _incidentRoot.gameObject.SetActive(false);
+      SetPanelVisible(_actionRoot, false);
+      SetPanelVisible(_incidentRoot, false);
       if (_stationStageGroup != null)
       {
         _stationStageGroup.alpha = visible ? 1f : 0.12f;
@@ -812,8 +1048,8 @@ namespace KeepBlinking.CareStation
       if (_transportRoot != null) _transportRoot.gameObject.SetActive(_transportWasVisible);
       if (_routineDock != null) _routineDock.gameObject.SetActive(_routineWasVisible);
       if (_navigationRoot != null) _navigationRoot.gameObject.SetActive(_navigationWasVisible);
-      if (_actionRoot != null) _actionRoot.gameObject.SetActive(_actionWasVisible);
-      if (_incidentRoot != null) _incidentRoot.gameObject.SetActive(_incidentWasVisible);
+      SetPanelVisible(_actionRoot, _actionWasVisible);
+      SetPanelVisible(_incidentRoot, _incidentWasVisible);
       if (_stationStageGroup != null)
       {
         _stationStageGroup.alpha = 1f;
@@ -962,19 +1198,21 @@ namespace KeepBlinking.CareStation
         _xpVisuals[i].rectTransform.localScale = Vector3.one;
     }
 
-    public void ShowRepairReveal(CareStationIncidentType incident)
+    public void ShowRepairReveal()
     {
-      _actionRoot.gameObject.SetActive(false);
-      _incidentRoot.gameObject.SetActive(true);
+      HideAllModals();
+      SetPanelVisible(_actionRoot, false);
       _careDimmer.color = Color.clear;
       _incidentSelectable = false;
-      _incidentLabel.text = incident == CareStationIncidentType.DrySpot ? "DRY SPOT" : incident == CareStationIncidentType.EyeGunk ? "EYE GUNK" : "DUST";
-      _incidentCore.color = KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.AccentPrimary, 0.2f);
-      _incidentRing.color = KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.AccentPrimary, 0.9f);
       _repairPulseUntil = Time.unscaledTime + 1.4f;
-      _statusText.text = "REPAIR COMPLETE";
+      _statusText.text = "CARE ROUTINE COMPLETE";
       SetRoutinePrimary("CONTINUE");
       SetProductionAnimation(false);
+    }
+
+    public void ShowRepairReveal(CareStationIncidentType legacyIncident)
+    {
+      ShowRepairReveal();
     }
 
     public void ShowSendXp(int pendingXp, bool fallbackAvailable)
@@ -1024,16 +1262,17 @@ namespace KeepBlinking.CareStation
         _actionGroup.interactable = false;
         _actionGroup.blocksRaycasts = false;
       }
-      _changeStepConfirmRoot.gameObject.SetActive(true);
+      SetPanelVisible(_changeStepConfirmRoot, true);
     }
 
     public void HideCareStepChangeConfirmation()
     {
-      if (_changeStepConfirmRoot != null) _changeStepConfirmRoot.gameObject.SetActive(false);
+      SetPanelVisible(_changeStepConfirmRoot, false);
       if (_actionGroup != null)
       {
-        _actionGroup.interactable = true;
-        _actionGroup.blocksRaycasts = true;
+        var actionVisible = _actionRoot != null && _actionRoot.gameObject.activeInHierarchy;
+        _actionGroup.interactable = actionVisible;
+        _actionGroup.blocksRaycasts = actionVisible;
       }
     }
 
@@ -1062,11 +1301,15 @@ namespace KeepBlinking.CareStation
       }
     }
 
-    public void ShowUpgrade(CareStationSaveData save, CareStationUpgradeConfiguration configuration = null)
+    public void ShowUpgrade(
+      CareStationSaveData save,
+      CareStationUpgradeConfiguration configuration = null,
+      CareEconomyConfiguration economy = null)
     {
       configuration = configuration ?? new CareStationUpgradeConfiguration();
+      economy = economy ?? new CareEconomyConfiguration();
       HideAllModals();
-      _upgradeRoot.gameObject.SetActive(true);
+      SetPanelVisible(_upgradeRoot, true);
       SetNavigationSelection(1);
       SetRoutinePrimary("UPGRADE");
       SetProductionAnimation(false);
@@ -1075,7 +1318,7 @@ namespace KeepBlinking.CareStation
       foreach (var pair in _upgradeButtons)
       {
         var level = CareStationShiftRules.GetUpgradeLevel(save, pair.Key);
-        var availability = CareStationShiftRules.EvaluateUpgrade(save, pair.Key, configuration);
+        var availability = CareStationShiftRules.EvaluateUpgrade(save, pair.Key, configuration, economy);
         var maximum = availability.IsMaximum;
         // Keep unavailable cards clickable so the authoritative purchase path
         // can explain exactly what is missing instead of silently doing nothing.
@@ -1095,10 +1338,7 @@ namespace KeepBlinking.CareStation
           }
           else
           {
-            var cost = configuration.Cost(pair.Key, level);
-            var costText = cost.goldBottles > 0
-              ? $"{cost.fullBottles} FULL + {cost.goldBottles} GOLD"
-              : $"{cost.fullBottles} FULL";
+            var costText = $"{availability.CoinCost} COINS";
             text.text = $"{title}\nLEVEL {level}\n{effect}\n{configuration.Value(pair.Key, level)}  →  {configuration.Value(pair.Key, level + 1)}     {costText}";
           }
         }
@@ -1110,15 +1350,12 @@ namespace KeepBlinking.CareStation
       {
         var level = CareStationShiftRules.GetUpgradeLevel(save, pair.Key);
         if (level >= CareStationUpgradeConfiguration.MaximumLevel) continue;
-        var availability = CareStationShiftRules.EvaluateUpgrade(save, pair.Key, configuration);
+        var availability = CareStationShiftRules.EvaluateUpgrade(save, pair.Key, configuration, economy);
         var title = pair.Key == CareStationUpgradeId.MoreWorkers ? "MORE WORKERS"
           : pair.Key == CareStationUpgradeId.LargerStorage ? "LARGER STORAGE" : "BIGGER CART";
         var effect = pair.Key == CareStationUpgradeId.MoreWorkers ? "More carts at once."
           : pair.Key == CareStationUpgradeId.LargerStorage ? "Hold more bottles." : "Carry more each trip.";
-        var cost = availability.Cost;
-        var costText = cost.goldBottles > 0
-          ? $"{cost.fullBottles} FULL + {cost.goldBottles} GOLD"
-          : $"{cost.fullBottles} FULL";
+        var costText = $"{availability.CoinCost} COINS";
         var reasonLine = string.IsNullOrEmpty(availability.PlayerReason)
           ? string.Empty
           : $"\n<color=#{ColorUtility.ToHtmlStringRGB(KeepBlinkingTheme.AccentWarm)}>{availability.PlayerReason}</color>";
@@ -1147,7 +1384,7 @@ namespace KeepBlinking.CareStation
       HideAllModals();
       _surveyIsPost = post;
       _surveyDraft = scores?.Clone() ?? new CareSubjectiveScores();
-      _surveyRoot.gameObject.SetActive(true);
+      SetPanelVisible(_surveyRoot, true);
       _surveyTitle.text = post ? "POST-CARE CHECK" : "PRE-CARE CHECK";
       SetRoutinePrimary(post ? "VIEW REPORT" : "CONTINUE");
       SetProductionAnimation(false);
@@ -1157,7 +1394,7 @@ namespace KeepBlinking.CareStation
     public void ShowCareReport(CareStationSaveData save)
     {
       HideAllModals();
-      _reportRoot.gameObject.SetActive(true);
+      SetPanelVisible(_reportRoot, true);
       SetNavigationSelection(2);
       _reportText.text = CareReportFormatter.Build(save);
       SetRoutinePrimary("DONE");
@@ -1187,9 +1424,11 @@ namespace KeepBlinking.CareStation
     {
       HideAllModals();
       ApplyStation(save);
-      _statusText.text = "STORAGE FULL\nPRODUCTION PAUSED";
+      SetFactoryStatus(string.Empty, "IDLE", "IDLE", "IDLE", "STORAGE FULL", "READY");
       SetCrewState(CareCrewState.Rest);
-      SetRoutinePrimary("START CARE");
+      var pendingCare = save != null && save.pendingFullBottleShipment > 0;
+      var pendingOffline = save != null && save.pendingOfflineXP > save.collectedOfflineBottleValue;
+      SetRoutinePrimary(pendingCare || pendingOffline ? "FREE STORAGE TO CONTINUE" : "START CARE");
       SetProductionAnimation(false);
     }
 
@@ -1201,35 +1440,74 @@ namespace KeepBlinking.CareStation
       _toastUntil = Time.unscaledTime + 2.2f;
     }
 
+    public void ShowTransportUpgradeUnlocked()
+    {
+      if (_toastText == null) return;
+      _toastText.text = "PRODUCTION LINE UPGRADED\nCONVEYOR UNLOCKED";
+      _toastText.gameObject.SetActive(true);
+      _toastUntil = Time.unscaledTime + 3.2f;
+    }
+
     public bool IsUpgradeVisible => _upgradeRoot != null && _upgradeRoot.gameObject.activeSelf;
+
+    internal string UiInputLockDescription
+    {
+      get
+      {
+        if (_eyeMovementGuidance != null && _eyeMovementGuidance.IsVisible)
+        {
+          var owner = _developmentGuidancePreviewUntil > Time.unscaledTime
+            ? "DevelopmentGuidancePreview"
+            : _guidanceMode ? "EyeMovementGuidance" : "STALE EyeMovementGuidance";
+          return $"owner={owner} visible=true shield={_eyeMovementGuidance.InputShieldActive} contentInteractable={(_contentGroup == null || _contentGroup.interactable)} contentBlocks={(_contentGroup == null || _contentGroup.blocksRaycasts)}";
+        }
+        if (_group != null && (!_group.interactable || !_group.blocksRaycasts))
+          return $"owner=RootCanvasGroup interactable={_group.interactable} blocksRaycasts={_group.blocksRaycasts} alpha={_group.alpha:0.###}";
+        if (_contentGroup != null && (!_contentGroup.interactable || !_contentGroup.blocksRaycasts))
+          return $"owner=StationContent interactable={_contentGroup.interactable} blocksRaycasts={_contentGroup.blocksRaycasts} alpha={_contentGroup.alpha:0.###}";
+        return "owner=NONE";
+      }
+    }
+
+    internal void SynchronizeUiInputOwnership(bool guidanceExpected)
+    {
+      var guidanceOwnsInput = _eyeMovementGuidance != null &&
+                              _eyeMovementGuidance.IsVisible &&
+                              _eyeMovementGuidance.InputShieldActive;
+      if (guidanceExpected && guidanceOwnsInput) return;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+      if (_developmentGuidancePreviewUntil > Time.unscaledTime) return;
+#endif
+      if (_guidanceMode || (_eyeMovementGuidance != null && _eyeMovementGuidance.IsVisible) ||
+          (_contentGroup != null && (!_contentGroup.interactable || !_contentGroup.blocksRaycasts)))
+        ExitEyeMovementGuidance(true);
+      RecoverBaseInputIfUnblocked();
+    }
 
     internal bool ClearStaleUiInputLock(bool legitimateGuidanceLock)
     {
       if (legitimateGuidanceLock && _eyeMovementGuidance != null && _eyeMovementGuidance.IsVisible)
         return false;
 
-      _guidanceMode = false;
-      _eyeMovementGuidance?.HideImmediate();
-      if (_contentGroup != null)
-      {
-        _contentGroup.alpha = 1f;
-        _contentGroup.interactable = true;
-        _contentGroup.blocksRaycasts = true;
-      }
-      if (_stationStageGroup != null)
-      {
-        _stationStageGroup.alpha = 1f;
-        _stationStageGroup.interactable = true;
-        _stationStageGroup.blocksRaycasts = true;
-      }
+      ExitEyeMovementGuidance(true);
+      _guidanceHudDebugVisible = false;
+      if (_hudRoot != null) _hudRoot.gameObject.SetActive(true);
+      if (_transportRoot != null) _transportRoot.gameObject.SetActive(true);
+      if (_routineDock != null) _routineDock.gameObject.SetActive(true);
       if (_navigationRoot != null)
       {
         _navigationRoot.gameObject.SetActive(true);
         _navigationRoot.SetAsLastSibling();
       }
-      for (var index = 0; index < _navigationButtons.Count; index++)
-        if (_navigationButtons[index] != null) _navigationButtons[index].interactable = true;
+      RecoverBaseInputIfUnblocked();
+      BindInputHandlers();
       return true;
+    }
+
+    internal void RebindInputHandlers()
+    {
+      Build();
+      BindInputHandlers();
     }
 
     public bool IsUpgradeInteractable(CareStationUpgradeId upgrade)
@@ -1243,8 +1521,8 @@ namespace KeepBlinking.CareStation
     public void ShowShiftComplete(CareStationSaveData save)
     {
       HideAllModals();
-      _completeRoot.gameObject.SetActive(true);
-      _completeText.text = $"SHIFT COMPLETE\nCARE ROUTINE COMPLETE\n\nFULL BOTTLES  {Mathf.Max(0, save?.shiftStoredFullBottles ?? 0)}\nGOLD BOTTLES  {Mathf.Max(0, save?.shiftStoredGoldBottles ?? 0)}";
+      SetPanelVisible(_completeRoot, true);
+      _completeText.text = $"SHIFT COMPLETE\nCARE ROUTINE COMPLETE\n\nCARE ENERGY  {Mathf.Max(0, save?.careEnergy ?? 0)}\nCOINS  {Mathf.Max(0, save?.coins ?? 0)}";
       var recipe = save?.currentRecipe;
       for (var index = 0; index < _completeStepIcons.Count; index++)
       {
@@ -1266,25 +1544,20 @@ namespace KeepBlinking.CareStation
       _statusText.text = "CREW AT WORK  ·  RETURN LATER";
       SetCrewState(CareCrewState.Work);
       SetRoutinePrimary("CREW AT WORK");
-      SetProductionAnimation(true);
+      SetProductionAnimation(false);
     }
 
     public void HideAllModals()
     {
       ExitEyeMovementGuidance(true);
-      if (_welcomeRoot != null) _welcomeRoot.gameObject.SetActive(false);
-      if (_incidentRoot != null) _incidentRoot.gameObject.SetActive(false);
-      if (_actionRoot != null) _actionRoot.gameObject.SetActive(false);
-      if (_upgradeRoot != null) _upgradeRoot.gameObject.SetActive(false);
-      if (_completeRoot != null) _completeRoot.gameObject.SetActive(false);
-      if (_surveyRoot != null) _surveyRoot.gameObject.SetActive(false);
-      if (_reportRoot != null) _reportRoot.gameObject.SetActive(false);
-      if (_changeStepConfirmRoot != null) _changeStepConfirmRoot.gameObject.SetActive(false);
-      if (_actionGroup != null)
-      {
-        _actionGroup.interactable = true;
-        _actionGroup.blocksRaycasts = true;
-      }
+      SetPanelVisible(_welcomeRoot, false);
+      SetPanelVisible(_incidentRoot, false);
+      SetPanelVisible(_actionRoot, false);
+      SetPanelVisible(_upgradeRoot, false);
+      SetPanelVisible(_completeRoot, false);
+      SetPanelVisible(_surveyRoot, false);
+      SetPanelVisible(_reportRoot, false);
+      SetPanelVisible(_changeStepConfirmRoot, false);
       if (_changeStepButton != null) _changeStepButton.gameObject.SetActive(false);
       if (_fallbackButton != null) _fallbackButton.gameObject.SetActive(false);
       if (_returnFallbackButton != null) _returnFallbackButton.gameObject.SetActive(false);
@@ -1295,10 +1568,98 @@ namespace KeepBlinking.CareStation
       _statusText.text = string.Empty;
       SetNavigationSelection(0);
       if (_navigationRoot != null) _navigationRoot.SetAsLastSibling();
+      RecoverBaseInputIfUnblocked();
+    }
+
+    internal bool HasVisibleModal =>
+      IsActive(_welcomeRoot) || IsActive(_actionRoot) || IsActive(_upgradeRoot) ||
+      IsActive(_completeRoot) || IsActive(_surveyRoot) || IsActive(_reportRoot) ||
+      IsActive(_changeStepConfirmRoot) ||
+      (_eyeMovementGuidance != null && _eyeMovementGuidance.IsVisible);
+
+    private static bool IsActive(RectTransform root)
+    {
+      return root != null && root.gameObject.activeInHierarchy;
+    }
+
+    private void SetPanelVisible(RectTransform root, bool visible)
+    {
+      if (root == null) return;
+      if (!_panelGroups.TryGetValue(root, out var group) || group == null)
+      {
+        group = root.GetComponent<CanvasGroup>();
+        if (group == null) group = root.gameObject.AddComponent<CanvasGroup>();
+        _panelGroups[root] = group;
+      }
+
+      var graphics = root.GetComponentsInChildren<Graphic>(true);
+      for (var index = 0; index < graphics.Length; index++)
+      {
+        var graphic = graphics[index];
+        if (!_panelGraphicRaycastDefaults.ContainsKey(graphic))
+          _panelGraphicRaycastDefaults[graphic] = graphic.raycastTarget;
+      }
+
+      if (visible)
+      {
+        root.gameObject.SetActive(true);
+        group.interactable = true;
+        group.blocksRaycasts = true;
+        for (var index = 0; index < graphics.Length; index++)
+          graphics[index].raycastTarget = _panelGraphicRaycastDefaults[graphics[index]];
+        return;
+      }
+
+      group.interactable = false;
+      group.blocksRaycasts = false;
+      for (var index = 0; index < graphics.Length; index++) graphics[index].raycastTarget = false;
+      root.gameObject.SetActive(false);
+    }
+
+    private void RecoverBaseInputIfUnblocked()
+    {
+      if (_eyeMovementGuidance != null && _eyeMovementGuidance.IsVisible) return;
+      // A domain reload or interrupted transition can leave the guidance
+      // surface active after the non-serialized visibility snapshot has been
+      // lost. Once no guidance surface owns input, restore the complete Station
+      // shell explicitly instead of relying on that stale snapshot.
+      if (_hudRoot != null) _hudRoot.gameObject.SetActive(true);
+      if (_transportRoot != null) _transportRoot.gameObject.SetActive(true);
+      if (_routineDock != null) _routineDock.gameObject.SetActive(true);
+      if (_group != null)
+      {
+        _group.alpha = 1f;
+        _group.interactable = true;
+        _group.blocksRaycasts = true;
+      }
+      if (_contentGroup != null)
+      {
+        _contentGroup.alpha = 1f;
+        _contentGroup.interactable = true;
+        _contentGroup.blocksRaycasts = true;
+      }
+      if (_stationStageGroup != null)
+      {
+        _stationStageGroup.alpha = 1f;
+        _stationStageGroup.interactable = true;
+        _stationStageGroup.blocksRaycasts = true;
+      }
+      if (_navigationRoot != null)
+      {
+        _navigationRoot.gameObject.SetActive(true);
+        _navigationRoot.SetAsLastSibling();
+      }
+      for (var index = 0; index < _navigationButtons.Count; index++)
+        if (_navigationButtons[index] != null) _navigationButtons[index].interactable = true;
     }
 
     private void Update()
     {
+      RecoverUiInputInfrastructureIfNeeded();
+      if (_guidanceMode && (_eyeMovementGuidance == null || !_eyeMovementGuidance.IsVisible))
+        ExitEyeMovementGuidance(true);
+      if (!_guidanceMode && (_eyeMovementGuidance == null || !_eyeMovementGuidance.IsVisible))
+        RecoverBaseInputIfUnblocked();
       var pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 2f);
       if (_incidentRoot != null && _incidentRoot.gameObject.activeSelf)
       {
@@ -1332,20 +1693,111 @@ namespace KeepBlinking.CareStation
         _toastUntil = 0f;
       }
       if (_filterBody != null) _filterBody.rectTransform.localScale = Vector3.one * (((_pipelineMask & CareRecipePipeline.Filter) != 0) ? pipelinePulse : 1f);
-      if (_tankBody != null)
-        _tankBody.rectTransform.localScale = Vector3.one * (_focusLegPulseActive && _focusLegPulseDirection == CareDistanceDirection.Away
+      if (_fillerBody != null)
+        _fillerBody.rectTransform.localScale = Vector3.one * (_focusLegPulseActive && _focusLegPulseDirection == CareDistanceDirection.Away
           ? focusLegPulse
-          : ((_pipelineMask & CareRecipePipeline.Tank) != 0) ? pipelinePulse : 1f);
-      for (var i = 0; i < _pressLayers.Count; i++)
-        _pressLayers[i].rectTransform.localScale = Vector3.one * (_focusLegPulseActive && _focusLegPulseDirection == CareDistanceDirection.Closer
+          : ((_pipelineMask & CareRecipePipeline.Filler) != 0) ? pipelinePulse : 1f);
+      for (var i = 0; i < _packerLayers.Count; i++)
+        _packerLayers[i].rectTransform.localScale = Vector3.one * (_focusLegPulseActive && _focusLegPulseDirection == CareDistanceDirection.Closer
           ? focusLegPulse
-          : ((_pipelineMask & CareRecipePipeline.Press) != 0) ? pipelinePulse : 1f);
+          : ((_pipelineMask & CareRecipePipeline.Packer) != 0) ? pipelinePulse : 1f);
       if (_careCoreInner != null)
-        _careCoreInner.rectTransform.localScale = Vector3.one * (((_pipelineMask & CareRecipePipeline.CareCore) != 0)
-          ? pipelinePulse
-          : 1f);
+      {
+        var energyPulse = _careEnergyPulseUntil > Time.unscaledTime
+          ? 1f + Mathf.Sin((1f - (_careEnergyPulseUntil - Time.unscaledTime) / 0.9f) * Mathf.PI) * 0.18f
+          : 1f;
+        _careCoreInner.rectTransform.localScale = Vector3.one * Mathf.Max(
+          ((_pipelineMask & CareRecipePipeline.CareCore) != 0) ? pipelinePulse : 1f,
+          energyPulse);
+      }
+      UpdateCareEnergyFlights();
       UpdateProductionAnimation();
       PollIncidentTouch();
+    }
+
+    private void PlayCareEnergyFlight(int amount)
+    {
+      if (_safe == null || _goldBottleText == null) return;
+      Canvas.ForceUpdateCanvases();
+      var source = _actionRoot != null ? _actionRoot : _careCoreInner?.rectTransform;
+      if (source == null) return;
+      RectTransformUtility.ScreenPointToLocalPointInRectangle(
+        _safe,
+        RectTransformUtility.WorldToScreenPoint(null, source.position),
+        null,
+        out var start);
+      RectTransformUtility.ScreenPointToLocalPointInRectangle(
+        _safe,
+        RectTransformUtility.WorldToScreenPoint(null, _goldBottleText.rectTransform.position),
+        null,
+        out var end);
+      var count = Mathf.Clamp(amount, 3, 8);
+      for (var index = 0; index < count; index++)
+      {
+        var image = FirstLevelUiFactory.CreateImage(
+          $"Care Energy Reward Particle {index + 1}",
+          _safe,
+          WorkshopMint,
+          FirstLevelUiFactory.CircleSprite);
+        image.raycastTarget = false;
+        FirstLevelUiFactory.SetRect(
+          image.rectTransform,
+          new Vector2(0.5f, 0.5f),
+          new Vector2(0.5f, 0.5f),
+          new Vector2(0.5f, 0.5f),
+          Vector2.zero,
+          Vector2.one * Mathf.Lerp(8f, 13f, index / Mathf.Max(1f, count - 1f)));
+        var offset = new Vector2((index % 3 - 1) * 16f, (index / 3) * 11f);
+        image.rectTransform.anchoredPosition = start + offset;
+        image.transform.SetAsLastSibling();
+        _careEnergyFlights.Add(new CareEnergyFlight
+        {
+          rect = image.rectTransform,
+          image = image,
+          start = start + offset,
+          end = end,
+          startedAt = Time.unscaledTime + index * 0.045f,
+          duration = 0.62f + index * 0.025f,
+        });
+      }
+      _careEnergyPulseUntil = Time.unscaledTime + 0.9f;
+      if (_careCoreInner != null) _careCoreInner.color = WorkshopMint;
+    }
+
+    private void UpdateCareEnergyFlights()
+    {
+      for (var index = _careEnergyFlights.Count - 1; index >= 0; index--)
+      {
+        var flight = _careEnergyFlights[index];
+        if (flight?.rect == null)
+        {
+          _careEnergyFlights.RemoveAt(index);
+          continue;
+        }
+        var t = Mathf.Clamp01((Time.unscaledTime - flight.startedAt) / Mathf.Max(0.05f, flight.duration));
+        var curved = Mathf.SmoothStep(0f, 1f, t);
+        var arc = Vector2.up * Mathf.Sin(t * Mathf.PI) * 44f;
+        flight.rect.anchoredPosition = Vector2.LerpUnclamped(flight.start, flight.end, curved) + arc;
+        flight.rect.localScale = Vector3.one * Mathf.Lerp(1f, 0.55f, t);
+        if (flight.image != null)
+          flight.image.color = KeepBlinkingTheme.WithAlpha(WorkshopMint, Mathf.Lerp(1f, 0.25f, t));
+        if (t < 1f) continue;
+        Destroy(flight.rect.gameObject);
+        _careEnergyFlights.RemoveAt(index);
+      }
+      if (_careEnergyFlights.Count == 0 && _careEnergyPulseUntil > 0f &&
+          Time.unscaledTime >= _careEnergyPulseUntil)
+      {
+        _careEnergyPulseUntil = 0f;
+        ApplyPipelineVisuals();
+      }
+    }
+
+    private void RecoverUiInputInfrastructureIfNeeded()
+    {
+      if (_safe == null) return;
+      if (FirstLevelUiFactory.IsUiInputInfrastructureHealthy(_safe)) return;
+      FirstLevelUiFactory.RecoverUiInput(_safe, _group);
     }
 
     private void PollIncidentTouch()
@@ -1383,34 +1835,41 @@ namespace KeepBlinking.CareStation
     {
       _stationStage = FirstLevelUiFactory.CreateObject("Station Stage", _content).GetComponent<RectTransform>();
       _stationStageGroup = _stationStage.gameObject.AddComponent<CanvasGroup>();
-      FirstLevelUiFactory.SetRect(_stationStage, new Vector2(0.03f, 0.31f), new Vector2(0.97f, 0.88f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
-      var stage = FirstLevelUiFactory.CreateImage("Stage Surface", _stationStage, KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.SurfaceBase, 0.18f), FirstLevelUiFactory.RoundedSprite);
+      FirstLevelUiFactory.SetRect(_stationStage, new Vector2(0.025f, 0.205f), new Vector2(0.975f, 0.90f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
+      var stage = FirstLevelUiFactory.CreateImage("Open Workshop Scene", _stationStage, KeepBlinkingTheme.WithAlpha(WorkshopWall, 0.38f));
       FirstLevelUiFactory.Stretch(stage.rectTransform);
-      var stationLoop = FirstLevelUiFactory.CreateImage("Station Logistics Loop", _stationStage, KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.BorderSubtle, 0.18f), FirstLevelUiFactory.RingSprite);
-      FirstLevelUiFactory.SetRect(stationLoop.rectTransform, new Vector2(0.5f, 0.49f), new Vector2(0.5f, 0.49f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(730f, 620f));
+      var floor = FirstLevelUiFactory.CreateImage("Workshop Floor Strip", _stationStage, KeepBlinkingTheme.WithAlpha(WorkshopFloor, 0.88f));
+      FirstLevelUiFactory.SetRect(floor.rectTransform, Vector2.zero, new Vector2(1f, 0.37f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
+      var upperBeam = CreateWorkshopPart("Upper Timber Beam", _stationStage, new Vector2(0.5f, 0.535f), new Vector2(910f, 24f), WorkshopWood, -0.25f, 6f);
+      upperBeam.color = KeepBlinkingTheme.WithAlpha(WorkshopWood, 0.52f);
+      var lowerBeam = CreateWorkshopPart("Lower Timber Beam", _stationStage, new Vector2(0.5f, 0.075f), new Vector2(910f, 22f), WorkshopWood, 0.18f, 6f);
+      lowerBeam.color = KeepBlinkingTheme.WithAlpha(WorkshopWood, 0.44f);
 
-      CreateTrack("Filter Track", new Vector2(0.28f, 0.68f), new Vector2(0.47f, 0.5f));
-      CreateTrack("Tank Track", new Vector2(0.72f, 0.68f), new Vector2(0.53f, 0.5f));
-      CreateTrack("Press Track", new Vector2(0.5f, 0.74f), new Vector2(0.5f, 0.56f));
+      BuildCareEnergySource();
+      BuildLiquidTransportRoutes();
+      BuildManualCarryRoute();
+      BuildBasicConveyorRoute();
 
       BuildFilterDevice();
-      BuildTankDevice();
-      BuildPressDevice();
-      BuildCareCore();
+      BuildFillerDevice();
+      BuildPackerDevice();
+      BuildWorkerHandoffAnchors();
     }
 
     private void BuildFilterDevice()
     {
-      var root = FirstLevelUiFactory.CreateObject("Filter Device", _stationStage).GetComponent<RectTransform>();
-      FirstLevelUiFactory.SetRect(root, new Vector2(0.22f, 0.76f), new Vector2(0.22f, 0.76f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(230f, 230f));
+      var root = CreateWorkshopDeviceRoot("Filter Device", CareStationDisplayNames.Filter, new Vector2(0.26f, 0.755f), new Vector2(360f, 500f), -0.8f, out _filterStatusText);
       var filterCatalog = Resources.Load<CareStationFilterArtCatalog>("CareStation/Filter/CareStationFilterArtCatalog");
       if (filterCatalog != null)
       {
         _filterArt = CareStationFilterArtView.Create(root, filterCatalog);
-        _filterArt.name = "FILTER Art";
+        _filterArt.name = "FILTER L1 Authored Machine Art";
         var artRect = _filterArt.GetComponent<RectTransform>();
-        FirstLevelUiFactory.SetRect(artRect, new Vector2(0.5f, 0.56f), new Vector2(0.5f, 0.56f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(250f, 375f));
+        FirstLevelUiFactory.SetRect(artRect, new Vector2(0.5f, 0.54f), new Vector2(0.5f, 0.54f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(300f, 450f));
         _filterArt.SetHitTestEnabled(false);
+        _filterArt.SetIntegratedBottleVisible(false);
+        _filterArt.SetLevel(1, true);
+        _filterArt.gameObject.SetActive(true);
       }
       else
       {
@@ -1419,35 +1878,282 @@ namespace KeepBlinking.CareStation
         // development instead of silently restoring the obsolete L1 shape.
         Debug.LogWarning("Care Station FILTER art catalog is missing; authored FILTER art was not created.");
       }
-      CreateDeviceLabel(root, "FILTER");
+      _filterBody = null;
     }
 
-    private void BuildTankDevice()
+    private void BuildFillerDevice()
     {
-      var root = FirstLevelUiFactory.CreateObject("Tank Device", _stationStage).GetComponent<RectTransform>();
-      FirstLevelUiFactory.SetRect(root, new Vector2(0.78f, 0.75f), new Vector2(0.78f, 0.75f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(170f, 188f));
-      var body = FirstLevelUiFactory.CreateImage("Tall Tank Body", root, KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.TextSecondary, 0.34f), FirstLevelUiFactory.RoundedSprite);
-      _tankBody = body;
-      FirstLevelUiFactory.SetRect(body.rectTransform, new Vector2(0.5f, 0.57f), new Vector2(0.5f, 0.57f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(112f, 134f));
-      var level = FirstLevelUiFactory.CreateImage("Tank Level", root, KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.AccentPrimary, 0.5f), FirstLevelUiFactory.RoundedSprite);
-      _tankLevel = level;
-      FirstLevelUiFactory.SetRect(level.rectTransform, new Vector2(0.5f, 0.39f), new Vector2(0.5f, 0.39f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(88f, 55f));
-      CreateDeviceLabel(root, "TANK");
+      var root = CreateWorkshopDeviceRoot("Filler Device", CareStationDisplayNames.Filler, new Vector2(0.73f, 0.755f), new Vector2(365f, 455f), 0.65f, out _fillerStatusText);
+      CreateWorkshopPart("Filler Left Timber Leg", root, new Vector2(0.26f, 0.34f), new Vector2(34f, 175f), WorkshopWood, 1.2f);
+      CreateWorkshopPart("Filler Right Metal Leg", root, new Vector2(0.74f, 0.34f), new Vector2(34f, 175f), WorkshopMetal, -1.1f);
+      CreateWorkshopPart("Filler Left Foot", root, new Vector2(0.23f, 0.14f), new Vector2(92f, 28f), WorkshopWoodLight, -1f);
+      CreateWorkshopPart("Filler Right Foot", root, new Vector2(0.77f, 0.14f), new Vector2(92f, 28f), WorkshopMetalLight, 1f);
+      CreateWorkshopPart("Filler Work Shelf", root, new Vector2(0.5f, 0.31f), new Vector2(256f, 40f), WorkshopMetal, -0.45f);
+      var tank = CreateWorkshopPart("Filler Liquid Reservoir", root, new Vector2(0.5f, 0.69f), new Vector2(198f, 132f), WorkshopMetalLight, 0.45f, 8f);
+      _fillerBody = tank;
+      CreateWorkshopPart("Filler Reservoir Top", root, new Vector2(0.5f, 0.835f), new Vector2(226f, 32f), WorkshopMetal, -0.7f);
+      CreateWorkshopPart("Filler Reservoir Rim", root, new Vector2(0.5f, 0.54f), new Vector2(220f, 28f), WorkshopMetal, 0.55f);
+      var window = CreateWorkshopPart("Filler Mint Sight Glass", root, new Vector2(0.5f, 0.69f), new Vector2(132f, 72f), KeepBlinkingTheme.WithAlpha(WorkshopMint, 0.48f), -0.3f, 5f);
+      _fillerLevel = window;
+      CreateWorkshopPart("Filler Bent Feed Pipe", root, new Vector2(0.23f, 0.70f), new Vector2(76f, 17f), WorkshopMetal, -7f, 5f);
+      CreateWorkshopPart("Filler Nozzle Stem", root, new Vector2(0.5f, 0.425f), new Vector2(20f, 86f), WorkshopMetalLight, 0.8f, 5f);
+      CreateWorkshopPart("Filler Nozzle Tip", root, new Vector2(0.5f, 0.335f), new Vector2(34f, 24f), WorkshopOutline, -0.8f, 3f);
+      CreateWorkshopPart("Empty Bottle Receiving Dock", root, new Vector2(0.5f, 0.19f), new Vector2(132f, 24f), WorkshopPaperDim, 0.65f, 5f);
+      AddWorkshopRivets(root, new[] { new Vector2(0.22f, 0.31f), new Vector2(0.78f, 0.31f), new Vector2(0.23f, 0.83f), new Vector2(0.77f, 0.83f) });
     }
 
-    private void BuildPressDevice()
+    private void BuildPackerDevice()
     {
-      var root = FirstLevelUiFactory.CreateObject("Press Device", _stationStage).GetComponent<RectTransform>();
-      FirstLevelUiFactory.SetRect(root, new Vector2(0.5f, 0.84f), new Vector2(0.5f, 0.84f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(190f, 150f));
-      for (var i = 0; i < 2; i++)
+      var root = CreateWorkshopDeviceRoot("Packer Device", CareStationDisplayNames.Packer, new Vector2(0.73f, 0.365f), new Vector2(365f, 395f), -0.55f, out _packerStatusText);
+      CreateWorkshopPart("Packer Left Timber Post", root, new Vector2(0.24f, 0.48f), new Vector2(34f, 206f), WorkshopWood, -1.4f);
+      CreateWorkshopPart("Packer Right Metal Post", root, new Vector2(0.76f, 0.48f), new Vector2(34f, 206f), WorkshopMetal, 1.1f);
+      var topBeam = CreateWorkshopPart("Packer Capping Gantry", root, new Vector2(0.5f, 0.77f), new Vector2(258f, 44f), WorkshopMetal, 0.7f);
+      _packerLayers.Add(topBeam);
+      var table = CreateWorkshopPart("Packer Packaging Table", root, new Vector2(0.5f, 0.22f), new Vector2(268f, 42f), WorkshopWoodLight, -0.45f);
+      _packerLayers.Add(table);
+      CreateWorkshopPart("Packer Press Shaft", root, new Vector2(0.54f, 0.57f), new Vector2(28f, 112f), WorkshopMetalLight, 0.5f);
+      CreateWorkshopPart("Packer Cap Head", root, new Vector2(0.54f, 0.425f), new Vector2(76f, 30f), WorkshopOutline, -0.7f, 4f);
+      var labelRoll = CreateWorkshopPart("Packer Label Roll", root, new Vector2(0.22f, 0.56f), new Vector2(74f, 74f), WorkshopPaper, -1.2f, 7f, FirstLevelUiFactory.CircleSprite);
+      var labelHub = FirstLevelUiFactory.CreateImage("Packer Label Roll Hub", labelRoll.transform, WorkshopOutline, FirstLevelUiFactory.CircleSprite);
+      FirstLevelUiFactory.SetRect(labelHub.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(20f, 20f));
+      CreateWorkshopPart("Packer Left Wrapper Arm", root, new Vector2(0.38f, 0.36f), new Vector2(82f, 20f), WorkshopMetalLight, -24f, 5f);
+      CreateWorkshopPart("Packer Right Wrapper Arm", root, new Vector2(0.68f, 0.35f), new Vector2(82f, 20f), WorkshopMetalLight, 23f, 5f);
+      CreateWorkshopPart("Packer Box Guide Left", root, new Vector2(0.30f, 0.19f), new Vector2(48f, 48f), WorkshopPaperDim, -4f, 5f);
+      CreateWorkshopPart("Packer Box Guide Right", root, new Vector2(0.72f, 0.19f), new Vector2(48f, 48f), WorkshopPaperDim, 3f, 5f);
+      AddWorkshopRivets(root, new[] { new Vector2(0.18f, 0.77f), new Vector2(0.82f, 0.77f), new Vector2(0.18f, 0.22f), new Vector2(0.82f, 0.22f) });
+    }
+
+    private RectTransform CreateWorkshopDeviceRoot(string objectName, string label, Vector2 anchor, Vector2 size, float signRotation, out TextMeshProUGUI statusText)
+    {
+      var root = FirstLevelUiFactory.CreateObject(objectName, _stationStage).GetComponent<RectTransform>();
+      FirstLevelUiFactory.SetRect(root, anchor, anchor, new Vector2(0.5f, 0.5f), Vector2.zero, size);
+      var frame = root.gameObject.AddComponent<Image>();
+      frame.color = Color.clear;
+      frame.raycastTarget = true;
+      var button = root.gameObject.AddComponent<Button>();
+      button.targetGraphic = frame;
+      var colors = button.colors;
+      colors.normalColor = Color.clear;
+      colors.highlightedColor = KeepBlinkingTheme.WithAlpha(WorkshopMint, 0.035f);
+      colors.pressedColor = KeepBlinkingTheme.WithAlpha(WorkshopMint, 0.07f);
+      colors.selectedColor = Color.clear;
+      colors.disabledColor = Color.clear;
+      button.colors = colors;
+      RegisterButtonBinding(button, () => DeviceSelected?.Invoke(label));
+      _deviceButtons.Add(button);
+
+      var sign = FirstLevelUiFactory.CreateImage(label + " Handwritten Sign", root, WorkshopPaper, FirstLevelUiFactory.RoundedSprite);
+      FirstLevelUiFactory.SetRect(sign.rectTransform, new Vector2(0.5f, 0.035f), new Vector2(0.5f, 0.035f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(178f, 42f));
+      sign.rectTransform.localRotation = Quaternion.Euler(0f, 0f, signRotation);
+      var nameText = FirstLevelUiFactory.CreateText(label + " Label", sign.transform, label, 20f, FontStyles.Bold, TextAlignmentOptions.Center, WorkshopInk);
+      FirstLevelUiFactory.Stretch(nameText.rectTransform, new Vector2(8f, 3f), new Vector2(-8f, -3f));
+
+      var statusTag = FirstLevelUiFactory.CreateImage(label + " Active Status Tag", root, WorkshopOutline, FirstLevelUiFactory.RoundedSprite);
+      FirstLevelUiFactory.SetRect(statusTag.rectTransform, new Vector2(0.5f, 0.145f), new Vector2(0.5f, 0.145f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(205f, 36f));
+      statusText = FirstLevelUiFactory.CreateText(label + " Status", statusTag.transform, string.Empty, 15f, FontStyles.Bold, TextAlignmentOptions.Center, WorkshopMint);
+      FirstLevelUiFactory.Stretch(statusText.rectTransform, new Vector2(8f, 2f), new Vector2(-8f, -2f));
+      statusTag.gameObject.SetActive(false);
+      _stationLabels.Add(nameText.gameObject);
+      return root;
+    }
+
+    private void BuildCareEnergySource()
+    {
+      var root = FirstLevelUiFactory.CreateObject("Care Energy Source", _stationStage).GetComponent<RectTransform>();
+      FirstLevelUiFactory.SetRect(root, new Vector2(0.07f, 0.77f), new Vector2(0.07f, 0.77f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(112f, 150f));
+      var nodeOutline = FirstLevelUiFactory.CreateImage("Care Energy Brass Housing", root, WorkshopOutline, FirstLevelUiFactory.CircleSprite);
+      FirstLevelUiFactory.SetRect(nodeOutline.rectTransform, new Vector2(0.5f, 0.61f), new Vector2(0.5f, 0.61f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(78f, 78f));
+      var node = FirstLevelUiFactory.CreateImage("Care Energy Meter", nodeOutline.transform, WorkshopMint, FirstLevelUiFactory.CircleSprite);
+      _careCoreInner = node;
+      FirstLevelUiFactory.SetRect(node.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(62f, 62f));
+      var boltUpper = FirstLevelUiFactory.CreateImage("Care Energy Bolt Upper", node.transform, WorkshopPaper, FirstLevelUiFactory.RoundedSprite);
+      FirstLevelUiFactory.SetRect(boltUpper.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-5f, 7f), new Vector2(12f, 28f));
+      boltUpper.rectTransform.localRotation = Quaternion.Euler(0f, 0f, -24f);
+      var boltLower = FirstLevelUiFactory.CreateImage("Care Energy Bolt Lower", node.transform, WorkshopPaper, FirstLevelUiFactory.RoundedSprite);
+      FirstLevelUiFactory.SetRect(boltLower.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(5f, -7f), new Vector2(12f, 28f));
+      boltLower.rectTransform.localRotation = Quaternion.Euler(0f, 0f, -24f);
+      var sign = FirstLevelUiFactory.CreateImage("Care Energy Paper Label", root, WorkshopPaperDim, FirstLevelUiFactory.RoundedSprite);
+      FirstLevelUiFactory.SetRect(sign.rectTransform, new Vector2(0.5f, 0.16f), new Vector2(0.5f, 0.16f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(110f, 40f));
+      sign.rectTransform.localRotation = Quaternion.Euler(0f, 0f, -1.2f);
+      var label = FirstLevelUiFactory.CreateText("Care Energy Source Label", sign.transform, "CARE ENERGY", 13f, FontStyles.Bold, TextAlignmentOptions.Center, WorkshopInk);
+      FirstLevelUiFactory.Stretch(label.rectTransform, new Vector2(4f, 2f), new Vector2(-4f, -2f));
+    }
+
+    private void BuildLiquidTransportRoutes()
+    {
+      _baseInputPipe = CreatePathSegment(
+        _stationStage,
+        "Care Energy Cable",
+        new Vector2(0.105f, 0.77f),
+        new Vector2(0.145f, 0.77f),
+        7f,
+        KeepBlinkingTheme.WithAlpha(WorkshopMint, 0.46f));
+
+      _manualFilterHoseRoot = FirstLevelUiFactory.CreateObject("L1 Manual Liquid Hose", _stationStage).GetComponent<RectTransform>();
+      FirstLevelUiFactory.Stretch(_manualFilterHoseRoot);
+      var hosePoints = new[]
       {
-        var layer = FirstLevelUiFactory.CreateImage("Press Layer", root, KeepBlinkingTheme.WithAlpha(i == 0 ? KeepBlinkingTheme.TextSecondary : KeepBlinkingTheme.AccentSoft, 0.36f), FirstLevelUiFactory.RoundedSprite);
-        _pressLayers.Add(layer);
-        FirstLevelUiFactory.SetRect(layer.rectTransform, new Vector2(0.5f, 0.62f), new Vector2(0.5f, 0.62f), new Vector2(0.5f, 0.5f), new Vector2(0f, i * 47f - 23f), new Vector2(i == 0 ? 168f : 136f, 36f));
+        new Vector2(0.385f, 0.735f),
+        new Vector2(0.45f, 0.705f),
+        new Vector2(0.56f, 0.705f),
+        new Vector2(0.595f, 0.745f),
+      };
+      for (var index = 0; index < hosePoints.Length - 1; index++)
+      {
+        CreatePathSegment(_manualFilterHoseRoot, "Soft Hose Outline " + index, hosePoints[index], hosePoints[index + 1], 17f, KeepBlinkingTheme.WithAlpha(WorkshopOutline, 0.86f));
+        var inner = CreatePathSegment(_manualFilterHoseRoot, "Soft Liquid Hose " + index, hosePoints[index], hosePoints[index + 1], 8f, KeepBlinkingTheme.WithAlpha(WorkshopMetalLight, 0.72f));
+        _liquidTransportSegments.Add(inner);
+        if (_filteredLiquidPipe == null) _filteredLiquidPipe = inner;
       }
-      var stem = FirstLevelUiFactory.CreateImage("Press Stem", root, KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.BorderReadable, 0.5f), FirstLevelUiFactory.RoundedSprite);
-      FirstLevelUiFactory.SetRect(stem.rectTransform, new Vector2(0.5f, 0.62f), new Vector2(0.5f, 0.62f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(18f, 72f));
-      CreateDeviceLabel(root, "PRESS");
+
+      _fixedFilterPipeRoot = FirstLevelUiFactory.CreateObject("L2 Fixed Liquid Pipe And Pump", _stationStage).GetComponent<RectTransform>();
+      FirstLevelUiFactory.Stretch(_fixedFilterPipeRoot);
+      var pipePoints = new[]
+      {
+        new Vector2(0.385f, 0.75f),
+        new Vector2(0.385f, 0.815f),
+        new Vector2(0.59f, 0.815f),
+        new Vector2(0.59f, 0.75f),
+      };
+      for (var index = 0; index < pipePoints.Length - 1; index++)
+      {
+        CreatePathSegment(_fixedFilterPipeRoot, "Fixed Pipe Outline " + index, pipePoints[index], pipePoints[index + 1], 20f, KeepBlinkingTheme.WithAlpha(WorkshopOutline, 0.9f));
+        var inner = CreatePathSegment(_fixedFilterPipeRoot, "Fixed Liquid Pipe " + index, pipePoints[index], pipePoints[index + 1], 10f, KeepBlinkingTheme.WithAlpha(WorkshopMetal, 0.86f));
+        _liquidTransportSegments.Add(inner);
+      }
+      var pumpOutline = FirstLevelUiFactory.CreateImage("L2 Pump Housing", _fixedFilterPipeRoot, WorkshopOutline, FirstLevelUiFactory.CircleSprite);
+      FirstLevelUiFactory.SetRect(pumpOutline.rectTransform, new Vector2(0.49f, 0.815f), new Vector2(0.49f, 0.815f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(54f, 54f));
+      var pump = FirstLevelUiFactory.CreateImage("L2 Small Pump", pumpOutline.transform, WorkshopMetalLight, FirstLevelUiFactory.CircleSprite);
+      FirstLevelUiFactory.SetRect(pump.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(38f, 38f));
+      var pumpHub = FirstLevelUiFactory.CreateImage("L2 Pump Hub", pump.transform, WorkshopPaperDim, FirstLevelUiFactory.CircleSprite);
+      FirstLevelUiFactory.SetRect(pumpHub.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(14f, 14f));
+    }
+
+    private void BuildManualCarryRoute()
+    {
+      _manualCarryRoot = FirstLevelUiFactory.CreateObject("L1 Manual Bottle Carry Path", _stationStage).GetComponent<RectTransform>();
+      FirstLevelUiFactory.Stretch(_manualCarryRoot);
+      var markers = new[]
+      {
+        new Vector2(0.82f, 0.60f), new Vector2(0.85f, 0.54f), new Vector2(0.84f, 0.47f), new Vector2(0.82f, 0.41f),
+        new Vector2(0.64f, 0.315f), new Vector2(0.56f, 0.305f), new Vector2(0.48f, 0.30f), new Vector2(0.40f, 0.295f),
+      };
+      for (var index = 0; index < markers.Length; index++)
+      {
+        var marker = FirstLevelUiFactory.CreateImage("Manual Carry Footstep " + index, _manualCarryRoot, KeepBlinkingTheme.WithAlpha(WorkshopPaperDim, 0.34f), FirstLevelUiFactory.RoundedSprite);
+        FirstLevelUiFactory.SetRect(marker.rectTransform, markers[index], markers[index], new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(20f, 9f));
+        marker.rectTransform.localRotation = Quaternion.Euler(0f, 0f, index < 4 ? 62f + (index % 2 == 0 ? -8f : 7f) : (index % 2 == 0 ? -7f : 8f));
+        marker.raycastTarget = false;
+        _manualCarryMarkers.Add(marker);
+      }
+    }
+
+    private void BuildBasicConveyorRoute()
+    {
+      _basicConveyorRoot = FirstLevelUiFactory.CreateObject("L2 Basic Bottle Conveyor", _stationStage).GetComponent<RectTransform>();
+      FirstLevelUiFactory.Stretch(_basicConveyorRoot);
+      CreateConveyorSpan("Filler To Packer Conveyor", new Vector2(0.73f, 0.585f), new Vector2(0.73f, 0.445f), 4);
+      CreateConveyorSpan("Packer To Storage Conveyor", new Vector2(0.62f, 0.295f), new Vector2(0.39f, 0.295f), 5);
+    }
+
+    private void CreateConveyorSpan(string name, Vector2 from, Vector2 to, int rollerCount)
+    {
+      CreatePathSegment(_basicConveyorRoot, name + " Brown Outline", from, to, 34f, KeepBlinkingTheme.WithAlpha(WorkshopOutline, 0.92f));
+      var belt = CreatePathSegment(_basicConveyorRoot, name + " Blue Gray Belt", from, to, 24f, KeepBlinkingTheme.WithAlpha(WorkshopMetal, 0.92f));
+      _conveyorSegments.Add(belt);
+      if (_bottleConveyor == null) _bottleConveyor = belt;
+      else if (_packedBottleRoute == null) _packedBottleRoute = belt;
+      for (var index = 0; index < rollerCount; index++)
+      {
+        var t = rollerCount <= 1 ? 0.5f : index / (float)(rollerCount - 1);
+        var roller = FirstLevelUiFactory.CreateImage(name + " Roller " + index, _basicConveyorRoot, WorkshopPaperDim, FirstLevelUiFactory.CircleSprite);
+        var anchor = Vector2.Lerp(from, to, t);
+        FirstLevelUiFactory.SetRect(roller.rectTransform, anchor, anchor, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(15f, 15f));
+        roller.raycastTarget = false;
+        _conveyorSegments.Add(roller);
+      }
+    }
+
+    private void BuildWorkerHandoffAnchors()
+    {
+      _workerFillerPickupAnchor = CreateReservedHandoffAnchor("Worker Bottle Pickup Anchor", ManualFillerPickupAnchor);
+      _workerPackerHandoffAnchor = CreateReservedHandoffAnchor("Worker Packer Handoff Anchor", ManualPackerHandoffAnchor);
+      _workerStorageHandoffAnchor = CreateReservedHandoffAnchor("Worker Storage Handoff Anchor", StorageBottleAnchor);
+    }
+
+    private RectTransform CreateReservedHandoffAnchor(string name, Vector2 anchor)
+    {
+      var root = FirstLevelUiFactory.CreateObject(name, _stationStage).GetComponent<RectTransform>();
+      FirstLevelUiFactory.SetRect(root, anchor, anchor, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(36f, 36f));
+      return root;
+    }
+
+    private Image CreateWorkshopPart(
+      string name,
+      Transform parent,
+      Vector2 anchor,
+      Vector2 size,
+      Color fill,
+      float rotation = 0f,
+      float outlinePad = 6f,
+      Sprite sprite = null)
+    {
+      sprite = sprite == null ? FirstLevelUiFactory.RoundedSprite : sprite;
+      var outline = FirstLevelUiFactory.CreateImage(name + " Outline", parent, WorkshopOutline, sprite);
+      FirstLevelUiFactory.SetRect(outline.rectTransform, anchor, anchor, new Vector2(0.5f, 0.5f), Vector2.zero, size + Vector2.one * outlinePad);
+      outline.rectTransform.localRotation = Quaternion.Euler(0f, 0f, rotation);
+      var part = FirstLevelUiFactory.CreateImage(name, outline.transform, fill, sprite);
+      FirstLevelUiFactory.Stretch(part.rectTransform, Vector2.one * (outlinePad * 0.5f), Vector2.one * (-outlinePad * 0.5f));
+      part.raycastTarget = false;
+      return part;
+    }
+
+    private Button CreateWorkshopButton(string name, Transform parent, Color material)
+    {
+      var root = FirstLevelUiFactory.CreateObject(name, parent);
+      var plate = root.AddComponent<Image>();
+      plate.sprite = FirstLevelUiFactory.RoundedSprite;
+      plate.type = Image.Type.Sliced;
+      plate.color = material;
+      plate.raycastTarget = true;
+      var button = root.AddComponent<Button>();
+      button.targetGraphic = plate;
+      var colors = button.colors;
+      colors.normalColor = Color.white;
+      colors.highlightedColor = Color.Lerp(Color.white, WorkshopMint, 0.16f);
+      colors.pressedColor = Color.Lerp(Color.white, WorkshopMint, 0.28f);
+      colors.selectedColor = colors.highlightedColor;
+      button.colors = colors;
+      var inner = FirstLevelUiFactory.CreateImage("Worn Inner Plate", root.transform, Color.Lerp(material, WorkshopPaperDim, 0.12f), FirstLevelUiFactory.RoundedSprite);
+      FirstLevelUiFactory.Stretch(inner.rectTransform, new Vector2(5f, 5f), new Vector2(-5f, -5f));
+      for (var index = 0; index < 2; index++)
+      {
+        var tack = FirstLevelUiFactory.CreateImage("Handmade Tack " + index, root.transform, WorkshopPaperDim, FirstLevelUiFactory.CircleSprite);
+        var x = index == 0 ? 0.08f : 0.92f;
+        FirstLevelUiFactory.SetRect(tack.rectTransform, new Vector2(x, 0.5f), new Vector2(x, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(10f, 10f));
+      }
+      return button;
+    }
+
+    private void AddWorkshopRivets(Transform parent, Vector2[] anchors)
+    {
+      if (anchors == null) return;
+      for (var index = 0; index < anchors.Length; index++)
+      {
+        var rivet = FirstLevelUiFactory.CreateImage("Brass Rivet " + index, parent, WorkshopPaperDim, FirstLevelUiFactory.CircleSprite);
+        FirstLevelUiFactory.SetRect(rivet.rectTransform, anchors[index], anchors[index], new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(13f, 13f));
+      }
+    }
+
+    private Image CreatePathSegment(Transform parent, string name, Vector2 from, Vector2 to, float width, Color color)
+    {
+      var center = (from + to) * 0.5f;
+      var logicalDelta = new Vector2((to.x - from.x) * 980f, (to.y - from.y) * 1320f);
+      var line = FirstLevelUiFactory.CreateImage(name, parent, color, FirstLevelUiFactory.RoundedSprite);
+      FirstLevelUiFactory.SetRect(line.rectTransform, center, center, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(logicalDelta.magnitude, width));
+      line.rectTransform.localRotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(logicalDelta.y, logicalDelta.x) * Mathf.Rad2Deg);
+      line.raycastTarget = false;
+      return line;
     }
 
     private void BuildCareCore()
@@ -1487,6 +2193,31 @@ namespace KeepBlinking.CareStation
       line.rectTransform.localRotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg);
     }
 
+    private Image CreateProductionLink(string name, Vector2 from, Vector2 to, bool registerTrack = true)
+    {
+      var center = (from + to) * 0.5f;
+      var delta = to - from;
+      var line = FirstLevelUiFactory.CreateImage(
+        name,
+        _stationStage,
+        KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.BorderReadable, 0.34f),
+        FirstLevelUiFactory.RoundedSprite);
+      FirstLevelUiFactory.SetRect(
+        line.rectTransform,
+        center,
+        center,
+        new Vector2(0.5f, 0.5f),
+        Vector2.zero,
+        new Vector2(delta.magnitude * 880f, 8f));
+      line.rectTransform.localRotation = Quaternion.Euler(
+        0f,
+        0f,
+        Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg);
+      line.raycastTarget = false;
+      if (registerTrack) _stationTracks.Add(line);
+      return line;
+    }
+
     private void CreateDeviceLabel(Transform root, string label)
     {
       var text = FirstLevelUiFactory.CreateText(label + " Label", root, label, 18f, FontStyles.Bold, TextAlignmentOptions.Center, KeepBlinkingTheme.TextMuted);
@@ -1497,85 +2228,127 @@ namespace KeepBlinking.CareStation
     private void BuildStorage()
     {
       _transportRoot = FirstLevelUiFactory.CreateObject("Bottle Transport", _stationStage).GetComponent<RectTransform>();
-      FirstLevelUiFactory.SetRect(_transportRoot, new Vector2(0.02f, 0.015f), new Vector2(0.98f, 0.25f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
-      var transportPanel = FirstLevelUiFactory.CreateImage("Transport Surface", _transportRoot, KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.SurfaceBase, 0.12f), FirstLevelUiFactory.RoundedSprite);
-      FirstLevelUiFactory.Stretch(transportPanel.rectTransform);
+      FirstLevelUiFactory.Stretch(_transportRoot);
 
-      var rail = FirstLevelUiFactory.CreateImage("Bottle Rail", _transportRoot, KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.BorderSubtle, 0.32f), FirstLevelUiFactory.RoundedSprite);
-      FirstLevelUiFactory.SetRect(rail.rectTransform, new Vector2(0.48f, 0.54f), new Vector2(0.48f, 0.54f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(430f, 8f));
-      for (var i = 0; i < 5; i++)
-      {
-        var marker = FirstLevelUiFactory.CreateImage("Rail Marker", _transportRoot, KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.BorderReadable, 0.24f), FirstLevelUiFactory.CircleSprite);
-        FirstLevelUiFactory.SetRect(marker.rectTransform, new Vector2(0.32f + i * 0.08f, 0.54f), new Vector2(0.32f + i * 0.08f, 0.54f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(12f, 12f));
-      }
+      var saleDrop = CreatePathSegment(_transportRoot, "Storage Exit Path", new Vector2(0.27f, 0.205f), new Vector2(0.27f, 0.115f), 9f, KeepBlinkingTheme.WithAlpha(WorkshopPaperDim, 0.3f));
+      saleDrop.transform.SetAsFirstSibling();
+      _storageToCartRoute = CreatePathSegment(_transportRoot, "Storage To Cart Floor Path", new Vector2(0.27f, 0.115f), new Vector2(0.80f, 0.115f), 9f, KeepBlinkingTheme.WithAlpha(WorkshopPaperDim, 0.3f));
+      _storageToCartRoute.transform.SetAsFirstSibling();
 
-      _storageTank = FirstLevelUiFactory.CreateObject("Bottle Storage Tank", _transportRoot).GetComponent<RectTransform>();
-      FirstLevelUiFactory.SetRect(_storageTank, new Vector2(0.14f, 0.52f), new Vector2(0.14f, 0.52f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(220f, 112f));
-      var tank = FirstLevelUiFactory.CreateImage("Tank", _storageTank, KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.AccentPrimary, 0.25f), FirstLevelUiFactory.RoundedSprite);
-      FirstLevelUiFactory.Stretch(tank.rectTransform);
-      var storageLabel = FirstLevelUiFactory.CreateText("Storage Label", _storageTank, "STORAGE", 17f, FontStyles.Bold, TextAlignmentOptions.Center, KeepBlinkingTheme.TextSecondary);
-      FirstLevelUiFactory.SetRect(storageLabel.rectTransform, new Vector2(0.08f, 0.56f), new Vector2(0.92f, 0.92f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
-      var storageTrack = FirstLevelUiFactory.CreateImage("Storage Capacity Track", _storageTank, KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.BackgroundPrimary, 0.72f), FirstLevelUiFactory.RoundedSprite);
-      FirstLevelUiFactory.SetRect(storageTrack.rectTransform, new Vector2(0.5f, 0.26f), new Vector2(0.5f, 0.26f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(170f, 15f));
-      _storageFill = FirstLevelUiFactory.CreateImage("Storage Capacity Fill", storageTrack.transform, KeepBlinkingTheme.AccentPrimary, FirstLevelUiFactory.RoundedSprite);
+      _storageTank = FirstLevelUiFactory.CreateObject("Bottle Storage", _transportRoot).GetComponent<RectTransform>();
+      FirstLevelUiFactory.SetRect(_storageTank, new Vector2(0.27f, 0.295f), new Vector2(0.27f, 0.295f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(340f, 270f));
+      CreateWorkshopPart("Storage Left Timber Upright", _storageTank, new Vector2(0.13f, 0.49f), new Vector2(34f, 218f), WorkshopWood, -1.1f);
+      CreateWorkshopPart("Storage Right Timber Upright", _storageTank, new Vector2(0.87f, 0.49f), new Vector2(34f, 218f), WorkshopWood, 0.9f);
+      CreateWorkshopPart("Storage Roof", _storageTank, new Vector2(0.5f, 0.88f), new Vector2(286f, 38f), WorkshopMetal, -0.65f);
+      CreateWorkshopPart("Storage Upper Shelf", _storageTank, new Vector2(0.5f, 0.58f), new Vector2(282f, 26f), WorkshopWoodLight, 0.55f);
+      CreateWorkshopPart("Storage Lower Shelf", _storageTank, new Vector2(0.5f, 0.31f), new Vector2(286f, 28f), WorkshopWoodLight, -0.45f);
+      var storageSign = FirstLevelUiFactory.CreateImage("Storage Paper Sign", _storageTank, WorkshopPaper, FirstLevelUiFactory.RoundedSprite);
+      FirstLevelUiFactory.SetRect(storageSign.rectTransform, new Vector2(0.5f, 0.97f), new Vector2(0.5f, 0.97f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(178f, 42f));
+      storageSign.rectTransform.localRotation = Quaternion.Euler(0f, 0f, 0.8f);
+      var storageLabel = FirstLevelUiFactory.CreateText("Storage Label", storageSign.transform, "STORAGE", 19f, FontStyles.Bold, TextAlignmentOptions.Center, WorkshopInk);
+      FirstLevelUiFactory.Stretch(storageLabel.rectTransform, new Vector2(6f, 2f), new Vector2(-6f, -2f));
+      var storageTrack = FirstLevelUiFactory.CreateImage("Storage Capacity Track", _storageTank, WorkshopOutline, FirstLevelUiFactory.RoundedSprite);
+      FirstLevelUiFactory.SetRect(storageTrack.rectTransform, new Vector2(0.5f, 0.13f), new Vector2(0.5f, 0.13f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(246f, 18f));
+      _storageFill = FirstLevelUiFactory.CreateImage("Storage Capacity Fill", storageTrack.transform, WorkshopMint, FirstLevelUiFactory.RoundedSprite);
       FirstLevelUiFactory.Stretch(_storageFill.rectTransform, Vector2.zero, Vector2.zero);
       _storageFill.type = Image.Type.Filled;
       _storageFill.fillMethod = Image.FillMethod.Horizontal;
       _storageFill.fillOrigin = 0;
-      var extra = FirstLevelUiFactory.CreateImage("Extra Container", _storageTank, KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.AccentPrimary, 0.18f), FirstLevelUiFactory.RoundedSprite);
-      FirstLevelUiFactory.SetRect(extra.rectTransform, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, 0.5f), new Vector2(16f, 0f), new Vector2(90f, 78f));
-      extra.gameObject.SetActive(false);
-      var tierThree = FirstLevelUiFactory.CreateImage("Tier 3 Container", _storageTank, KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.AccentPrimary, 0.16f), FirstLevelUiFactory.RoundedSprite);
-      FirstLevelUiFactory.SetRect(tierThree.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 0f), new Vector2(0f, 11f), new Vector2(160f, 42f));
-      tierThree.gameObject.SetActive(false);
-      var tierFour = FirstLevelUiFactory.CreateImage("Tier 4 Container", _storageTank, KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.AccentPrimary, 0.14f), FirstLevelUiFactory.RoundedSprite);
-      FirstLevelUiFactory.SetRect(tierFour.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 0f), new Vector2(0f, 55f), new Vector2(122f, 34f));
-      tierFour.gameObject.SetActive(false);
-      for (var cartIndex = 0; cartIndex < 5; cartIndex++)
-      {
-        var cartName = cartIndex == 0 ? "Bottle Cart" : $"Bottle Cart {cartIndex + 1}";
-        var cart = FirstLevelUiFactory.CreateObject(cartName, _transportRoot).GetComponent<RectTransform>();
-        var x = 0.79f + (cartIndex % 3) * 0.055f;
-        var y = 0.42f + (cartIndex / 3) * 0.28f;
-        FirstLevelUiFactory.SetRect(cart, new Vector2(x, y), new Vector2(x, y), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(125f, 62f));
-        var bed = FirstLevelUiFactory.CreateImage("Cart Bed", cart, KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.TextPrimary, 0.58f), FirstLevelUiFactory.RoundedSprite);
-        FirstLevelUiFactory.SetRect(bed.rectTransform, Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f), new Vector2(0f, 8f), new Vector2(-10f, -24f));
-        for (var wheelIndex = 0; wheelIndex < 2; wheelIndex++)
-        {
-          var wheel = FirstLevelUiFactory.CreateImage("Wheel", cart, KeepBlinkingTheme.BorderReadable, FirstLevelUiFactory.CircleSprite);
-          FirstLevelUiFactory.SetRect(wheel.rectTransform, new Vector2(wheelIndex == 0 ? 0.25f : 0.75f, 0f), new Vector2(wheelIndex == 0 ? 0.25f : 0.75f, 0f), new Vector2(0.5f, 0.5f), new Vector2(0f, 5f), new Vector2(22f, 22f));
-        }
-        cart.gameObject.SetActive(cartIndex < 2);
-        _carts.Add(cart);
-        if (cartIndex == 0) _cart = cart;
-      }
-      if (_cart != null) _productionCartHome = _cart.anchoredPosition;
-      _productionBottle = FirstLevelUiFactory.CreateObject("Representative Production Bottle", _stationStage).GetComponent<RectTransform>();
-      FirstLevelUiFactory.SetRect(_productionBottle, new Vector2(0.12f, 0.29f), new Vector2(0.12f, 0.29f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(24f, 38f));
-      var productionBottleBody = FirstLevelUiFactory.CreateImage("Bottle Body", _productionBottle, KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.TextPrimary, 0.76f), FirstLevelUiFactory.RoundedSprite);
-      FirstLevelUiFactory.Stretch(productionBottleBody.rectTransform);
-      productionBottleBody.raycastTarget = false;
-      var productionBottleNeck = FirstLevelUiFactory.CreateImage("Bottle Neck", _productionBottle, KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.TextPrimary, 0.76f), FirstLevelUiFactory.RoundedSprite);
-      FirstLevelUiFactory.SetRect(productionBottleNeck.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 0f), new Vector2(0f, -1f), new Vector2(12f, 9f));
-      productionBottleNeck.raycastTarget = false;
-      _productionBottle.gameObject.SetActive(false);
+      var storageStatusTag = FirstLevelUiFactory.CreateImage("Storage Active Status Tag", _storageTank, WorkshopOutline, FirstLevelUiFactory.RoundedSprite);
+      FirstLevelUiFactory.SetRect(storageStatusTag.rectTransform, new Vector2(0.5f, -0.015f), new Vector2(0.5f, -0.015f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(300f, 62f));
+      _storageStatusText = FirstLevelUiFactory.CreateText("Storage Status", storageStatusTag.transform, string.Empty, 17f, FontStyles.Bold, TextAlignmentOptions.Center, WorkshopMint, true);
+      FirstLevelUiFactory.Stretch(_storageStatusText.rectTransform, new Vector2(8f, 2f), new Vector2(-8f, -2f));
+      storageStatusTag.gameObject.SetActive(false);
 
-      var emptyRack = FirstLevelUiFactory.CreateText("Empty Rack Label", _stationStage, "EMPTY RACK", 14f, FontStyles.Bold, TextAlignmentOptions.Center, KeepBlinkingTheme.TextMuted);
-      FirstLevelUiFactory.SetRect(emptyRack.rectTransform, new Vector2(0.03f, 0.245f), new Vector2(0.22f, 0.30f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
-      emptyRack.raycastTarget = false;
-      for (var i = 0; i < 24; i++)
+      _cart = FirstLevelUiFactory.CreateObject("Bottle Cart", _transportRoot).GetComponent<RectTransform>();
+      FirstLevelUiFactory.SetRect(_cart, new Vector2(0.88f, 0.12f), new Vector2(0.88f, 0.12f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(190f, 145f));
+      var cartSign = FirstLevelUiFactory.CreateImage("Cart Paper Sign", _cart, WorkshopPaperDim, FirstLevelUiFactory.RoundedSprite);
+      FirstLevelUiFactory.SetRect(cartSign.rectTransform, new Vector2(0.5f, 0.94f), new Vector2(0.5f, 0.94f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(118f, 36f));
+      cartSign.rectTransform.localRotation = Quaternion.Euler(0f, 0f, -1.2f);
+      var cartLabel = FirstLevelUiFactory.CreateText("Cart Label", cartSign.transform, "CART", 17f, FontStyles.Bold, TextAlignmentOptions.Center, WorkshopInk);
+      FirstLevelUiFactory.Stretch(cartLabel.rectTransform, new Vector2(4f, 2f), new Vector2(-4f, -2f));
+      CreateWorkshopPart("Cart Wooden Box", _cart, new Vector2(0.5f, 0.52f), new Vector2(154f, 64f), WorkshopWood, -1.2f);
+      CreateWorkshopPart("Cart Metal Rim", _cart, new Vector2(0.5f, 0.72f), new Vector2(170f, 24f), WorkshopMetalLight, 0.7f);
+      CreateWorkshopPart("Cart Handle", _cart, new Vector2(0.91f, 0.53f), new Vector2(70f, 17f), WorkshopMetal, -6f, 5f);
+      for (var wheelIndex = 0; wheelIndex < 2; wheelIndex++)
       {
-        var xp = FirstLevelUiFactory.CreateImage("Pending Bottle", _transportRoot, KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.AccentPrimary, 0.78f), FirstLevelUiFactory.RoundedSprite);
-        var column = i % 12;
-        var row = i / 12;
-        var x = 0.29f + column * 0.035f;
-        var y = 0.42f + row * 0.28f;
-        FirstLevelUiFactory.SetRect(xp.rectTransform, new Vector2(x, y), new Vector2(x, y), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(19f, 28f));
-        var neck = FirstLevelUiFactory.CreateImage("Bottle Neck", xp.transform, xp.color, FirstLevelUiFactory.RoundedSprite);
-        FirstLevelUiFactory.SetRect(neck.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 0f), new Vector2(0f, -1f), new Vector2(11f, 8f));
+        var wheel = FirstLevelUiFactory.CreateImage("Cart Wheel", _cart, WorkshopOutline, FirstLevelUiFactory.CircleSprite);
+        FirstLevelUiFactory.SetRect(wheel.rectTransform, new Vector2(wheelIndex == 0 ? 0.28f : 0.72f, 0.22f), new Vector2(wheelIndex == 0 ? 0.28f : 0.72f, 0.22f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(42f, 42f));
+        var hub = FirstLevelUiFactory.CreateImage("Brass Wheel Hub", wheel.transform, WorkshopPaperDim, FirstLevelUiFactory.CircleSprite);
+        FirstLevelUiFactory.SetRect(hub.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(17f, 17f));
+      }
+      var cartStatusTag = FirstLevelUiFactory.CreateImage("Cart Active Status Tag", _cart, WorkshopOutline, FirstLevelUiFactory.RoundedSprite);
+      FirstLevelUiFactory.SetRect(cartStatusTag.rectTransform, new Vector2(0.5f, -0.03f), new Vector2(0.5f, -0.03f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(142f, 34f));
+      _cartStatusText = FirstLevelUiFactory.CreateText("Cart Status", cartStatusTag.transform, string.Empty, 14f, FontStyles.Bold, TextAlignmentOptions.Center, WorkshopMint);
+      FirstLevelUiFactory.Stretch(_cartStatusText.rectTransform, new Vector2(6f, 2f), new Vector2(-6f, -2f));
+      cartStatusTag.gameObject.SetActive(false);
+      _carts.Add(_cart);
+      if (_cart != null) _productionCartHome = _cart.anchoredPosition;
+      BuildProductionBottle();
+
+      var coinTag = FirstLevelUiFactory.CreateImage("Coins Exit Tag", _transportRoot, WorkshopPaper, FirstLevelUiFactory.CircleSprite);
+      FirstLevelUiFactory.SetRect(coinTag.rectTransform, new Vector2(0.965f, 0.12f), new Vector2(0.965f, 0.12f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(62f, 62f));
+      var cartSaleLabel = FirstLevelUiFactory.CreateText("Cart Sale Label", coinTag.transform, "COINS", 12f, FontStyles.Bold, TextAlignmentOptions.Center, WorkshopInk);
+      FirstLevelUiFactory.Stretch(cartSaleLabel.rectTransform, new Vector2(3f, 2f), new Vector2(-3f, -2f));
+
+      var filterCatalog = Resources.Load<CareStationFilterArtCatalog>("CareStation/Filter/CareStationFilterArtCatalog");
+      var storageBottleSprite = FindLevelOneSprites(filterCatalog)?.bottleGlassSprite;
+      for (var i = 0; i < 12; i++)
+      {
+        var xp = FirstLevelUiFactory.CreateImage("Stored Bottle Marker", _storageTank, KeepBlinkingTheme.WithAlpha(Color.white, 0.9f), storageBottleSprite);
+        xp.preserveAspect = true;
+        var column = i % 6;
+        var row = i / 6;
+        var x = 0.22f + column * 0.112f;
+        var y = 0.42f + row * 0.27f;
+        FirstLevelUiFactory.SetRect(xp.rectTransform, new Vector2(x, y), new Vector2(x, y), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(25f, 38f));
         xp.gameObject.SetActive(false);
         _xpVisuals.Add(xp);
       }
+    }
+
+    private void BuildProductionBottle()
+    {
+      var filterCatalog = Resources.Load<CareStationFilterArtCatalog>("CareStation/Filter/CareStationFilterArtCatalog");
+      var l1 = FindLevelOneSprites(filterCatalog);
+      _productionBottle = FirstLevelUiFactory.CreateObject("Representative Production Bottle", _stationStage).GetComponent<RectTransform>();
+      FirstLevelUiFactory.SetRect(_productionBottle, FillerBottleAnchor, FillerBottleAnchor, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(56f, 84f));
+
+      _productionPackage = FirstLevelUiFactory.CreateImage("Bottle Paper Package", _productionBottle, KeepBlinkingTheme.WithAlpha(WorkshopPaper, 0.34f), FirstLevelUiFactory.RoundedSprite);
+      FirstLevelUiFactory.Stretch(_productionPackage.rectTransform, new Vector2(-8f, -6f), new Vector2(8f, 9f));
+      _productionPackage.raycastTarget = false;
+
+      var liquidMaskObject = FirstLevelUiFactory.CreateObject("Bottle Liquid Mask", _productionBottle);
+      _productionBottleLiquidMask = liquidMaskObject.GetComponent<RectTransform>();
+      _productionBottleLiquidMask.anchorMin = _productionBottleLiquidMask.anchorMax = new Vector2(0.5f, 0.08f);
+      _productionBottleLiquidMask.pivot = new Vector2(0.5f, 0f);
+      _productionBottleLiquidMask.anchoredPosition = Vector2.zero;
+      _productionBottleLiquidMask.sizeDelta = new Vector2(34f, 0f);
+      liquidMaskObject.AddComponent<RectMask2D>();
+      _productionBottleLiquid = FirstLevelUiFactory.CreateImage("Bottle Liquid Body", _productionBottleLiquidMask, Color.white, l1?.bottleLiquidBodySprite);
+      _productionBottleLiquid.preserveAspect = true;
+      FirstLevelUiFactory.SetRect(_productionBottleLiquid.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), Vector2.zero, new Vector2(34f, 50f));
+      _productionBottleLiquidSurface = FirstLevelUiFactory.CreateImage("Bottle Liquid Surface", _productionBottle, Color.white, l1?.bottleLiquidSurfaceSprite);
+      _productionBottleLiquidSurface.preserveAspect = true;
+      FirstLevelUiFactory.SetRect(_productionBottleLiquidSurface.rectTransform, new Vector2(0.5f, 0.08f), new Vector2(0.5f, 0.08f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(36f, 10f));
+
+      _productionBottleBody = FirstLevelUiFactory.CreateImage("Bottle Glass", _productionBottle, Color.white, l1?.bottleGlassSprite);
+      _productionBottleBody.preserveAspect = true;
+      FirstLevelUiFactory.Stretch(_productionBottleBody.rectTransform);
+      _productionBottleCap = FirstLevelUiFactory.CreateImage("Bottle Cap", _productionBottle, WorkshopMetal, FirstLevelUiFactory.RoundedSprite);
+      FirstLevelUiFactory.SetRect(_productionBottleCap.rectTransform, new Vector2(0.5f, 0.94f), new Vector2(0.5f, 0.94f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(26f, 9f));
+      _productionBottleLabel = FirstLevelUiFactory.CreateImage("Bottle Warm Paper Label", _productionBottle, WorkshopPaper, FirstLevelUiFactory.RoundedSprite);
+      FirstLevelUiFactory.SetRect(_productionBottleLabel.rectTransform, new Vector2(0.5f, 0.47f), new Vector2(0.5f, 0.47f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(38f, 20f));
+      _productionBottle.gameObject.SetActive(false);
+    }
+
+    private static CareStationFilterArtCatalog.LevelSprites FindLevelOneSprites(CareStationFilterArtCatalog catalog)
+    {
+      if (catalog == null || catalog.Levels == null) return null;
+      for (var index = 0; index < catalog.Levels.Length; index++)
+        if (catalog.Levels[index] != null && catalog.Levels[index].level == 1)
+          return catalog.Levels[index];
+      return null;
     }
 
     private void BuildCrew()
@@ -1597,35 +2370,41 @@ namespace KeepBlinking.CareStation
     private void BuildCareRoutineDock()
     {
       _routineDock = FirstLevelUiFactory.CreateObject("Care Routine Dock", _content).GetComponent<RectTransform>();
-      FirstLevelUiFactory.SetRect(_routineDock, new Vector2(0.03f, 0.09f), new Vector2(0.97f, 0.29f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
-      var surface = FirstLevelUiFactory.CreateImage("Routine Surface", _routineDock, KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.SurfaceBase, 0.74f), FirstLevelUiFactory.RoundedSprite);
-      FirstLevelUiFactory.Stretch(surface.rectTransform);
+      FirstLevelUiFactory.SetRect(_routineDock, new Vector2(0.035f, 0.082f), new Vector2(0.965f, 0.19f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
+      var shadow = FirstLevelUiFactory.CreateImage("Routine Wood Backing", _routineDock, WorkshopOutline, FirstLevelUiFactory.RoundedSprite);
+      FirstLevelUiFactory.Stretch(shadow.rectTransform);
+      shadow.rectTransform.localRotation = Quaternion.Euler(0f, 0f, -0.18f);
+      var surface = FirstLevelUiFactory.CreateImage("Routine Paper Sheet", _routineDock, WorkshopPaperDim, FirstLevelUiFactory.RoundedSprite);
+      FirstLevelUiFactory.Stretch(surface.rectTransform, new Vector2(6f, 6f), new Vector2(-6f, -6f));
+      surface.rectTransform.localRotation = Quaternion.Euler(0f, 0f, 0.22f);
       surface.raycastTarget = false;
-      _routineDockTitle = FirstLevelUiFactory.CreateText("Routine Title", _routineDock, "CARE ROUTINE", 23f, FontStyles.Bold, TextAlignmentOptions.Center, KeepBlinkingTheme.TextPrimary);
-      FirstLevelUiFactory.SetRect(_routineDockTitle.rectTransform, new Vector2(0.08f, 0.76f), new Vector2(0.92f, 0.96f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
+      _routineDockTitle = FirstLevelUiFactory.CreateText("Routine Title", _routineDock, "TODAY'S EYE CARE", 20f, FontStyles.Bold, TextAlignmentOptions.MidlineLeft, WorkshopInk);
+      FirstLevelUiFactory.SetRect(_routineDockTitle.rectTransform, new Vector2(0.045f, 0.54f), new Vector2(0.56f, 0.90f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
       _routineDockTitle.raycastTarget = false;
+      _routineHintText = FirstLevelUiFactory.CreateText("Routine Step Summary", _routineDock, "READY FOR TODAY'S ROUTINE", 14f, FontStyles.Bold, TextAlignmentOptions.MidlineLeft, WorkshopInk);
+      FirstLevelUiFactory.SetRect(_routineHintText.rectTransform, new Vector2(0.045f, 0.12f), new Vector2(0.56f, 0.53f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
 
       for (var index = 0; index < 4; index++)
       {
-        var x = 0.16f + index * 0.225f;
+        var x = 0.12f + index * 0.12f;
         var dot = FirstLevelUiFactory.CreateImage("Routine Step Dot", _routineDock, KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.TextPrimary, 0.2f), FirstLevelUiFactory.CircleSprite);
-        FirstLevelUiFactory.SetRect(dot.rectTransform, new Vector2(x, 0.58f), new Vector2(x, 0.58f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(25f, 25f));
+        FirstLevelUiFactory.SetRect(dot.rectTransform, new Vector2(x, 0.18f), new Vector2(x, 0.18f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(16f, 16f));
         dot.raycastTarget = false;
         _routineDockDots.Add(dot);
         var label = FirstLevelUiFactory.CreateText("Routine Step Label", _routineDock, string.Empty, 13f, FontStyles.Bold, TextAlignmentOptions.Center, KeepBlinkingTheme.TextMuted, true);
-        FirstLevelUiFactory.SetRect(label.rectTransform, new Vector2(x - 0.105f, 0.31f), new Vector2(x + 0.105f, 0.49f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
+        FirstLevelUiFactory.SetRect(label.rectTransform, new Vector2(x - 0.05f, 0.02f), new Vector2(x + 0.05f, 0.15f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
         label.raycastTarget = false;
         _routineDockLabels.Add(label);
       }
 
-      var primary = FirstLevelUiFactory.CreateImage("Routine Primary Prompt", _routineDock, KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.AccentPrimary, 0.22f), FirstLevelUiFactory.RoundedSprite);
-      FirstLevelUiFactory.SetRect(primary.rectTransform, new Vector2(0.20f, 0.04f), new Vector2(0.80f, 0.27f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
-      primary.raycastTarget = false;
-      _routinePrimaryText = FirstLevelUiFactory.CreateText("Routine Primary Text", primary.transform, "STATION WORKING", 18f, FontStyles.Bold, TextAlignmentOptions.Center, KeepBlinkingTheme.TextPrimary, true);
+      _routinePrimaryButton = CreateWorkshopButton("Routine Primary Prompt", _routineDock, WorkshopMetal);
+      FirstLevelUiFactory.SetRect((RectTransform)_routinePrimaryButton.transform, new Vector2(0.59f, 0.16f), new Vector2(0.955f, 0.84f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
+      _routinePrimaryText = FirstLevelUiFactory.CreateText("Routine Primary Text", _routinePrimaryButton.transform, "STATION WORKING", 16f, FontStyles.Bold, TextAlignmentOptions.Center, WorkshopPaper, true);
       FirstLevelUiFactory.Stretch(_routinePrimaryText.rectTransform, new Vector2(12f, 4f), new Vector2(-12f, -4f));
       _routinePrimaryText.raycastTarget = false;
+      RegisterButtonBinding(_routinePrimaryButton, () => StartCareSelected?.Invoke());
 
-      if (_statusText != null) _statusText.gameObject.SetActive(false);
+      if (_statusText != null) _statusText.gameObject.SetActive(true);
       if (_xpReady != null) _xpReady.gameObject.SetActive(false);
       RefreshRoutineDock(null);
     }
@@ -1633,23 +2412,24 @@ namespace KeepBlinking.CareStation
     private void BuildNavigation()
     {
       _navigationRoot = FirstLevelUiFactory.CreateObject("Station Navigation", _content).GetComponent<RectTransform>();
-      FirstLevelUiFactory.SetRect(_navigationRoot, new Vector2(0.03f, 0.01f), new Vector2(0.97f, 0.075f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
+      FirstLevelUiFactory.SetRect(_navigationRoot, new Vector2(0.03f, 0.008f), new Vector2(0.97f, 0.069f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
       var labels = new[] { "STATION", "UPGRADES", "REPORTS" };
+      var rotations = new[] { -0.8f, 0.55f, -0.3f };
       for (var index = 0; index < labels.Length; index++)
       {
-        var min = new Vector2(index / 3f + 0.008f, 0.04f);
-        var max = new Vector2((index + 1) / 3f - 0.008f, 0.96f);
+        var min = new Vector2(index / 3f + 0.014f, 0.08f);
+        var max = new Vector2((index + 1) / 3f - 0.014f, 0.92f);
         var selected = index == 0;
         var captured = index;
-        var button = FirstLevelUiFactory.CreateButton(labels[index] + " Tab", _navigationRoot, string.Empty,
-          KeepBlinkingTheme.WithAlpha(selected ? KeepBlinkingTheme.AccentPrimary : KeepBlinkingTheme.SurfaceElevated, selected ? 0.38f : 0.42f));
+        var button = CreateWorkshopButton(labels[index] + " Tab", _navigationRoot, selected ? WorkshopWood : WorkshopOutline);
         var tab = button.targetGraphic as Image;
         FirstLevelUiFactory.SetRect((RectTransform)button.transform, min, max, new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
-        button.onClick.AddListener(() => NavigationSelected?.Invoke(captured));
+        ((RectTransform)button.transform).localRotation = Quaternion.Euler(0f, 0f, rotations[index]);
+        RegisterButtonBinding(button, () => NavigationSelected?.Invoke(captured));
         _navigationButtons.Add(button);
         _navigationTabs.Add(tab);
         var text = FirstLevelUiFactory.CreateText(labels[index] + " Label", tab.transform, labels[index], 16f, FontStyles.Bold, TextAlignmentOptions.Center,
-          selected ? KeepBlinkingTheme.TextPrimary : KeepBlinkingTheme.TextMuted);
+          selected ? WorkshopPaper : WorkshopPaperDim);
         FirstLevelUiFactory.Stretch(text.rectTransform, new Vector2(4f, 3f), new Vector2(-4f, -3f));
         text.raycastTarget = false;
         _navigationLabels.Add(text);
@@ -1668,117 +2448,172 @@ namespace KeepBlinking.CareStation
       for (var index = 0; index < _navigationTabs.Count; index++)
       {
         var selected = index == selectedIndex;
-        _navigationTabs[index].color = KeepBlinkingTheme.WithAlpha(
-          selected ? KeepBlinkingTheme.AccentPrimary : KeepBlinkingTheme.SurfaceElevated,
-          selected ? 0.38f : 0.42f);
+        _navigationTabs[index].color = selected ? WorkshopWood : WorkshopOutline;
         if (index < _navigationLabels.Count)
-          _navigationLabels[index].color = selected ? KeepBlinkingTheme.TextPrimary : KeepBlinkingTheme.TextMuted;
+          _navigationLabels[index].color = selected ? WorkshopPaper : WorkshopPaperDim;
       }
     }
 
     private void RefreshRoutineDock(CareRecipeSaveData recipe)
     {
       if (_routineDockTitle == null) return;
-      var training = recipe == null ? -1 : CareRecipeGenerator.TrainingIndex(recipe);
-      _routineDockTitle.text = recipe != null && recipe.recipeType == CareRecipeType.Training && training >= 0
-        ? $"TRAINING {training + 1} / 4"
-        : recipe != null ? "TODAY'S EYE CARE" : "CARE ROUTINE";
+      _routineDockTitle.text = recipe == null ? "TODAY'S EYE CARE" : RoutineTitle(recipe);
+      if (_routineHintText != null)
+      {
+        _routineHintText.gameObject.SetActive(true);
+        if (recipe == null || recipe.ActionCount <= 0)
+          _routineHintText.text = "READY FOR TODAY'S ROUTINE";
+        else if (recipe.recipeCompleted)
+          _routineHintText.text = "ROUTINE COMPLETE";
+        else
+        {
+          var visibleStep = Mathf.Clamp(recipe.currentActionIndex + 1, 1, recipe.ActionCount);
+          var action = ShortActionLabel(recipe.CurrentAction).Replace("\n", " ");
+          _routineHintText.text = $"STEP {visibleStep}/{recipe.ActionCount}  ·  {action}";
+        }
+      }
       for (var index = 0; index < _routineDockDots.Count; index++)
       {
-        var visible = recipe != null && index < recipe.ActionCount;
-        _routineDockDots[index].gameObject.SetActive(visible);
-        _routineDockLabels[index].gameObject.SetActive(visible);
-        if (!visible) continue;
-        var action = recipe.actionList[index];
-        _routineDockLabels[index].text = ShortActionLabel(action);
-        _routineDockDots[index].color = recipe.IsStepCompleted(index)
-          ? KeepBlinkingTheme.AccentPrimary
-          : index == recipe.currentActionIndex && !recipe.recipeCompleted
-            ? KeepBlinkingTheme.TextPrimary
-            : KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.TextPrimary, 0.2f);
+        _routineDockDots[index].gameObject.SetActive(false);
+        _routineDockLabels[index].gameObject.SetActive(false);
+      }
+    }
+
+    private static string RoutineTitle(CareRecipeSaveData recipe)
+    {
+      if (recipe == null) return "TODAY'S EYE CARE";
+      switch (recipe.routineId)
+      {
+        case CareRoutineId.FocusFlow: return "A · FOCUS FLOW";
+        case CareRoutineId.PilotFlow: return recipe.recipeType == CareRecipeType.Inspection
+          ? "STATION INSPECTION · PILOT FLOW"
+          : "B · PILOT FLOW";
+        case CareRoutineId.DeepReset: return "C · DEEP RESET";
+        case CareRoutineId.FullCare: return "D · FULL CARE";
+        default: return "TODAY'S EYE CARE";
       }
     }
 
     private void SetRoutinePrimary(string text)
     {
-      if (_routinePrimaryText != null) _routinePrimaryText.text = text ?? string.Empty;
+      var value = text ?? string.Empty;
+      if (_routinePrimaryText != null) _routinePrimaryText.text = value;
+      if (_routinePrimaryButton == null) return;
+      var canStartCare = string.Equals(value, "START CARE", StringComparison.Ordinal);
+      _routinePrimaryButton.interactable = canStartCare;
+      if (_routinePrimaryButton.targetGraphic != null)
+        _routinePrimaryButton.targetGraphic.raycastTarget = canStartCare;
+    }
+
+    private void RegisterButtonBinding(Button button, UnityAction action)
+    {
+      if (button == null || action == null) return;
+      if (_ownedButtonBindings.TryGetValue(button, out var previous) && previous != null)
+        button.onClick.RemoveListener(previous);
+      _ownedButtonBindings[button] = action;
+    }
+
+    private void BindInputHandlers()
+    {
+      foreach (var pair in _ownedButtonBindings)
+      {
+        if (pair.Key == null || pair.Value == null) continue;
+        pair.Key.onClick.RemoveListener(pair.Value);
+        pair.Key.onClick.AddListener(pair.Value);
+      }
+      if (_routinePrimaryText != null) SetRoutinePrimary(_routinePrimaryText.text);
     }
 
     private void SetProductionAnimation(bool active)
     {
-      if (_productionAnimating == active) return;
       _productionAnimating = active;
-      _productionAnimationStartedAt = Time.unscaledTime;
-      if (_filterArt != null)
-        _filterArt.SetProductionVisual(
-          active && !_storageFull ? FilterProductionVisualState.Filtering : FilterProductionVisualState.Idle,
-          0f);
+      if (_routinePrimaryButton != null) _routinePrimaryButton.interactable = !active;
       if (!active)
       {
+        _renderedProductionStage = CareProductionStage.None;
         if (_productionBottle != null) _productionBottle.gameObject.SetActive(false);
         if (_cart != null) _cart.anchoredPosition = _productionCartHome;
-        if (_tankLevel != null) _tankLevel.rectTransform.localScale = Vector3.one;
-        if (_pressLayers.Count > 0)
-          _pressLayers[0].rectTransform.anchoredPosition = new Vector2(0f, -23f);
+        if (_fillerLevel != null) _fillerLevel.rectTransform.localScale = Vector3.one;
+        if (_baseInputPipe != null) _baseInputPipe.color = KeepBlinkingTheme.WithAlpha(WorkshopPaperDim, 0.34f);
+        SetRouteColor(_liquidTransportSegments, false, WorkshopMetalLight);
+        SetRouteColor(_manualCarryMarkers, false, WorkshopPaperDim);
+        SetRouteColor(_conveyorSegments, false, WorkshopMetal);
+        if (_storageToCartRoute != null)
+          _storageToCartRoute.color = KeepBlinkingTheme.WithAlpha(WorkshopPaperDim, 0.3f);
+        if (_filterArt != null)
+        {
+          _filterArt.SetIntegratedBottleVisible(false);
+          _filterArt.SetProductionVisual(FilterProductionVisualState.Idle, 0f);
+        }
       }
     }
 
     private void UpdateProductionAnimation()
     {
-      if (_productionBottle == null || !_productionAnimating || _storageFull)
-      {
-        if (_productionBottle != null) _productionBottle.gameObject.SetActive(false);
-        if (_filterArt != null)
-          _filterArt.SetProductionVisual(FilterProductionVisualState.Idle, 0f);
-        return;
-      }
+      // Production v22 is rendered only from the persisted stage supplied by
+      // ShowProductionStage. There is no independent visual-only bottle loop.
+      if (_productionAnimating || _productionBottle == null) return;
+      _productionBottle.gameObject.SetActive(false);
+    }
 
-      // A representative 10 second bottle route followed by an 8 second quiet
-      // interval. It is deliberately visual-only: authoritative production is
-      // settled by CareStationProductionController and the save service.
-      var cycle = Mathf.Repeat(Time.unscaledTime - _productionAnimationStartedAt, 18f);
-      if (cycle >= 10f)
-      {
-        _productionBottle.gameObject.SetActive(false);
-        if (_cart != null) _cart.anchoredPosition = _productionCartHome;
-        if (_filterArt != null)
-          _filterArt.SetProductionVisual(FilterProductionVisualState.Idle, 0f);
-        return;
-      }
+    private void ApplyTransportModeVisuals(CareProductionTransportMode mode)
+    {
+      _transportMode = mode;
+      var manual = mode == CareProductionTransportMode.ManualCarry;
+      if (_manualCarryRoot != null) _manualCarryRoot.gameObject.SetActive(manual);
+      if (_manualFilterHoseRoot != null) _manualFilterHoseRoot.gameObject.SetActive(manual);
+      if (_basicConveyorRoot != null) _basicConveyorRoot.gameObject.SetActive(!manual);
+      if (_fixedFilterPipeRoot != null) _fixedFilterPipeRoot.gameObject.SetActive(!manual);
+    }
 
-      _productionBottle.gameObject.SetActive(true);
-      var route = Mathf.Clamp(cycle / 9f, 0f, 0.9999f) * (_productionRoute.Length - 1);
-      var segment = Mathf.Clamp(Mathf.FloorToInt(route), 0, _productionRoute.Length - 2);
-      var local = Mathf.SmoothStep(0f, 1f, route - segment);
-      if (_filterArt != null)
+    private void SetProductionBottleFill(float fill, bool visible)
+    {
+      fill = Mathf.Clamp01(fill);
+      if (_productionBottleLiquidMask != null)
+        _productionBottleLiquidMask.sizeDelta = new Vector2(34f, 50f * fill);
+      if (_productionBottleLiquid != null)
+        _productionBottleLiquid.gameObject.SetActive(visible && fill > 0.001f);
+      if (_productionBottleLiquidSurface != null)
       {
-        if (segment == 0)
-          _filterArt.SetProductionVisual(FilterProductionVisualState.Filtering, local);
-        else if (segment == 1 && local <= 0.38f)
-          _filterArt.SetProductionVisual(FilterProductionVisualState.BottleComplete, 1f);
-        else
-          _filterArt.SetProductionVisual(FilterProductionVisualState.Idle, 0f);
+        _productionBottleLiquidSurface.gameObject.SetActive(visible && fill > 0.001f);
+        var anchor = new Vector2(0.5f, 0.08f + 0.60f * fill);
+        _productionBottleLiquidSurface.rectTransform.anchorMin = anchor;
+        _productionBottleLiquidSurface.rectTransform.anchorMax = anchor;
+        _productionBottleLiquidSurface.rectTransform.anchoredPosition = Vector2.zero;
       }
-      var anchor = Vector2.Lerp(_productionRoute[segment], _productionRoute[segment + 1], local);
-      _productionBottle.anchorMin = anchor;
-      _productionBottle.anchorMax = anchor;
-      _productionBottle.anchoredPosition = Vector2.zero;
+    }
 
-      if (_tankLevel != null)
+    private static Vector2 EvaluatePolyline(Vector2[] points, float progress)
+    {
+      if (points == null || points.Length == 0) return Vector2.zero;
+      if (points.Length == 1) return points[0];
+      progress = Mathf.Clamp01(progress);
+      var lengths = new float[points.Length - 1];
+      var total = 0f;
+      for (var index = 0; index < lengths.Length; index++)
       {
-        var tankFill = segment == 1 ? local : segment > 1 ? 1f : 0.24f;
-        _tankLevel.rectTransform.localScale = new Vector3(1f, Mathf.Lerp(0.24f, 1f, tankFill), 1f);
+        lengths[index] = Vector2.Distance(points[index], points[index + 1]);
+        total += lengths[index];
       }
-      if (_pressLayers.Count > 0)
+      if (total <= 0.0001f) return points[points.Length - 1];
+      var distance = total * progress;
+      for (var index = 0; index < lengths.Length; index++)
       {
-        var press = segment == 2 ? Mathf.Sin(local * Mathf.PI) : 0f;
-        _pressLayers[0].rectTransform.anchoredPosition = new Vector2(0f, -23f - press * 13f);
+        if (distance <= lengths[index] || index == lengths.Length - 1)
+          return Vector2.Lerp(points[index], points[index + 1], lengths[index] <= 0f ? 1f : distance / lengths[index]);
+        distance -= lengths[index];
       }
-      if (_cart != null)
-      {
-        var transport = segment >= 3 ? Mathf.Clamp01((cycle - 6f) / 3f) : 0f;
-        _cart.anchoredPosition = _productionCartHome + new Vector2(Mathf.Lerp(0f, -120f, transport), 0f);
-      }
+      return points[points.Length - 1];
+    }
+
+    private static void SetRouteColor(List<Image> route, bool active, Color idle)
+    {
+      if (route == null) return;
+      var color = active
+        ? KeepBlinkingTheme.WithAlpha(WorkshopMint, 0.94f)
+        : KeepBlinkingTheme.WithAlpha(idle, 0.34f);
+      for (var index = 0; index < route.Count; index++)
+        if (route[index] != null) route[index].color = color;
     }
 
     private static string ShortActionLabel(CareActionType action)
@@ -1793,6 +2628,102 @@ namespace KeepBlinking.CareStation
       }
     }
 
+    private static string ProductionStageText(CareProductionStage stage)
+    {
+      switch (stage)
+      {
+        case CareProductionStage.FilterProcessing: return "FILTERING";
+        case CareProductionStage.TransferFilteredLiquid: return "TRANSFERRING";
+        case CareProductionStage.FillerCreateBottle:
+        case CareProductionStage.FillerFilling:
+        case CareProductionStage.FillerFilled: return "FILLING";
+        case CareProductionStage.TransferToPacker: return "TRANSFERRING";
+        case CareProductionStage.PackerCapping: return "CAPPING";
+        case CareProductionStage.PackerLabeling: return "LABELING";
+        case CareProductionStage.PackerPackaging: return "PACKAGING";
+        case CareProductionStage.TransferToStorage: return "TRANSFERRING";
+        case CareProductionStage.WaitingForStorage: return "WAITING FOR STORAGE";
+        default: return "READY";
+      }
+    }
+
+    private void ApplyProductionStageStatus(CareProductionStage stage)
+    {
+      switch (stage)
+      {
+        case CareProductionStage.FilterProcessing:
+          SetFactoryStatus(string.Empty, "FILTERING");
+          break;
+        case CareProductionStage.TransferFilteredLiquid:
+          SetFactoryStatus(string.Empty, "TRANSFERRING");
+          break;
+        case CareProductionStage.FillerCreateBottle:
+          SetFactoryStatus(string.Empty, "IDLE", "EMPTY BOTTLE");
+          break;
+        case CareProductionStage.FillerFilling:
+        case CareProductionStage.FillerFilled:
+          SetFactoryStatus(string.Empty, "IDLE", "FILLING");
+          break;
+        case CareProductionStage.TransferToPacker:
+          SetFactoryStatus(string.Empty, "IDLE", "TRANSFERRING");
+          break;
+        case CareProductionStage.PackerCapping:
+          SetFactoryStatus(string.Empty, "IDLE", "IDLE", "CAPPING");
+          break;
+        case CareProductionStage.PackerLabeling:
+          SetFactoryStatus(string.Empty, "IDLE", "IDLE", "LABELING");
+          break;
+        case CareProductionStage.PackerPackaging:
+          SetFactoryStatus(string.Empty, "IDLE", "IDLE", "PACKAGING");
+          break;
+        case CareProductionStage.TransferToStorage:
+          SetFactoryStatus(string.Empty, "IDLE", "IDLE", "TRANSFERRING");
+          break;
+        case CareProductionStage.WaitingForStorage:
+          SetFactoryStatus(string.Empty, "IDLE", "IDLE", "IDLE", "WAITING FOR STORAGE\nSTORAGE FULL");
+          break;
+        default:
+          SetFactoryStatus(string.Empty);
+          break;
+      }
+    }
+
+    private void SetFactoryStatus(
+      string global,
+      string filter = "IDLE",
+      string filler = "IDLE",
+      string packer = "IDLE",
+      string storage = "READY",
+      string cart = "READY")
+    {
+      if (_statusText != null) _statusText.text = global ?? string.Empty;
+      SetFactoryStatusLabel(_filterStatusText, filter);
+      SetFactoryStatusLabel(_fillerStatusText, filler);
+      SetFactoryStatusLabel(_packerStatusText, packer);
+      SetFactoryStatusLabel(_storageStatusText, storage);
+      SetFactoryStatusLabel(_cartStatusText, cart);
+    }
+
+    private static void SetFactoryStatusLabel(TextMeshProUGUI label, string value)
+    {
+      if (label == null) return;
+      label.text = value ?? string.Empty;
+      var waiting = value != null &&
+                    (value.IndexOf("FULL", StringComparison.Ordinal) >= 0 ||
+                     value.IndexOf("WAIT", StringComparison.Ordinal) >= 0);
+      var inactive = string.Equals(value, "IDLE", StringComparison.Ordinal) ||
+                     string.Equals(value, "READY", StringComparison.Ordinal) ||
+                     string.IsNullOrWhiteSpace(value);
+      var visualRoot = label.transform.parent != null &&
+                       label.transform.parent.name.IndexOf("Status Tag", StringComparison.Ordinal) >= 0
+        ? label.transform.parent.gameObject
+        : label.gameObject;
+      visualRoot.SetActive(!inactive);
+      label.color = waiting
+        ? WorkshopPaper
+        : inactive ? WorkshopPaperDim : WorkshopMint;
+    }
+
     private void BuildIncident()
     {
       _incidentRoot = FirstLevelUiFactory.CreateObject("Station Incident", _stationStage).GetComponent<RectTransform>();
@@ -1805,11 +2736,11 @@ namespace KeepBlinking.CareStation
       var dustOffsets = new[] { new Vector2(-112f, 42f), new Vector2(105f, 32f), new Vector2(0f, -74f) };
       for (var i = 0; i < dustOffsets.Length; i++)
       {
-        var dust = FirstLevelUiFactory.CreateImage("Dust Group", _incidentRoot, KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.TextPrimary, 0.42f), FirstLevelUiFactory.CircleSprite);
+        var dust = FirstLevelUiFactory.CreateImage("Legacy Particle Group", _incidentRoot, KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.TextPrimary, 0.42f), FirstLevelUiFactory.CircleSprite);
         FirstLevelUiFactory.SetRect(dust.rectTransform, new Vector2(0.5f, 0.58f), new Vector2(0.5f, 0.58f), new Vector2(0.5f, 0.5f), dustOffsets[i], new Vector2(42f + i * 8f, 42f + i * 8f));
         _dustGroups.Add(dust);
       }
-      for (var i = 0; i < 3; i++)
+      for (var i = 0; i < 4; i++)
       {
         var crack = FirstLevelUiFactory.CreateImage("Dry Crack", _incidentRoot, KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.AccentWarm, 0.72f), FirstLevelUiFactory.RoundedSprite);
         FirstLevelUiFactory.SetRect(crack.rectTransform, new Vector2(0.5f, 0.58f), new Vector2(0.5f, 0.58f), new Vector2(0.5f, 0.5f), new Vector2((i - 1) * 28f, (i % 2 == 0 ? 1f : -1f) * 10f), new Vector2(7f, 108f));
@@ -1817,7 +2748,7 @@ namespace KeepBlinking.CareStation
         crack.gameObject.SetActive(false);
         _dryCracks.Add(crack);
       }
-      _incidentLabel = FirstLevelUiFactory.CreateText("Incident Label", _incidentRoot, "DUST", 25f, FontStyles.Bold, TextAlignmentOptions.Center, KeepBlinkingTheme.TextPrimary);
+      _incidentLabel = FirstLevelUiFactory.CreateText("Legacy Care Label", _incidentRoot, "CARE", 25f, FontStyles.Bold, TextAlignmentOptions.Center, KeepBlinkingTheme.TextPrimary);
       FirstLevelUiFactory.SetRect(_incidentLabel.rectTransform, new Vector2(0.15f, 0f), new Vector2(0.85f, 0.2f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
     }
 
@@ -1832,10 +2763,10 @@ namespace KeepBlinking.CareStation
       FirstLevelUiFactory.SetRect(_recipeTitle.rectTransform, new Vector2(0.05f, 0.9f), new Vector2(0.95f, 0.97f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
       _recipeStepText = FirstLevelUiFactory.CreateText("Recipe Step", _actionRoot, "STEP 1 / 1", 18f, FontStyles.Bold, TextAlignmentOptions.Center, KeepBlinkingTheme.TextSecondary);
       FirstLevelUiFactory.SetRect(_recipeStepText.rectTransform, new Vector2(0.25f, 0.84f), new Vector2(0.75f, 0.9f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
-      for (var i = 0; i < 3; i++)
+      for (var i = 0; i < 4; i++)
       {
         var dot = FirstLevelUiFactory.CreateImage("Recipe Step Dot", _actionRoot, KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.TextPrimary, 0.2f), FirstLevelUiFactory.CircleSprite);
-        FirstLevelUiFactory.SetRect(dot.rectTransform, new Vector2(0.5f, 0.815f), new Vector2(0.5f, 0.815f), new Vector2(0.5f, 0.5f), new Vector2((i - 1) * 34f, 0f), new Vector2(14f, 14f));
+        FirstLevelUiFactory.SetRect(dot.rectTransform, new Vector2(0.5f, 0.815f), new Vector2(0.5f, 0.815f), new Vector2(0.5f, 0.5f), new Vector2((i - 1.5f) * 34f, 0f), new Vector2(14f, 14f));
         _recipeStepDots.Add(dot);
       }
       _actionVisualRing = FirstLevelUiFactory.CreateImage("Action Ring", _actionRoot, KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.BorderReadable, 0.35f), FirstLevelUiFactory.RingSprite);
@@ -1947,14 +2878,14 @@ namespace KeepBlinking.CareStation
       _actionPurpose.raycastTarget = false;
       _fallbackButton = FirstLevelUiFactory.CreateButton("Collect Fallback", _actionRoot, "COLLECT", KeepBlinkingTheme.AccentPrimary);
       FirstLevelUiFactory.SetRect((RectTransform)_fallbackButton.transform, new Vector2(0.5f, 0.08f), new Vector2(0.5f, 0.08f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(300f, 92f));
-      _fallbackButton.onClick.AddListener(() => FallbackCollectSelected?.Invoke());
+      RegisterButtonBinding(_fallbackButton, () => FallbackCollectSelected?.Invoke());
       _returnFallbackButton = FirstLevelUiFactory.CreateButton("Return Fallback", _actionRoot, "CONTINUE", KeepBlinkingTheme.AccentPrimary);
       FirstLevelUiFactory.SetRect((RectTransform)_returnFallbackButton.transform, new Vector2(0.5f, 0.08f), new Vector2(0.5f, 0.08f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(300f, 92f));
-      _returnFallbackButton.onClick.AddListener(() => ReturnFallbackSelected?.Invoke());
+      RegisterButtonBinding(_returnFallbackButton, () => ReturnFallbackSelected?.Invoke());
       _returnFallbackButton.gameObject.SetActive(false);
       _changeStepButton = FirstLevelUiFactory.CreateButton("Change Care Step", _actionRoot, "CHANGE STEP", KeepBlinkingTheme.SurfaceElevated);
       FirstLevelUiFactory.SetRect((RectTransform)_changeStepButton.transform, new Vector2(0.18f, 0.055f), new Vector2(0.18f, 0.055f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(190f, 70f));
-      _changeStepButton.onClick.AddListener(() => ChangeStepSelected?.Invoke());
+      RegisterButtonBinding(_changeStepButton, () => ChangeStepSelected?.Invoke());
       _changeStepButton.gameObject.SetActive(false);
     }
 
@@ -1980,11 +2911,11 @@ namespace KeepBlinking.CareStation
       FirstLevelUiFactory.SetRect(prompt.rectTransform, new Vector2(0.08f, 0.48f), new Vector2(0.92f, 0.9f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
       var use = FirstLevelUiFactory.CreateButton("Use Rest", _changeStepConfirmRoot, "USE REST", KeepBlinkingTheme.AccentPrimary);
       FirstLevelUiFactory.SetRect((RectTransform)use.transform, new Vector2(0.08f, 0.13f), new Vector2(0.47f, 0.36f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
-      use.onClick.AddListener(() => UseRestSelected?.Invoke());
+      RegisterButtonBinding(use, () => UseRestSelected?.Invoke());
       var keep = FirstLevelUiFactory.CreateButton("Keep Step", _changeStepConfirmRoot, "KEEP STEP", KeepBlinkingTheme.SurfaceElevated);
       FirstLevelUiFactory.SetRect((RectTransform)keep.transform, new Vector2(0.53f, 0.13f), new Vector2(0.92f, 0.36f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
-      keep.onClick.AddListener(() => KeepStepSelected?.Invoke());
-      _changeStepConfirmRoot.gameObject.SetActive(false);
+      RegisterButtonBinding(keep, () => KeepStepSelected?.Invoke());
+      SetPanelVisible(_changeStepConfirmRoot, false);
     }
 
     private void BuildUpgrade()
@@ -2000,7 +2931,7 @@ namespace KeepBlinking.CareStation
       CreateUpgradeCard(CareStationUpgradeId.BiggerCart, 0.28f);
       var back = FirstLevelUiFactory.CreateButton("Back To Station", _upgradeRoot, "BACK TO STATION", KeepBlinkingTheme.SurfaceElevated);
       FirstLevelUiFactory.SetRect((RectTransform)back.transform, new Vector2(0.22f, 0.105f), new Vector2(0.78f, 0.195f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
-      back.onClick.AddListener(() => UpgradeBackSelected?.Invoke());
+      RegisterButtonBinding(back, () => UpgradeBackSelected?.Invoke());
     }
 
     private void BuildToast()
@@ -2025,7 +2956,7 @@ namespace KeepBlinking.CareStation
       FirstLevelUiFactory.SetRect((RectTransform)button.transform, new Vector2(0.08f, y), new Vector2(0.92f, y + 0.14f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
       var cardText = FirstLevelUiFactory.CreateText("Card Text", button.transform, string.Empty, 22f, FontStyles.Bold, TextAlignmentOptions.MidlineLeft, KeepBlinkingTheme.TextPrimary, true);
       FirstLevelUiFactory.SetRect(cardText.rectTransform, new Vector2(0.055f, 0.08f), new Vector2(0.95f, 0.92f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
-      button.onClick.AddListener(() => UpgradeSelected?.Invoke(id));
+      RegisterButtonBinding(button, () => UpgradeSelected?.Invoke(id));
       _upgradeButtons[id] = button;
       _upgradeCardTexts[id] = cardText;
     }
@@ -2052,17 +2983,17 @@ namespace KeepBlinking.CareStation
         var captured = index;
         var minus = FirstLevelUiFactory.CreateButton("Decrease Score", panel.transform, "-", KeepBlinkingTheme.SurfaceElevated);
         FirstLevelUiFactory.SetRect((RectTransform)minus.transform, new Vector2(0.55f, rowY - 0.02f), new Vector2(0.66f, rowY + 0.075f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
-        minus.onClick.AddListener(() => AdjustSurveyScore(captured, -1));
+        RegisterButtonBinding(minus, () => AdjustSurveyScore(captured, -1));
         var value = FirstLevelUiFactory.CreateText("Score Value", panel.transform, "--", 32f, FontStyles.Bold, TextAlignmentOptions.Center, KeepBlinkingTheme.AccentPrimary);
         FirstLevelUiFactory.SetRect(value.rectTransform, new Vector2(0.67f, rowY - 0.02f), new Vector2(0.79f, rowY + 0.075f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
         _surveyValues.Add(value);
         var plus = FirstLevelUiFactory.CreateButton("Increase Score", panel.transform, "+", KeepBlinkingTheme.SurfaceElevated);
         FirstLevelUiFactory.SetRect((RectTransform)plus.transform, new Vector2(0.80f, rowY - 0.02f), new Vector2(0.91f, rowY + 0.075f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
-        plus.onClick.AddListener(() => AdjustSurveyScore(captured, 1));
+        RegisterButtonBinding(plus, () => AdjustSurveyScore(captured, 1));
       }
       _surveyContinueButton = FirstLevelUiFactory.CreateButton("Continue Care Check", panel.transform, "CONTINUE", KeepBlinkingTheme.AccentPrimary);
       FirstLevelUiFactory.SetRect((RectTransform)_surveyContinueButton.transform, new Vector2(0.12f, 0.055f), new Vector2(0.60f, 0.16f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
-      _surveyContinueButton.onClick.AddListener(() =>
+      RegisterButtonBinding(_surveyContinueButton, () =>
       {
         if (!_surveyDraft.HasAllResponses) return;
         var submitted = _surveyDraft.Clone();
@@ -2072,8 +3003,8 @@ namespace KeepBlinking.CareStation
       });
       var skip = FirstLevelUiFactory.CreateButton("Skip Care Check", panel.transform, "SKIP", KeepBlinkingTheme.SurfaceElevated);
       FirstLevelUiFactory.SetRect((RectTransform)skip.transform, new Vector2(0.64f, 0.055f), new Vector2(0.88f, 0.16f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
-      skip.onClick.AddListener(() => SubjectiveScoresSkipped?.Invoke(_surveyIsPost));
-      _surveyRoot.gameObject.SetActive(false);
+      RegisterButtonBinding(skip, () => SubjectiveScoresSkipped?.Invoke(_surveyIsPost));
+      SetPanelVisible(_surveyRoot, false);
     }
 
     private void BuildCareReport()
@@ -2094,8 +3025,8 @@ namespace KeepBlinking.CareStation
       }
       var done = FirstLevelUiFactory.CreateButton("Done", panel.transform, "DONE", KeepBlinkingTheme.AccentPrimary);
       FirstLevelUiFactory.SetRect((RectTransform)done.transform, new Vector2(0.22f, 0.035f), new Vector2(0.78f, 0.13f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
-      done.onClick.AddListener(() => CareReportDoneSelected?.Invoke());
-      _reportRoot.gameObject.SetActive(false);
+      RegisterButtonBinding(done, () => CareReportDoneSelected?.Invoke());
+      SetPanelVisible(_reportRoot, false);
     }
 
     private void AdjustSurveyScore(int index, int delta)
@@ -2133,34 +3064,38 @@ namespace KeepBlinking.CareStation
       FirstLevelUiFactory.Stretch(panel.rectTransform);
       _completeText = FirstLevelUiFactory.CreateText("Complete Text", _completeRoot, "SHIFT COMPLETE", 43f, FontStyles.Bold, TextAlignmentOptions.Center, KeepBlinkingTheme.TextPrimary, true);
       FirstLevelUiFactory.SetRect(_completeText.rectTransform, new Vector2(0.08f, 0.31f), new Vector2(0.92f, 0.92f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
-      for (var index = 0; index < 3; index++)
+      for (var index = 0; index < 4; index++)
       {
         var icon = FirstLevelUiFactory.CreateImage("Completed Care Step", _completeRoot, KeepBlinkingTheme.AccentPrimary, FirstLevelUiFactory.CircleSprite);
-        FirstLevelUiFactory.SetRect(icon.rectTransform, new Vector2(0.5f, 0.29f), new Vector2(0.5f, 0.29f), new Vector2(0.5f, 0.5f), new Vector2((index - 1) * 54f, 0f), new Vector2(24f, 24f));
+        FirstLevelUiFactory.SetRect(icon.rectTransform, new Vector2(0.5f, 0.29f), new Vector2(0.5f, 0.29f), new Vector2(0.5f, 0.5f), new Vector2((index - 1.5f) * 54f, 0f), new Vector2(24f, 24f));
         _completeStepIcons.Add(icon);
       }
       _endShiftButton = FirstLevelUiFactory.CreateButton("End Shift", _completeRoot, "END SHIFT", KeepBlinkingTheme.AccentPrimary);
       FirstLevelUiFactory.SetRect((RectTransform)_endShiftButton.transform, new Vector2(0.22f, 0.07f), new Vector2(0.78f, 0.22f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
-      _endShiftButton.onClick.AddListener(() => EndShiftSelected?.Invoke());
+      RegisterButtonBinding(_endShiftButton, () => EndShiftSelected?.Invoke());
     }
 
     private void BuildHud()
     {
       _hudRoot = FirstLevelUiFactory.CreateObject("Station HUD", _content).GetComponent<RectTransform>();
       FirstLevelUiFactory.Stretch(_hudRoot);
-      var top = FirstLevelUiFactory.CreateImage("Station Status Bar", _hudRoot, KeepBlinkingTheme.WithAlpha(KeepBlinkingTheme.SurfaceBase, 0.72f), FirstLevelUiFactory.RoundedSprite);
-      FirstLevelUiFactory.SetRect(top.rectTransform, new Vector2(0.03f, 0.89f), new Vector2(0.97f, 0.98f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
-      _stationText = FirstLevelUiFactory.CreateText("Station Number", top.transform, "STATION 1", 22f, FontStyles.Bold, TextAlignmentOptions.MidlineLeft, KeepBlinkingTheme.TextPrimary);
-      FirstLevelUiFactory.SetRect(_stationText.rectTransform, new Vector2(0.035f, 0.08f), new Vector2(0.28f, 0.92f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
-      CreateBottleCounter(top.transform, "Full Bottle Counter", new Vector2(0.31f, 0.1f), new Vector2(0.52f, 0.9f), KeepBlinkingTheme.AccentPrimary, out _fullBottleText);
-      CreateBottleCounter(top.transform, "Gold Bottle Counter", new Vector2(0.54f, 0.1f), new Vector2(0.75f, 0.9f), KeepBlinkingTheme.AccentWarm, out _goldBottleText);
-      _storageText = FirstLevelUiFactory.CreateText("Storage Capacity", top.transform, "0 / 24", 21f, FontStyles.Bold, TextAlignmentOptions.MidlineRight, KeepBlinkingTheme.TextSecondary);
-      FirstLevelUiFactory.SetRect(_storageText.rectTransform, new Vector2(0.75f, 0.08f), new Vector2(0.96f, 0.92f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
+      var topOutline = FirstLevelUiFactory.CreateImage("Resource Bar Dark Wood Edge", _hudRoot, WorkshopOutline, FirstLevelUiFactory.RoundedSprite);
+      FirstLevelUiFactory.SetRect(topOutline.rectTransform, new Vector2(0.035f, 0.918f), new Vector2(0.965f, 0.987f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
+      topOutline.rectTransform.localRotation = Quaternion.Euler(0f, 0f, -0.18f);
+      var top = FirstLevelUiFactory.CreateImage("Compact Workshop Resource Bar", topOutline.transform, WorkshopWood, FirstLevelUiFactory.RoundedSprite);
+      FirstLevelUiFactory.Stretch(top.rectTransform, new Vector2(6f, 6f), new Vector2(-6f, -6f));
+      top.rectTransform.localRotation = Quaternion.Euler(0f, 0f, 0.22f);
+      _stationText = FirstLevelUiFactory.CreateText("Station Number Compatibility", top.transform, string.Empty, 1f, FontStyles.Bold, TextAlignmentOptions.Center, Color.clear);
+      _stationText.gameObject.SetActive(false);
+      CreateHudResourceCard(top.transform, "Coins Counter", "COINS", new Vector2(0.015f, 0.08f), new Vector2(0.325f, 0.92f), WorkshopPaper, out _fullBottleText);
+      CreateHudResourceCard(top.transform, "Care Energy Counter", "CARE ENERGY", new Vector2(0.335f, 0.08f), new Vector2(0.665f, 0.92f), WorkshopMint, out _goldBottleText);
+      CreateHudResourceCard(top.transform, "Storage Capacity", "STORAGE", new Vector2(0.675f, 0.08f), new Vector2(0.985f, 0.92f), WorkshopMetalLight, out _storageText);
 
       _xpReady = FirstLevelUiFactory.CreateText("Bottles Ready Compatibility", _hudRoot, string.Empty, 20f, FontStyles.Bold, TextAlignmentOptions.Center, KeepBlinkingTheme.AccentWarm);
       FirstLevelUiFactory.SetRect(_xpReady.rectTransform, new Vector2(0.3f, 0.205f), new Vector2(0.7f, 0.235f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
-      _statusText = FirstLevelUiFactory.CreateText("Primary Station Prompt", _hudRoot, string.Empty, 25f, FontStyles.Bold, TextAlignmentOptions.Center, KeepBlinkingTheme.TextSecondary, false);
-      FirstLevelUiFactory.SetRect(_statusText.rectTransform, new Vector2(0.1f, 0.205f), new Vector2(0.9f, 0.245f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
+      _statusText = FirstLevelUiFactory.CreateText("Primary Station Prompt", _hudRoot, string.Empty, 20f, FontStyles.Bold, TextAlignmentOptions.Center, WorkshopPaper, false);
+      FirstLevelUiFactory.SetRect(_statusText.rectTransform, new Vector2(0.18f, 0.892f), new Vector2(0.82f, 0.917f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
+      _statusText.gameObject.SetActive(false);
     }
 
     private void BuildDistanceSafetyWarning()
@@ -2182,14 +3117,25 @@ namespace KeepBlinking.CareStation
       _distanceSafetyRoot.gameObject.SetActive(false);
     }
 
-    private static void CreateBottleCounter(Transform parent, string name, Vector2 min, Vector2 max, Color color, out TextMeshProUGUI value)
+    private static void CreateHudResourceCard(
+      Transform parent,
+      string name,
+      string label,
+      Vector2 min,
+      Vector2 max,
+      Color accent,
+      out TextMeshProUGUI value)
     {
-      var icon = FirstLevelUiFactory.CreateImage(name + " Icon", parent, color, FirstLevelUiFactory.RoundedSprite);
-      FirstLevelUiFactory.SetRect(icon.rectTransform, new Vector2(min.x, 0.5f), new Vector2(min.x, 0.5f), new Vector2(0f, 0.5f), new Vector2(6f, -3f), new Vector2(22f, 31f));
-      var neck = FirstLevelUiFactory.CreateImage(name + " Neck", icon.transform, color, FirstLevelUiFactory.RoundedSprite);
-      FirstLevelUiFactory.SetRect(neck.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 0f), new Vector2(0f, -1f), new Vector2(11f, 8f));
-      value = FirstLevelUiFactory.CreateText(name + " Value", parent, "0", 22f, FontStyles.Bold, TextAlignmentOptions.MidlineLeft, KeepBlinkingTheme.TextPrimary);
-      FirstLevelUiFactory.SetRect(value.rectTransform, new Vector2(min.x + 0.045f, min.y), max, new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
+      var root = FirstLevelUiFactory.CreateObject(name, parent).GetComponent<RectTransform>();
+      FirstLevelUiFactory.SetRect(root, min, max, new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
+      var icon = FirstLevelUiFactory.CreateImage(name + " Hand Drawn Token", root, WorkshopOutline, FirstLevelUiFactory.CircleSprite);
+      FirstLevelUiFactory.SetRect(icon.rectTransform, new Vector2(0.17f, 0.5f), new Vector2(0.17f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(42f, 42f));
+      var iconInner = FirstLevelUiFactory.CreateImage(name + " Token Face", icon.transform, accent, FirstLevelUiFactory.CircleSprite);
+      FirstLevelUiFactory.SetRect(iconInner.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(28f, 28f));
+      var labelText = FirstLevelUiFactory.CreateText(name + " Label", root, label, 12f, FontStyles.Bold, TextAlignmentOptions.MidlineLeft, WorkshopPaperDim);
+      FirstLevelUiFactory.SetRect(labelText.rectTransform, new Vector2(0.33f, 0.5f), new Vector2(0.98f, 0.92f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
+      value = FirstLevelUiFactory.CreateText(name + " Value", root, "0", 20f, FontStyles.Bold, TextAlignmentOptions.MidlineLeft, accent);
+      FirstLevelUiFactory.SetRect(value.rectTransform, new Vector2(0.33f, 0.04f), new Vector2(0.98f, 0.56f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
     }
 
     private void RefreshResourceHud()
@@ -2201,8 +3147,8 @@ namespace KeepBlinking.CareStation
       if (_filterArt != null && (_storageFull || !_productionAnimating))
         _filterArt.SetProductionVisual(FilterProductionVisualState.Idle, 0f);
       _stationText.text = $"STATION {(_stationSave == null ? 1 : Mathf.Max(1, _stationSave.stationLevel))}";
-      _fullBottleText.text = (_stationSave == null ? 0 : Mathf.Max(0, _stationSave.storedFullBottles)).ToString();
-      _goldBottleText.text = (_stationSave == null ? 0 : Mathf.Max(0, _stationSave.storedGoldBottles)).ToString();
+      _fullBottleText.text = (_stationSave == null ? 0 : Mathf.Max(0, _stationSave.coins)).ToString();
+      _goldBottleText.text = (_stationSave == null ? 0 : Mathf.Max(0, _stationSave.careEnergy)).ToString();
       _storageText.text = $"{Mathf.Min(stored, capacity)} / {capacity}";
       if (_storageFill != null)
       {
@@ -2210,13 +3156,15 @@ namespace KeepBlinking.CareStation
         _storageFill.fillAmount = fill;
         _storageFill.color = fill >= 0.85f ? KeepBlinkingTheme.AccentWarm : KeepBlinkingTheme.AccentPrimary;
       }
+      if (_storageStatusText != null && !_productionAnimating)
+        SetFactoryStatusLabel(_storageStatusText, _storageFull ? "STORAGE FULL" : "READY");
     }
 
     private static Vector3 CartScale(int capacity)
     {
-      if (capacity >= 12) return new Vector3(1.48f, 1.32f, 1f);
-      if (capacity >= 8) return new Vector3(1.32f, 1.22f, 1f);
-      if (capacity >= 6) return new Vector3(1.14f, 1.10f, 1f);
+      if (capacity >= 12) return new Vector3(1.12f, 1.08f, 1f);
+      if (capacity >= 8) return new Vector3(1.08f, 1.06f, 1f);
+      if (capacity >= 6) return new Vector3(1.04f, 1.03f, 1f);
       return Vector3.one;
     }
 

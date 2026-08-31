@@ -1,13 +1,10 @@
 using System;
+using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
 
 namespace KeepBlinking.CareStation
 {
-  /// <summary>
-  /// Presentation-only FILTER state. It deliberately carries no inventory or
-  /// production authority; the station view supplies state and progress.
-  /// </summary>
   public enum FilterProductionVisualState
   {
     Idle = 0,
@@ -16,8 +13,8 @@ namespace KeepBlinking.CareStation
   }
 
   /// <summary>
-  /// Presentation-only controller for the authored FILTER sprite layers.
-  /// It never changes production, inventory, upgrades, or save data.
+  /// Presentation-only FILTER art. It never changes production, inventory,
+  /// upgrades, settlement, recipes, or save data.
   /// </summary>
   public sealed class CareStationFilterArtView : MonoBehaviour
   {
@@ -27,6 +24,8 @@ namespace KeepBlinking.CareStation
       public RectTransform root;
       public RectTransform contentRoot;
       public CanvasGroup group;
+
+      // Shared/legacy fields retained for Level 2/3 and existing diagnostics.
       public Image baseImage;
       public Image flowImage;
       public Image crankImage;
@@ -44,7 +43,35 @@ namespace KeepBlinking.CareStation
       public Vector2 gaugePivot;
       public Vector2 displayScale = Vector2.one;
       public Rect normalizedHitBounds = new Rect(0f, 0f, 1f, 1f);
+
+      // Approved Level 1 hierarchy. MachineRoot and BottleFillAnchor are
+      // siblings so a completed BottleRoot can later be reparented by Worker.
+      public RectTransform machineRoot;
+      public Image machineBaseImage;
+      public RectMask2D rawLiquidMask;
+      public Image rawLiquidBodyImage;
+      public Image rawLiquidSurfaceImage;
+      public Image filterBedImage;
+      public Image filterDripImage;
+      public Image outletFlowImage;
+      public RectTransform bottleFillAnchor;
+      public RectTransform bottleRoot;
+      public RectTransform bottlePickupAnchor;
+      public RectMask2D bottleLiquidMask;
+      public Image bottleGlassImage;
+      public Image bottleLiquidBodyImage;
+      public Image bottleLiquidSurfaceImage;
+      public Sprite[] filterDripFrames = Array.Empty<Sprite>();
+      public Sprite[] outletFlowFrames = Array.Empty<Sprite>();
+      public float rawLiquidMaxHeight;
+      public float bottleLiquidMaxHeight;
     }
+
+    private const float RawLiquidBottom = 0.558f;
+    private const float BottleLiquidBottom = 0.115f;
+    private const float DripOnlyProgress = 0.14f;
+    private const float FlowTaperProgress = 0.86f;
+    private const float LastDropSeconds = 0.62f;
 
     [SerializeField] private LevelVisual[] _levels = Array.Empty<LevelVisual>();
     [SerializeField, Range(6f, 8f)] private float _flowFramesPerSecond = 7f;
@@ -60,6 +87,8 @@ namespace KeepBlinking.CareStation
     private FilterProductionVisualState _productionVisualState = FilterProductionVisualState.Idle;
     private float _productionVisualProgress;
     private float _productionStateEnteredAt;
+    private int _productionStateVersion;
+    private bool _integratedBottleVisible = true;
 
     public int Level => _level;
     public bool Running => _running;
@@ -85,56 +114,125 @@ namespace KeepBlinking.CareStation
       for (var i = 0; i < catalog.Levels.Length; i++)
       {
         var source = catalog.Levels[i];
-        var levelRoot = CreateRect($"Filter L{source.level}");
-        levelRoot.SetParent(root, false);
-        Stretch(levelRoot);
-        var group = levelRoot.gameObject.AddComponent<CanvasGroup>();
-        var contentRoot = CreateRect("Artwork");
-        contentRoot.SetParent(levelRoot, false);
-        Stretch(contentRoot);
-        // Authored equipment shares a bottom-center pivot. Runtime artwork is
-        // sized by its RectTransform; keeping this transform at unit scale
-        // avoids a second, fractional resampling pass through the Canvas.
-        contentRoot.pivot = new Vector2(0.5f, 0f);
-        var displayScale = SanitizeDisplayScale(source.displayScale);
-        contentRoot.localScale = Vector3.one;
-        var visual = new LevelVisual
-        {
-          root = levelRoot,
-          contentRoot = contentRoot,
-          group = group,
-          rawLiquidImage = AddOptionalFullCanvasLayer("Raw Liquid", contentRoot, source.rawLiquidSprite),
-          rawParticlesImage = AddOptionalFullCanvasLayer("Raw Particles", contentRoot, source.rawParticlesSprite),
-          bottleFillImage = AddOptionalFullCanvasLayer("Bottle Fill", contentRoot, source.bottleFillSprite),
-          baseImage = AddFullCanvasLayer("Base", contentRoot, source.baseSprite),
-          filterCartridgeImage = AddOptionalFullCanvasLayer("Filter Cartridge", contentRoot, source.filterCartridgeSprite),
-          funnelAndPipeImage = AddOptionalFullCanvasLayer("Funnel And Pipe", contentRoot, source.funnelAndPipeSprite),
-          flowImage = AddFullCanvasLayer("Flow", contentRoot,
-            source.flowFrames != null && source.flowFrames.Length > 0 ? source.flowFrames[0] : null),
-          bottleImage = AddOptionalFullCanvasLayer("Bottle", contentRoot, source.bottleSprite),
-          badgeImage = AddFullCanvasLayer("Badge", contentRoot, source.badgeSprite),
-          flowFrames = source.flowFrames ?? Array.Empty<Sprite>(),
-          crankPivot = source.crankPivot,
-          gaugePivot = source.gaugePivot,
-          displayScale = displayScale,
-          normalizedHitBounds = SanitizeNormalizedBounds(source.normalizedHitBounds),
-        };
-        // The approved Level 1 design has no crank. Keeping this guard here
-        // also prevents a stale pre-approval catalog reference from rendering.
-        if (source.level != 1 && source.crankSprite != null)
-          visual.crankImage = AddPivotedLayer("Crank", contentRoot, source.crankSprite, source.crankPivot);
-        if (source.brushSprite != null)
-          visual.brushImage = AddFullCanvasLayer("Automatic Brush", contentRoot, source.brushSprite);
-        if (source.gaugeNeedleSprite != null)
-          visual.gaugeNeedleImage = AddPivotedLayer("Gauge Needle", contentRoot, source.gaugeNeedleSprite, source.gaugePivot);
-        ConfigureVerticalFill(visual.rawLiquidImage, 1f);
-        ConfigureVerticalFill(visual.bottleFillImage, 0f);
+        var visual = CreateLevelShell(root, source);
+        if (source.level == 1 && source.machineBaseSprite != null)
+          BuildLevelOneVisual(visual, source);
+        else
+          BuildLegacyVisual(visual, source);
         levels[i] = visual;
       }
 
       var view = root.gameObject.AddComponent<CareStationFilterArtView>();
       view.EditorConfigure(levels, hitRect);
       return view;
+    }
+
+    private static LevelVisual CreateLevelShell(RectTransform root, CareStationFilterArtCatalog.LevelSprites source)
+    {
+      var levelRoot = CreateRect($"Filter L{source.level}");
+      levelRoot.SetParent(root, false);
+      Stretch(levelRoot);
+      var contentRoot = CreateRect("Artwork");
+      contentRoot.SetParent(levelRoot, false);
+      Stretch(contentRoot);
+      contentRoot.pivot = new Vector2(0.5f, 0f);
+      return new LevelVisual
+      {
+        root = levelRoot,
+        contentRoot = contentRoot,
+        group = levelRoot.gameObject.AddComponent<CanvasGroup>(),
+        crankPivot = source.crankPivot,
+        gaugePivot = source.gaugePivot,
+        displayScale = SanitizeDisplayScale(source.displayScale),
+        normalizedHitBounds = SanitizeNormalizedBounds(source.normalizedHitBounds),
+      };
+    }
+
+    private static void BuildLevelOneVisual(LevelVisual visual, CareStationFilterArtCatalog.LevelSprites source)
+    {
+      visual.machineRoot = CreateRect("MachineRoot");
+      visual.machineRoot.SetParent(visual.contentRoot, false);
+      Stretch(visual.machineRoot);
+
+      visual.rawLiquidMask = AddRectMask("RawLiquidMask", visual.machineRoot);
+      visual.rawLiquidMaxHeight = 82f;
+      SetBottomAnchoredRect(visual.rawLiquidMask.rectTransform,
+        new Vector2(0.5f, RawLiquidBottom), new Vector2(82f, visual.rawLiquidMaxHeight));
+      visual.rawLiquidBodyImage = AddFixedBottomImage("RawLiquidBody", visual.rawLiquidMask.transform,
+        source.rawLiquidBodySprite, new Vector2(82f, visual.rawLiquidMaxHeight));
+      visual.rawLiquidSurfaceImage = AddPointLayer("RawLiquidSurface", visual.machineRoot,
+        source.rawLiquidSurfaceSprite, new Vector2(0.5f, RawLiquidBottom), new Vector2(88f, 14f));
+
+      visual.filterBedImage = AddPointLayer("FilterBed", visual.machineRoot, source.filterBedSprite,
+        new Vector2(0.5f, 0.548f), new Vector2(98f, 44f));
+      visual.filterDripImage = AddPointLayer("FilterDrips", visual.machineRoot,
+        FirstFrame(source.filterDripFrames), new Vector2(0.5f, 0.493f), new Vector2(42f, 54f));
+      visual.outletFlowImage = AddPointLayer("OutletFlow", visual.machineRoot,
+        FirstFrame(source.outletFlowFrames), new Vector2(0.5f, 0.338f), new Vector2(34f, 88f));
+      visual.machineBaseImage = AddFullCanvasLayer("MachineBase", visual.machineRoot, source.machineBaseSprite);
+
+      // Compatibility aliases point at the same authored sprites; visual state
+      // transitions cannot select the retired Level 1 sheets.
+      visual.baseImage = visual.machineBaseImage;
+      visual.flowImage = visual.outletFlowImage;
+      visual.flowFrames = source.outletFlowFrames ?? Array.Empty<Sprite>();
+      visual.filterDripFrames = source.filterDripFrames ?? Array.Empty<Sprite>();
+      visual.outletFlowFrames = source.outletFlowFrames ?? Array.Empty<Sprite>();
+
+      visual.bottleFillAnchor = CreateRect("BottleFillAnchor");
+      visual.bottleFillAnchor.SetParent(visual.contentRoot, false);
+      SetPointRect(visual.bottleFillAnchor, new Vector2(0.5f, 0.166f), new Vector2(72f, 108f));
+      visual.bottleRoot = CreateRect("BottleRoot");
+      visual.bottleRoot.SetParent(visual.bottleFillAnchor, false);
+      Stretch(visual.bottleRoot);
+
+      visual.bottleLiquidMask = AddRectMask("BottleLiquidMask", visual.bottleRoot);
+      visual.bottleLiquidMaxHeight = 62f;
+      SetBottomAnchoredRect(visual.bottleLiquidMask.rectTransform,
+        new Vector2(0.5f, BottleLiquidBottom), new Vector2(43f, visual.bottleLiquidMaxHeight));
+      visual.bottleLiquidBodyImage = AddFixedBottomImage("BottleLiquidBody",
+        visual.bottleLiquidMask.transform, source.bottleLiquidBodySprite,
+        new Vector2(43f, visual.bottleLiquidMaxHeight));
+      visual.bottleLiquidSurfaceImage = AddPointLayer("BottleLiquidSurface", visual.bottleRoot,
+        source.bottleLiquidSurfaceSprite, new Vector2(0.5f, BottleLiquidBottom), new Vector2(45f, 12f));
+      visual.bottleGlassImage = AddFullCanvasLayer("BottleGlass", visual.bottleRoot, source.bottleGlassSprite);
+
+      visual.bottlePickupAnchor = CreateRect("Carry/Pickup Anchor");
+      visual.bottlePickupAnchor.SetParent(visual.bottleRoot, false);
+      SetPointRect(visual.bottlePickupAnchor, new Vector2(0.5f, 0.82f), Vector2.one);
+
+      visual.bottleImage = visual.bottleGlassImage;
+      visual.bottleFillImage = visual.bottleLiquidBodyImage;
+      if (source.badgeSprite != null)
+        visual.badgeImage = AddFullCanvasLayer("Badge", visual.contentRoot, source.badgeSprite);
+
+      SetMaskedLiquid(visual.rawLiquidMask, visual.rawLiquidBodyImage,
+        visual.rawLiquidSurfaceImage, visual.rawLiquidMaxHeight, 1f);
+      SetMaskedLiquid(visual.bottleLiquidMask, visual.bottleLiquidBodyImage,
+        visual.bottleLiquidSurfaceImage, visual.bottleLiquidMaxHeight, 0f);
+      visual.filterDripImage.gameObject.SetActive(false);
+      visual.outletFlowImage.gameObject.SetActive(false);
+    }
+
+    private static void BuildLegacyVisual(LevelVisual visual, CareStationFilterArtCatalog.LevelSprites source)
+    {
+      visual.rawLiquidImage = AddOptionalFullCanvasLayer("Raw Liquid", visual.contentRoot, source.rawLiquidSprite);
+      visual.rawParticlesImage = AddOptionalFullCanvasLayer("Raw Particles", visual.contentRoot, source.rawParticlesSprite);
+      visual.bottleFillImage = AddOptionalFullCanvasLayer("Bottle Fill", visual.contentRoot, source.bottleFillSprite);
+      visual.baseImage = AddFullCanvasLayer("Base", visual.contentRoot, source.baseSprite);
+      visual.filterCartridgeImage = AddOptionalFullCanvasLayer("Filter Cartridge", visual.contentRoot, source.filterCartridgeSprite);
+      visual.funnelAndPipeImage = AddOptionalFullCanvasLayer("Funnel And Pipe", visual.contentRoot, source.funnelAndPipeSprite);
+      visual.flowImage = AddFullCanvasLayer("Flow", visual.contentRoot, FirstFrame(source.flowFrames));
+      visual.bottleImage = AddOptionalFullCanvasLayer("Bottle", visual.contentRoot, source.bottleSprite);
+      visual.badgeImage = AddFullCanvasLayer("Badge", visual.contentRoot, source.badgeSprite);
+      visual.flowFrames = source.flowFrames ?? Array.Empty<Sprite>();
+      if (source.level != 1 && source.crankSprite != null)
+        visual.crankImage = AddPivotedLayer("Crank", visual.contentRoot, source.crankSprite, source.crankPivot);
+      if (source.brushSprite != null)
+        visual.brushImage = AddFullCanvasLayer("Automatic Brush", visual.contentRoot, source.brushSprite);
+      if (source.gaugeNeedleSprite != null)
+        visual.gaugeNeedleImage = AddPivotedLayer("Gauge Needle", visual.contentRoot,
+          source.gaugeNeedleSprite, source.gaugePivot);
     }
 
     private void Awake()
@@ -185,22 +283,29 @@ namespace KeepBlinking.CareStation
       RefreshFlowVisibility();
     }
 
-    /// <summary>
-    /// Updates the FILTER's presentation only. No bottle, storage, upgrade, or
-    /// save value is read or written here.
-    /// </summary>
     public void SetProductionVisual(FilterProductionVisualState state, float progress)
     {
       progress = Mathf.Clamp01(progress);
       if (_productionVisualState != state)
       {
         _productionVisualState = state;
-        _productionStateEnteredAt = Time.unscaledTime;
+        _productionStateEnteredAt = Time.realtimeSinceStartup;
+        _productionStateVersion++;
+        if (state == FilterProductionVisualState.BottleComplete && isActiveAndEnabled)
+          StartCoroutine(HideLastDropAfterRealtime(_productionStateVersion));
       }
       _productionVisualProgress = progress;
       _running = state == FilterProductionVisualState.Filtering;
       RefreshFlowVisibility();
-      ApplyLevelOneProductionVisual();
+      ApplyLevelOneProductionVisual(Time.unscaledTime);
+    }
+
+    private IEnumerator HideLastDropAfterRealtime(int stateVersion)
+    {
+      yield return new WaitForSecondsRealtime(LastDropSeconds);
+      if (stateVersion != _productionStateVersion ||
+          _productionVisualState != FilterProductionVisualState.BottleComplete) yield break;
+      ApplyLevelOneProductionVisual(Time.unscaledTime);
     }
 
     public void SetPipelineHighlighted(bool highlighted)
@@ -211,6 +316,23 @@ namespace KeepBlinking.CareStation
     public void SetHitTestEnabled(bool enabled)
     {
       if (_hitRect != null) _hitRect.raycastTarget = enabled;
+    }
+
+    public void SetIntegratedBottleVisible(bool visible)
+    {
+      _integratedBottleVisible = visible;
+      for (var index = 0; index < _levels.Length; index++)
+      {
+        var visual = _levels[index];
+        if (visual == null) continue;
+        if (visual.bottleFillAnchor != null) visual.bottleFillAnchor.gameObject.SetActive(visible);
+        else
+        {
+          if (visual.bottleImage != null) visual.bottleImage.gameObject.SetActive(visible);
+          if (visual.bottleFillImage != null) visual.bottleFillImage.gameObject.SetActive(visible);
+        }
+      }
+      ApplyLevelOneProductionVisual(Time.unscaledTime);
     }
 
     private void Update()
@@ -241,7 +363,8 @@ namespace KeepBlinking.CareStation
       var active = _levels[Mathf.Clamp(_level - 1, 0, _levels.Length - 1)];
       if (active == null) return;
       var time = Time.unscaledTime;
-      if (active.flowImage != null && active.flowImage.gameObject.activeSelf &&
+      var isAuthoredLevelOne = _level == 1 && active.machineRoot != null;
+      if (!isAuthoredLevelOne && active.flowImage != null && active.flowImage.gameObject.activeSelf &&
           active.flowFrames != null && active.flowFrames.Length > 0)
       {
         var frame = Mathf.FloorToInt(time * _flowFramesPerSecond) % active.flowFrames.Length;
@@ -261,9 +384,10 @@ namespace KeepBlinking.CareStation
       if (active.baseImage != null)
       {
         var highlight = _pipelineHighlighted ? (Mathf.Sin(time * 4.5f) + 1f) * 0.5f : 0f;
-        active.baseImage.color = Color.Lerp(Color.white, new Color(0.95f, 1f, 0.98f, 1f), highlight * 0.16f);
+        active.baseImage.color = Color.Lerp(Color.white,
+          new Color(0.95f, 1f, 0.98f, 1f), highlight * 0.16f);
       }
-      ApplyLevelOneProductionVisual();
+      ApplyLevelOneProductionVisual(time);
     }
 
     private void ApplyImmediate(int level)
@@ -282,7 +406,7 @@ namespace KeepBlinking.CareStation
       }
       ApplyHitBounds(_levels.Length > 0 ? _levels[_level - 1] : null);
       RefreshFlowVisibility();
-      ApplyLevelOneProductionVisual();
+      ApplyLevelOneProductionVisual(Time.unscaledTime);
     }
 
     public void EditorConfigure(LevelVisual[] levels, Image hitRect)
@@ -299,93 +423,135 @@ namespace KeepBlinking.CareStation
       for (var i = 0; i < _levels.Length; i++)
       {
         var visual = _levels[i];
-        if (visual?.flowImage == null) continue;
-        var isLevelOne = i == 0;
-        var show = isLevelOne
-          ? _productionVisualState == FilterProductionVisualState.Filtering
-          : _running;
-        visual.flowImage.gameObject.SetActive(show);
+        if (visual == null) continue;
+        if (i == 0 && visual.machineRoot != null)
+        {
+          ApplyLevelOneProductionVisual(Time.unscaledTime);
+          continue;
+        }
+        if (visual.flowImage != null) visual.flowImage.gameObject.SetActive(_running);
       }
     }
 
-    private void ApplyLevelOneProductionVisual()
+    private void ApplyLevelOneProductionVisual(float time)
     {
       if (_levels.Length == 0) return;
       var visual = _levels[0];
-      if (visual == null) return;
+      if (visual?.machineRoot == null) return;
 
       var filtering = _productionVisualState == FilterProductionVisualState.Filtering;
       var complete = _productionVisualState == FilterProductionVisualState.BottleComplete;
-      var progress = complete ? 1f : filtering ? _productionVisualProgress : 0f;
-      var time = Time.unscaledTime;
+      var fillProgress = complete ? 1f : filtering ? _productionVisualProgress : 0f;
+      SetMaskedLiquid(visual.rawLiquidMask, visual.rawLiquidBodyImage,
+        visual.rawLiquidSurfaceImage, visual.rawLiquidMaxHeight, 1f - fillProgress);
+      SetMaskedLiquid(visual.bottleLiquidMask, visual.bottleLiquidBodyImage,
+        visual.bottleLiquidSurfaceImage, visual.bottleLiquidMaxHeight,
+        _integratedBottleVisible ? fillProgress : 0f);
 
-      if (visual.rawLiquidImage != null)
+      if (visual.filterDripImage != null)
       {
-        visual.rawLiquidImage.rectTransform.localScale = Vector3.one;
-        visual.rawLiquidImage.fillAmount = Mathf.Lerp(1f, 0.86f, progress);
+        var showDrips = filtering && fillProgress < DripOnlyProgress;
+        visual.filterDripImage.gameObject.SetActive(showDrips);
+        if (showDrips)
+          visual.filterDripImage.sprite = AnimatedFrame(visual.filterDripFrames, time, _flowFramesPerSecond);
       }
 
-      if (visual.rawParticlesImage != null)
+      if (visual.outletFlowImage != null)
       {
-        // A tiny, slow drift keeps the raw material alive without flicker.
-        visual.rawParticlesImage.rectTransform.anchoredPosition = new Vector2(
-          Mathf.Sin(time * 0.31f) * 1.8f,
-          Mathf.Sin(time * 0.23f + 0.8f) * 2.4f);
+        var completionAge = complete
+          ? Mathf.Max(0f, Time.realtimeSinceStartup - _productionStateEnteredAt)
+          : 0f;
+        var showOutlet = _integratedBottleVisible &&
+                         (filtering && fillProgress >= DripOnlyProgress || complete && completionAge < LastDropSeconds);
+        visual.outletFlowImage.gameObject.SetActive(showOutlet);
+        if (showOutlet)
+        {
+          visual.outletFlowImage.sprite = complete
+            ? LastFrame(visual.outletFlowFrames)
+            : SelectOutletFrame(visual.outletFlowFrames, fillProgress, time, _flowFramesPerSecond);
+        }
       }
 
-      if (visual.filterCartridgeImage != null)
+      if (visual.bottleRoot != null)
       {
-        var oneShot = filtering ? Mathf.Sin(Mathf.Clamp01(progress * 5f) * Mathf.PI) : 0f;
-        visual.filterCartridgeImage.rectTransform.localScale = Vector3.one;
-        visual.filterCartridgeImage.color = Color.Lerp(Color.white,
-          new Color(0.88f, 1f, 0.94f, 1f), oneShot * 0.45f);
+        visual.bottleRoot.gameObject.SetActive(_integratedBottleVisible);
+        if (!_integratedBottleVisible) return;
+        var completionAge = complete
+          ? Mathf.Max(0f, Time.realtimeSinceStartup - _productionStateEnteredAt)
+          : 0f;
+        var completionLift = complete
+          ? Mathf.SmoothStep(0f, 6f, Mathf.Clamp01(completionAge / 0.32f))
+          : 0f;
+        visual.bottleRoot.anchoredPosition = Vector2.up * completionLift;
+        visual.bottleRoot.localScale = Vector3.one;
+        if (visual.bottleGlassImage != null)
+        {
+          var glow = complete && completionAge < 0.7f
+            ? Mathf.Sin(Mathf.Clamp01(completionAge / 0.7f) * Mathf.PI)
+            : 0f;
+          visual.bottleGlassImage.color = Color.Lerp(Color.white,
+            new Color(0.88f, 1f, 0.95f, 1f), glow);
+        }
       }
-
-      if (visual.bottleFillImage != null)
-      {
-        visual.bottleFillImage.gameObject.SetActive(filtering || complete);
-        visual.bottleFillImage.rectTransform.localScale = Vector3.one;
-        visual.bottleFillImage.fillAmount = Mathf.Lerp(0.04f, 1f, progress);
-      }
-
-      var completionAge = complete ? Mathf.Max(0f, time - _productionStateEnteredAt) : 0f;
-      var completionLift = complete ? Mathf.SmoothStep(0f, 6f, Mathf.Clamp01(completionAge / 0.32f)) : 0f;
-      var completionGlow = complete && completionAge < 0.7f
-        ? Mathf.Sin(Mathf.Clamp01(completionAge / 0.7f) * Mathf.PI)
-        : 0f;
-      ApplyBottleCompletionTransform(visual.bottleImage, completionLift,
-        Color.Lerp(Color.white, new Color(0.88f, 1f, 0.95f, 1f), completionGlow));
-      ApplyBottleCompletionTransform(visual.bottleFillImage, completionLift, Color.white);
     }
 
-    private static void ApplyBottleCompletionTransform(
-      Image image,
-      float lift,
-      Color color)
+    private static Sprite SelectOutletFrame(Sprite[] frames, float progress, float time, float fps)
     {
-      if (image == null) return;
-      image.rectTransform.anchoredPosition = Vector2.up * lift;
-      image.rectTransform.localScale = Vector3.one;
-      image.color = color;
+      if (frames == null || frames.Length == 0) return null;
+      if (progress < FlowTaperProgress)
+      {
+        var steadyFrames = Mathf.Max(1, frames.Length - 2);
+        return frames[Mathf.FloorToInt(time * fps) % steadyFrames];
+      }
+      var taper = Mathf.InverseLerp(FlowTaperProgress, 1f, progress);
+      var index = Mathf.Clamp(Mathf.FloorToInt(taper * frames.Length), 0, frames.Length - 1);
+      return frames[index];
     }
 
-    private static void ConfigureVerticalFill(Image image, float amount)
+    private static Sprite AnimatedFrame(Sprite[] frames, float time, float fps)
     {
-      if (image == null) return;
-      image.type = Image.Type.Filled;
-      image.fillMethod = Image.FillMethod.Vertical;
-      image.fillOrigin = (int)Image.OriginVertical.Bottom;
-      image.fillClockwise = true;
-      image.fillAmount = Mathf.Clamp01(amount);
-      image.rectTransform.localScale = Vector3.one;
+      if (frames == null || frames.Length == 0) return null;
+      return frames[Mathf.FloorToInt(time * fps) % frames.Length];
+    }
+
+    private static Sprite FirstFrame(Sprite[] frames)
+    {
+      return frames != null && frames.Length > 0 ? frames[0] : null;
+    }
+
+    private static Sprite LastFrame(Sprite[] frames)
+    {
+      return frames != null && frames.Length > 0 ? frames[frames.Length - 1] : null;
+    }
+
+    private static void SetMaskedLiquid(RectMask2D mask, Image body, Image surface,
+      float maximumHeight, float amount)
+    {
+      amount = Mathf.Clamp01(amount);
+      if (mask != null)
+      {
+        var size = mask.rectTransform.sizeDelta;
+        size.y = Mathf.Max(0.01f, maximumHeight * amount);
+        mask.rectTransform.sizeDelta = size;
+        mask.rectTransform.localScale = Vector3.one;
+      }
+      if (body != null)
+      {
+        body.gameObject.SetActive(amount > 0.001f);
+        body.rectTransform.localScale = Vector3.one;
+      }
+      if (surface != null)
+      {
+        surface.gameObject.SetActive(amount > 0.001f);
+        surface.rectTransform.anchoredPosition = Vector2.up * (maximumHeight * amount);
+        surface.rectTransform.localScale = Vector3.one;
+      }
     }
 
     private void ApplyHitBounds(LevelVisual visual)
     {
       if (_hitRect == null) return;
-      var bounds = visual == null
-        ? new Rect(0f, 0f, 1f, 1f)
-        : SanitizeNormalizedBounds(visual.normalizedHitBounds);
+      var bounds = visual == null ? new Rect(0f, 0f, 1f, 1f) : SanitizeNormalizedBounds(visual.normalizedHitBounds);
       var rect = _hitRect.rectTransform;
       rect.anchorMin = new Vector2(bounds.xMin, bounds.yMin);
       rect.anchorMax = new Vector2(bounds.xMax, bounds.yMax);
@@ -398,21 +564,43 @@ namespace KeepBlinking.CareStation
 
     private static Vector2 SanitizeDisplayScale(Vector2 scale)
     {
-      return new Vector2(
-        scale.x > 0.05f ? scale.x : 1f,
-        scale.y > 0.05f ? scale.y : 1f);
+      return new Vector2(scale.x > 0.05f ? scale.x : 1f, scale.y > 0.05f ? scale.y : 1f);
     }
 
     private static Rect SanitizeNormalizedBounds(Rect bounds)
     {
-      if (bounds.width <= 0f || bounds.height <= 0f)
-        return new Rect(0f, 0f, 1f, 1f);
+      if (bounds.width <= 0f || bounds.height <= 0f) return new Rect(0f, 0f, 1f, 1f);
       var xMin = Mathf.Clamp01(bounds.xMin);
       var yMin = Mathf.Clamp01(bounds.yMin);
       var xMax = Mathf.Clamp01(bounds.xMax);
       var yMax = Mathf.Clamp01(bounds.yMax);
       if (xMax <= xMin || yMax <= yMin) return new Rect(0f, 0f, 1f, 1f);
       return Rect.MinMaxRect(xMin, yMin, xMax, yMax);
+    }
+
+    private static RectMask2D AddRectMask(string name, Transform parent)
+    {
+      var rect = CreateRect(name);
+      rect.SetParent(parent, false);
+      return rect.gameObject.AddComponent<RectMask2D>();
+    }
+
+    private static Image AddFixedBottomImage(string name, Transform parent, Sprite sprite, Vector2 size)
+    {
+      var image = AddImage(name, parent, sprite);
+      var rect = image.rectTransform;
+      rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0f);
+      rect.pivot = new Vector2(0.5f, 0f);
+      rect.anchoredPosition = Vector2.zero;
+      rect.sizeDelta = size;
+      return image;
+    }
+
+    private static Image AddPointLayer(string name, Transform parent, Sprite sprite, Vector2 anchor, Vector2 size)
+    {
+      var image = AddImage(name, parent, sprite);
+      SetPointRect(image.rectTransform, anchor, size);
+      return image;
     }
 
     private static Image AddFullCanvasLayer(string name, RectTransform parent, Sprite sprite)
@@ -455,6 +643,24 @@ namespace KeepBlinking.CareStation
       return new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer)).GetComponent<RectTransform>();
     }
 
+    private static void SetBottomAnchoredRect(RectTransform rect, Vector2 anchor, Vector2 size)
+    {
+      rect.anchorMin = rect.anchorMax = anchor;
+      rect.pivot = new Vector2(0.5f, 0f);
+      rect.anchoredPosition = Vector2.zero;
+      rect.sizeDelta = size;
+      rect.localScale = Vector3.one;
+    }
+
+    private static void SetPointRect(RectTransform rect, Vector2 anchor, Vector2 size)
+    {
+      rect.anchorMin = rect.anchorMax = anchor;
+      rect.pivot = new Vector2(0.5f, 0.5f);
+      rect.anchoredPosition = Vector2.zero;
+      rect.sizeDelta = size;
+      rect.localScale = Vector3.one;
+    }
+
     private static void Stretch(RectTransform rect)
     {
       rect.anchorMin = Vector2.zero;
@@ -462,6 +668,7 @@ namespace KeepBlinking.CareStation
       rect.pivot = new Vector2(0.5f, 0.5f);
       rect.offsetMin = Vector2.zero;
       rect.offsetMax = Vector2.zero;
+      rect.localScale = Vector3.one;
     }
   }
 }

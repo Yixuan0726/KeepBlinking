@@ -136,7 +136,7 @@ namespace KeepBlinking.CareStation
       {
         if (WorkTarget.IndexOf("FILTER", System.StringComparison.OrdinalIgnoreCase) >= 0)
           SetFacing(CareStationWorkerFacing.BackLeft);
-        else if (WorkTarget.IndexOf("TANK", System.StringComparison.OrdinalIgnoreCase) >= 0)
+        else if (WorkTarget.IndexOf("FILLER", System.StringComparison.OrdinalIgnoreCase) >= 0)
           SetFacing(CareStationWorkerFacing.BackRight);
       }
     }

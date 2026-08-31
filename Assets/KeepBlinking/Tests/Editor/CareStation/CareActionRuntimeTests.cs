@@ -209,6 +209,159 @@ namespace KeepBlinking.Tests
       action.Advance(0.25f, FreshFrame(1f, 0.25f));
       Assert.That(action.Stage, Is.EqualTo(CareActionStage.Completed));
       Assert.That(action.Data.focusCycleCount, Is.EqualTo(6));
+      Assert.That(action.TryConsumeCompletionSignal(), Is.True);
+      Assert.That(action.TryConsumeCompletionSignal(), Is.False,
+        "The sensor-completed Focus Shift signal must be one-shot.");
+    }
+
+    [Test]
+    public void FocusCloserHoldAndMinimumLegAccumulateInParallel()
+    {
+      _config.focusTargetHoldSeconds = 0.7f;
+      _config.focusMinimumLegSeconds = 3f;
+      var action = Begin(CareActionType.FocusShift);
+      action.Data.gestureReferenceScale = 1f;
+      action.Data.gestureReferenceValid = true;
+      EnterInitialFocusLeg(action);
+
+      const float tick = 0.05f;
+      var elapsed = 0f;
+      for (var i = 0; i < 10; i++)
+      {
+        action.Advance(tick, FreshFrame(1.20f, tick));
+        elapsed += tick;
+      }
+      Assert.That(action.Data.holdElapsedSeconds, Is.Zero);
+
+      action.Advance(tick, FreshFrame(1.25f, tick));
+      elapsed += tick;
+      var thresholdReachedAt = elapsed;
+      Assert.That(action.Data.holdElapsedSeconds, Is.EqualTo(tick).Within(0.001f),
+        "Hold must begin on the first Closer sample, before the pace gate is ready.");
+      Assert.That(action.Prompt, Does.StartWith("HOLD"));
+      var holdBeforePresentationReads = action.Data.holdElapsedSeconds;
+      var phaseBeforePresentationReads = action.Data.phaseElapsedSeconds;
+      _ = action.Prompt;
+      _ = action.Progress;
+      _ = action.FocusConfirmationProgress;
+      Assert.That(action.Data.holdElapsedSeconds, Is.EqualTo(holdBeforePresentationReads));
+      Assert.That(action.Data.phaseElapsedSeconds, Is.EqualTo(phaseBeforePresentationReads),
+        "UI/presentation reads must not mutate Focus timers.");
+
+      while (action.Data.holdElapsedSeconds < 0.699f)
+      {
+        action.Advance(tick, FreshFrame(1.25f, tick));
+        elapsed += tick;
+      }
+      Assert.That(action.Data.focusTargetStep, Is.Zero,
+        "Finishing Hold early must still respect the independent three-second rhythm.");
+      Assert.That(action.FocusHoldProgress, Is.EqualTo(1f).Within(0.001f));
+      Assert.That(action.FocusConfirmationProgress, Is.GreaterThan(0f).And.LessThan(1f));
+
+      while (action.Data.focusTargetStep == 0 && elapsed < 3.2f)
+      {
+        action.Advance(tick, FreshFrame(1.25f, tick));
+        elapsed += tick;
+      }
+
+      Assert.That(action.Data.focusTargetStep, Is.EqualTo(1));
+      Assert.That(elapsed, Is.EqualTo(3f).Within(tick + 0.001f));
+      Assert.That(elapsed - thresholdReachedAt, Is.EqualTo(2.45f).Within(tick + 0.001f));
+    }
+
+    [Test]
+    public void FocusCloserRequiresAContinuousHoldAcrossThresholdJitter()
+    {
+      _config.focusTargetHoldSeconds = 0.7f;
+      _config.focusMinimumLegSeconds = 3f;
+      var action = Begin(CareActionType.FocusShift);
+      action.Data.gestureReferenceScale = 1f;
+      action.Data.gestureReferenceValid = true;
+      EnterInitialFocusLeg(action);
+
+      for (var i = 0; i < 50; i++) action.Advance(0.05f, FreshFrame(1.20f, 0.05f));
+      for (var i = 0; i < 7; i++) action.Advance(0.05f, FreshFrame(1.251f, 0.05f));
+      Assert.That(action.Data.holdElapsedSeconds, Is.EqualTo(0.35f).Within(0.01f));
+
+      action.Advance(0.05f, FreshFrame(1.249f, 0.05f));
+      Assert.That(action.Data.holdElapsedSeconds, Is.Zero,
+        "A sample below the unchanged 1.25 threshold must restart the stable hold.");
+      for (var i = 0; i < 13; i++) action.Advance(0.05f, FreshFrame(1.251f, 0.05f));
+      Assert.That(action.Data.focusTargetStep, Is.Zero);
+      action.Advance(0.05f, FreshFrame(1.251f, 0.05f));
+      Assert.That(action.Data.focusTargetStep, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void FocusTrackingLossResetsHoldAndRequiresOneFreshRecoverySample()
+    {
+      _config.focusTargetHoldSeconds = 0.7f;
+      _config.focusMinimumLegSeconds = 3f;
+      var action = Begin(CareActionType.FocusShift);
+      action.Data.gestureReferenceScale = 1f;
+      action.Data.gestureReferenceValid = true;
+      EnterInitialFocusLeg(action);
+
+      for (var i = 0; i < 50; i++) action.Advance(0.05f, FreshFrame(1.20f, 0.05f));
+      for (var i = 0; i < 8; i++) action.Advance(0.05f, FreshFrame(1.25f, 0.05f));
+      Assert.That(action.Data.holdElapsedSeconds, Is.EqualTo(0.4f).Within(0.01f));
+
+      action.Advance(0.1f, Frame(tracking: false, ratio: 1.25f));
+      Assert.That(action.PauseReason, Is.EqualTo(CareActionPauseReason.TrackingLost));
+      Assert.That(action.Data.holdElapsedSeconds, Is.Zero);
+      action.Advance(0.1f, FreshFrame(1.25f, 0.1f));
+      Assert.That(action.PauseReason, Is.EqualTo(CareActionPauseReason.TrackingLost));
+      Assert.That(action.Data.holdElapsedSeconds, Is.Zero,
+        "The first fresh sample only clears the recovery guard.");
+      action.Advance(0.1f, FreshFrame(1.25f, 0.1f));
+      Assert.That(action.PauseReason, Is.EqualTo(CareActionPauseReason.None));
+      Assert.That(action.Data.holdElapsedSeconds, Is.EqualTo(0.1f).Within(0.001f));
+    }
+
+    [Test]
+    public void FocusNextLegCannotSkipNeutralRearm()
+    {
+      _config.focusTargetHoldSeconds = 0.7f;
+      _config.focusMinimumLegSeconds = 3f;
+      var action = Begin(CareActionType.FocusShift);
+      action.Data.gestureReferenceScale = 1f;
+      action.Data.gestureReferenceValid = true;
+      EnterInitialFocusLeg(action);
+      CompleteFocusLeg(action, 1.25f);
+      Assert.That(action.Phase, Is.EqualTo(CareActionInternalPhase.FocusReference));
+
+      while (action.Phase == CareActionInternalPhase.FocusReference)
+        action.Advance(0.1f, FreshFrame(0.78f, 0.1f));
+      Assert.That(action.Data.focusRearmed, Is.False);
+      for (var i = 0; i < 35; i++) action.Advance(0.1f, FreshFrame(0.78f, 0.1f));
+      Assert.That(action.Data.focusTargetStep, Is.EqualTo(1));
+      Assert.That(action.Data.holdElapsedSeconds, Is.Zero);
+      Assert.That(action.Prompt, Is.EqualTo("RETURN TO CENTER"));
+
+      action.Advance(0.1f, FreshFrame(1f, 0.1f));
+      Assert.That(action.Data.focusRearmed, Is.True);
+      for (var i = 0; i < 8; i++) action.Advance(0.1f, FreshFrame(0.78f, 0.1f));
+      Assert.That(action.Data.focusTargetStep, Is.EqualTo(2));
+      Assert.That(action.Data.focusCycleCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void FocusTooCloseImmediatelyShowsSafetyPromptAndRejectsHold()
+    {
+      _config.focusTargetHoldSeconds = 0.7f;
+      _config.focusMinimumLegSeconds = 3f;
+      var action = Begin(CareActionType.FocusShift);
+      action.Data.gestureReferenceScale = 1f;
+      action.Data.gestureReferenceValid = true;
+      EnterInitialFocusLeg(action);
+      for (var i = 0; i < 6; i++) action.Advance(0.1f, FreshFrame(1.25f, 0.1f));
+      Assert.That(action.Data.holdElapsedSeconds, Is.EqualTo(0.6f).Within(0.01f));
+
+      action.Advance(0.05f, FreshFrame(1.45f, 0.05f));
+      Assert.That(action.PauseReason, Is.EqualTo(CareActionPauseReason.TooClose));
+      Assert.That(action.Prompt, Is.EqualTo("TOO CLOSE\nMOVE AWAY"));
+      Assert.That(action.Data.holdElapsedSeconds, Is.Zero);
+      Assert.That(action.Data.focusTargetStep, Is.Zero);
     }
 
     [Test]
@@ -344,6 +497,11 @@ namespace KeepBlinking.Tests
       var defaults = CareActionConfiguration.Default;
       Assert.That(defaults.closedEyeDurationSeconds, Is.EqualTo(45f));
       Assert.That(defaults.focusCycleCount, Is.EqualTo(6));
+      Assert.That(defaults.focusCloserRatio, Is.EqualTo(1.25f));
+      Assert.That(defaults.focusAwayRatio, Is.EqualTo(0.78f));
+      Assert.That(defaults.focusTooCloseRatio, Is.EqualTo(1.45f));
+      Assert.That(defaults.focusTargetHoldSeconds, Is.EqualTo(0.7f));
+      Assert.That(defaults.focusMinimumLegSeconds, Is.EqualTo(3f));
       Assert.That(defaults.guidedPreviewSeconds +
                   (defaults.guidedClockwiseSeconds + defaults.guidedCounterClockwiseSeconds) *
                   defaults.guidedLapsPerDirection + defaults.guidedPauseSeconds +
@@ -865,7 +1023,9 @@ namespace KeepBlinking.Tests
     private static void EnterInitialFocusLeg(CareActionRuntime action)
     {
       action.Advance(0.01f, FreshFrame(1f, 0.01f));
-      action.Advance(0.25f, FreshFrame(1f, 0.25f));
+      for (var i = 0; i < 40 && action.Phase == CareActionInternalPhase.FocusNeutralStart; i++)
+        action.Advance(0.05f, FreshFrame(1f, 0.05f));
+      Assert.That(action.Phase, Is.EqualTo(CareActionInternalPhase.FocusNearOne));
     }
 
     private static void EnterNextFocusLeg(CareActionRuntime action)

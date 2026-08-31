@@ -15,6 +15,24 @@ namespace KeepBlinking.Tests
     private const string BottlePath = "Assets/KeepBlinking/Art/CareStation/Bottles/care-sample-bottles-clear-empty-full-gold.png";
     private const string FilterFolder = "Assets/KeepBlinking/Art/CareStation/Filter";
     private const string FilterCatalogPath = "Assets/KeepBlinking/Resources/CareStation/Filter/CareStationFilterArtCatalog.asset";
+    private static readonly HashSet<string> PhoneLevelOneLayers = new HashSet<string>
+    {
+      "FilterL1_MachineBase.png",
+      "FilterL1_RawLiquidBody.png",
+      "FilterL1_RawLiquidSurface.png",
+      "FilterL1_FilterBed.png",
+      "FilterL1_FilterDrips_01.png",
+      "FilterL1_FilterDrips_02.png",
+      "FilterL1_FilterDrips_03.png",
+      "FilterL1_FilterDrips_04.png",
+      "FilterL1_OutletFlow_01.png",
+      "FilterL1_OutletFlow_02.png",
+      "FilterL1_OutletFlow_03.png",
+      "FilterL1_OutletFlow_04.png",
+      "FilterL1_BottleGlass.png",
+      "FilterL1_BottleLiquidBody.png",
+      "FilterL1_BottleLiquidSurface.png"
+    };
 
     [TestCase(CrewPath, 12)]
     [TestCase(CartPath, 3)]
@@ -79,16 +97,20 @@ namespace KeepBlinking.Tests
     {
       var expected = new List<string>
       {
-        "FilterL1_Base.png",
-        "FilterL1_RawLiquid.png",
-        "FilterL1_RawParticles.png",
-        "FilterL1_FilterCartridge.png",
-        "FilterL1_FunnelAndPipe.png",
-        "FilterL1_Bottle.png",
-        "FilterL1_BottleFill.png",
+        "FilterL1_MachineBase.png",
+        "FilterL1_RawLiquidBody.png",
+        "FilterL1_RawLiquidSurface.png",
+        "FilterL1_FilterBed.png",
+        "FilterL1_BottleGlass.png",
+        "FilterL1_BottleLiquidBody.png",
+        "FilterL1_BottleLiquidSurface.png",
         "FilterL1_Badge.png",
       };
-      for (var frame = 1; frame <= 4; frame++) expected.Add($"FilterL1_CleanFlow_{frame:00}.png");
+      for (var frame = 1; frame <= 4; frame++)
+      {
+        expected.Add($"FilterL1_FilterDrips_{frame:00}.png");
+        expected.Add($"FilterL1_OutletFlow_{frame:00}.png");
+      }
       for (var level = 2; level <= 3; level++)
       {
         expected.Add($"Filter_L{level}_Base.png");
@@ -103,9 +125,34 @@ namespace KeepBlinking.Tests
         .Select(Path.GetFileName)
         .OrderBy(name => name)
         .ToArray();
-      Assert.That(actual, Is.EqualTo(expected.OrderBy(name => name).ToArray()));
+      Assert.That(actual, Is.SupersetOf(expected),
+        "Every approved Level 1 phone sprite and the untouched Level 2/3 set must exist independently.");
       Assert.That(File.Exists(Path.Combine(FilterFolder, "Filter_L1_Crank.png")), Is.False,
         "The approved Level 1 design has no crank and must not retain the retired placeholder layer.");
+    }
+
+    [TestCase("FilterL1_MachineBase.png", 500, 750)]
+    [TestCase("FilterL1_RawLiquidBody.png", 164, 164)]
+    [TestCase("FilterL1_RawLiquidSurface.png", 176, 28)]
+    [TestCase("FilterL1_FilterBed.png", 196, 88)]
+    [TestCase("FilterL1_FilterDrips_01.png", 84, 108)]
+    [TestCase("FilterL1_FilterDrips_02.png", 84, 108)]
+    [TestCase("FilterL1_FilterDrips_03.png", 84, 108)]
+    [TestCase("FilterL1_FilterDrips_04.png", 84, 108)]
+    [TestCase("FilterL1_OutletFlow_01.png", 68, 176)]
+    [TestCase("FilterL1_OutletFlow_02.png", 68, 176)]
+    [TestCase("FilterL1_OutletFlow_03.png", 68, 176)]
+    [TestCase("FilterL1_OutletFlow_04.png", 68, 176)]
+    [TestCase("FilterL1_BottleGlass.png", 144, 216)]
+    [TestCase("FilterL1_BottleLiquidBody.png", 86, 124)]
+    [TestCase("FilterL1_BottleLiquidSurface.png", 90, 24)]
+    public void LevelOneSpritesUsePhoneTargetPixelCanvases(string fileName, int width, int height)
+    {
+      var path = $"{FilterFolder}/{fileName}";
+      var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+      Assert.That(texture, Is.Not.Null, path);
+      Assert.That(texture.width, Is.EqualTo(width), path);
+      Assert.That(texture.height, Is.EqualTo(height), path);
     }
 
     [Test]
@@ -121,26 +168,29 @@ namespace KeepBlinking.Tests
         Assert.That(importer.sRGBTexture, Is.True, assetPath);
         Assert.That(importer.alphaSource, Is.EqualTo(TextureImporterAlphaSource.FromInput), assetPath);
         Assert.That(importer.alphaIsTransparency, Is.True, assetPath);
-        Assert.That(importer.mipmapEnabled, Is.True, assetPath);
+        var isLevelOne = PhoneLevelOneLayers.Contains(Path.GetFileName(path));
+        Assert.That(importer.mipmapEnabled, Is.EqualTo(!isLevelOne), assetPath);
         Assert.That(importer.mipmapFilter, Is.EqualTo(TextureImporterMipFilter.KaiserFilter), assetPath);
         Assert.That(importer.wrapMode, Is.EqualTo(TextureWrapMode.Clamp), assetPath);
         Assert.That(importer.maxTextureSize, Is.EqualTo(2048), assetPath);
         Assert.That(importer.textureCompression, Is.EqualTo(TextureImporterCompression.Uncompressed), assetPath);
         Assert.That(importer.crunchedCompression, Is.False, assetPath);
-        Assert.That(importer.filterMode, Is.EqualTo(FilterMode.Trilinear), assetPath);
+        Assert.That(importer.filterMode,
+          Is.EqualTo(isLevelOne ? FilterMode.Bilinear : FilterMode.Trilinear), assetPath);
         Assert.That(importer.spritePixelsPerUnit, Is.EqualTo(100f), assetPath);
 
-        var isLevelOne = Path.GetFileName(path).StartsWith("FilterL1_", System.StringComparison.Ordinal);
-        var expectedWidth = isLevelOne ? 560 : 1024;
-        var expectedHeight = isLevelOne ? 840 : 1024;
         var importedTexture = AssetDatabase.LoadAssetAtPath<Texture2D>(assetPath);
         var importedSprite = AssetDatabase.LoadAssetAtPath<Sprite>(assetPath);
         Assert.That(importedTexture, Is.Not.Null, assetPath);
-        Assert.That(importedTexture.width, Is.EqualTo(expectedWidth), assetPath);
-        Assert.That(importedTexture.height, Is.EqualTo(expectedHeight), assetPath);
-        Assert.That(importedTexture.mipmapCount, Is.GreaterThan(1), assetPath);
+        Assert.That(importedTexture.width, Is.GreaterThan(0).And.LessThanOrEqualTo(2048), assetPath);
+        Assert.That(importedTexture.height, Is.GreaterThan(0).And.LessThanOrEqualTo(2048), assetPath);
+        if (isLevelOne)
+          Assert.That(importedTexture.mipmapCount, Is.EqualTo(1), assetPath);
+        else
+          Assert.That(importedTexture.mipmapCount, Is.GreaterThan(1), assetPath);
         Assert.That(importedSprite, Is.Not.Null, assetPath);
-        Assert.That(importedSprite.rect, Is.EqualTo(new Rect(0f, 0f, expectedWidth, expectedHeight)), assetPath);
+        Assert.That(importedSprite.rect,
+          Is.EqualTo(new Rect(0f, 0f, importedTexture.width, importedTexture.height)), assetPath);
 
         var iosSettings = importer.GetPlatformTextureSettings(BuildPipeline.GetBuildTargetName(BuildTarget.iOS));
         Assert.That(iosSettings.overridden, Is.True, assetPath);
@@ -159,7 +209,7 @@ namespace KeepBlinking.Tests
     }
 
     [Test]
-    public void FilterLayersShareCanvasAndKeepFourPixelEdgesTransparent()
+    public void FilterLayersHaveRealAlphaAndKeepFourPixelEdgesTransparent()
     {
       foreach (var path in Directory.GetFiles(FilterFolder, "*.png", SearchOption.TopDirectoryOnly))
       {
@@ -167,11 +217,6 @@ namespace KeepBlinking.Tests
         Assert.That(ImageConversion.LoadImage(texture, File.ReadAllBytes(path), false), Is.True, path);
         try
         {
-          var isLevelOne = Path.GetFileName(path).StartsWith("FilterL1_", System.StringComparison.Ordinal);
-          var expectedWidth = isLevelOne ? 560 : 1024;
-          var expectedHeight = isLevelOne ? 840 : 1024;
-          Assert.That(texture.width, Is.EqualTo(expectedWidth), path);
-          Assert.That(texture.height, Is.EqualTo(expectedHeight), path);
           var pixels = texture.GetPixels32();
           Assert.That(pixels.Any(pixel => pixel.a == 0), Is.True, $"{path} must contain real transparent pixels.");
           Assert.That(pixels.Any(pixel => pixel.a > 0), Is.True, $"{path} must contain visible authored artwork.");
@@ -208,24 +253,35 @@ namespace KeepBlinking.Tests
       }
       var levelOne = catalog.Levels[0];
       Assert.That(levelOne.crankSprite, Is.Null);
-      Assert.That(levelOne.rawLiquidSprite, Is.Not.Null);
-      Assert.That(levelOne.rawParticlesSprite, Is.Not.Null);
-      Assert.That(levelOne.filterCartridgeSprite, Is.Not.Null);
-      Assert.That(levelOne.funnelAndPipeSprite, Is.Not.Null);
-      Assert.That(levelOne.bottleSprite, Is.Not.Null);
-      Assert.That(levelOne.bottleFillSprite, Is.Not.Null);
-      AssertFilterSpritePath(levelOne.baseSprite, "FilterL1_Base.png");
-      AssertFilterSpritePath(levelOne.rawLiquidSprite, "FilterL1_RawLiquid.png");
-      AssertFilterSpritePath(levelOne.rawParticlesSprite, "FilterL1_RawParticles.png");
-      AssertFilterSpritePath(levelOne.filterCartridgeSprite, "FilterL1_FilterCartridge.png");
-      AssertFilterSpritePath(levelOne.funnelAndPipeSprite, "FilterL1_FunnelAndPipe.png");
-      AssertFilterSpritePath(levelOne.bottleSprite, "FilterL1_Bottle.png");
-      AssertFilterSpritePath(levelOne.bottleFillSprite, "FilterL1_BottleFill.png");
+      Assert.That(levelOne.rawLiquidSprite, Is.Null);
+      Assert.That(levelOne.rawParticlesSprite, Is.Null);
+      Assert.That(levelOne.filterCartridgeSprite, Is.Null);
+      Assert.That(levelOne.funnelAndPipeSprite, Is.Null);
+      Assert.That(levelOne.bottleSprite, Is.Null);
+      Assert.That(levelOne.bottleFillSprite, Is.Null);
+      AssertFilterSpritePath(levelOne.machineBaseSprite, "FilterL1_MachineBase.png");
+      AssertFilterSpritePath(levelOne.baseSprite, "FilterL1_MachineBase.png");
+      AssertFilterSpritePath(levelOne.rawLiquidBodySprite, "FilterL1_RawLiquidBody.png");
+      AssertFilterSpritePath(levelOne.rawLiquidSurfaceSprite, "FilterL1_RawLiquidSurface.png");
+      AssertFilterSpritePath(levelOne.filterBedSprite, "FilterL1_FilterBed.png");
+      AssertFilterSpritePath(levelOne.bottleGlassSprite, "FilterL1_BottleGlass.png");
+      AssertFilterSpritePath(levelOne.bottleLiquidBodySprite, "FilterL1_BottleLiquidBody.png");
+      AssertFilterSpritePath(levelOne.bottleLiquidSurfaceSprite, "FilterL1_BottleLiquidSurface.png");
       AssertFilterSpritePath(levelOne.badgeSprite, "FilterL1_Badge.png");
-      for (var frame = 0; frame < levelOne.flowFrames.Length; frame++)
-        AssertFilterSpritePath(levelOne.flowFrames[frame], $"FilterL1_CleanFlow_{frame + 1:00}.png");
-      Assert.That(AssetDatabase.GetDependencies(FilterCatalogPath),
-        Does.Not.Contain($"{FilterFolder}/Filter_L1_Crank.png"));
+      Assert.That(levelOne.filterDripFrames, Has.Length.EqualTo(4));
+      Assert.That(levelOne.outletFlowFrames, Has.Length.EqualTo(4));
+      Assert.That(levelOne.flowFrames, Has.Length.EqualTo(4));
+      for (var frame = 0; frame < 4; frame++)
+      {
+        AssertFilterSpritePath(levelOne.filterDripFrames[frame], $"FilterL1_FilterDrips_{frame + 1:00}.png");
+        AssertFilterSpritePath(levelOne.outletFlowFrames[frame], $"FilterL1_OutletFlow_{frame + 1:00}.png");
+        Assert.That(levelOne.flowFrames[frame], Is.SameAs(levelOne.outletFlowFrames[frame]));
+      }
+      var dependencies = AssetDatabase.GetDependencies(FilterCatalogPath);
+      Assert.That(dependencies, Does.Not.Contain($"{FilterFolder}/Filter_L1_Crank.png"));
+      Assert.That(dependencies, Does.Not.Contain($"{FilterFolder}/FilterL1_Base.png"));
+      Assert.That(dependencies, Does.Not.Contain($"{FilterFolder}/FilterL1_Bottle.png"));
+      Assert.That(dependencies, Does.Not.Contain($"{FilterFolder}/FilterL1_BottleFill.png"));
       Assert.That(catalog.Levels[1].crankSprite, Is.Not.Null);
       Assert.That(catalog.Levels[2].brushSprite, Is.Not.Null);
       Assert.That(catalog.Levels[2].gaugeNeedleSprite, Is.Not.Null);

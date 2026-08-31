@@ -30,6 +30,20 @@ namespace KeepBlinking.CareStation
       public float rawLiquidScalePivotY = 0.59f;
       public float bottleFillScalePivotY = 0.06f;
 
+      // Re-authored Level 1 phone sprites. These are deliberately separate
+      // from the legacy full-canvas layers above: the machine never owns a
+      // baked bottle, and each liquid body/surface is independently masked.
+      // Level 2/3 keep using the legacy fields without migration.
+      public Sprite machineBaseSprite;
+      public Sprite rawLiquidBodySprite;
+      public Sprite rawLiquidSurfaceSprite;
+      public Sprite filterBedSprite;
+      public Sprite[] filterDripFrames = Array.Empty<Sprite>();
+      public Sprite[] outletFlowFrames = Array.Empty<Sprite>();
+      public Sprite bottleGlassSprite;
+      public Sprite bottleLiquidBodySprite;
+      public Sprite bottleLiquidSurfaceSprite;
+
       // Legacy catalog metadata retained for L2/L3 serialization compatibility.
       // Runtime FILTER artwork is now sized by its RectTransform and always
       // renders at unit transform scale; new entries should use Vector2.one.

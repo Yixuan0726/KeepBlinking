@@ -43,17 +43,17 @@ namespace KeepBlinking.CareStation
         KeepBlinkingTheme.TextSecondary,
         false);
       FirstLevelUiFactory.SetRect(_distanceDiagnostics.rectTransform, new Vector2(0.05f, 0.77f), new Vector2(0.95f, 0.92f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
-      AddButton("Training 1", 0.69f, 0.03f, 0.255f, () => _controller.StartRecipeDevelopmentTest(CareRecipeType.Training, 0));
-      AddButton("Training 2", 0.69f, 0.265f, 0.49f, () => _controller.StartRecipeDevelopmentTest(CareRecipeType.Training, 1));
-      AddButton("Training 3", 0.69f, 0.51f, 0.735f, () => _controller.StartRecipeDevelopmentTest(CareRecipeType.Training, 2));
-      AddButton("Training 4", 0.69f, 0.745f, 0.97f, () => _controller.StartRecipeDevelopmentTest(CareRecipeType.Training, 3));
+      AddButton("Routine A", 0.69f, 0.03f, 0.255f, () => _controller.StartRoutineDevelopmentTest(CareRoutineId.FocusFlow));
+      AddButton("Routine B", 0.69f, 0.265f, 0.49f, () => _controller.StartRoutineDevelopmentTest(CareRoutineId.PilotFlow));
+      AddButton("Routine C", 0.69f, 0.51f, 0.735f, () => _controller.StartRoutineDevelopmentTest(CareRoutineId.DeepReset));
+      AddButton("Routine D", 0.69f, 0.745f, 0.97f, () => _controller.StartRoutineDevelopmentTest(CareRoutineId.FullCare));
       AddButton("CARE AUDIO", 0.61f, 0.03f, 0.32f, ShowAudioPanel);
       AddButton("Double Recipe", 0.61f, 0.355f, 0.645f, () => _controller.StartRecipeDevelopmentTest(CareRecipeType.Double));
       AddButton("Triple Recipe", 0.61f, 0.68f, 0.97f, () => _controller.StartRecipeDevelopmentTest(CareRecipeType.Triple));
       AddButton("Complete Action", 0.53f, 0.03f, 0.32f, () => _controller.AdvanceRecipeStepDevelopmentTest());
       AddButton("Reset Care Intros", 0.53f, 0.355f, 0.645f, () => _controller.ResetCareIntrosDevelopment());
       AddButton("Reset Recipe", 0.53f, 0.68f, 0.97f, () => _controller.ResetRecipeDevelopmentTest());
-      AddButton("Reset Training", 0.45f, 0.03f, 0.20f, () => _controller.ResetTrainingProgressDevelopment());
+      AddButton("Reset Routine Order", 0.45f, 0.03f, 0.20f, () => _controller.ResetTrainingProgressDevelopment());
       AddButton("RESEARCH TOOLS", 0.45f, 0.215f, 0.385f, ShowResearchPanel);
       AddButton("FILL STORAGE", 0.45f, 0.40f, 0.575f, () => _controller.FillStorageDevelopment());
       AddButton("FREE ONE SLOT", 0.45f, 0.59f, 0.765f, () => _controller.FreeOneStorageSlotDevelopment());
@@ -105,7 +105,7 @@ namespace KeepBlinking.CareStation
       AddButtonTo(_researchPanel, "TEST CLOSE CUE", 0.13f, 0.05f, 0.34f, () => _controller.TestCloseCueDevelopment());
       AddButtonTo(_researchPanel, "TEST OPEN CUE", 0.13f, 0.355f, 0.645f, () => _controller.TestOpenCueDevelopment());
       AddButtonTo(_researchPanel, "TEST GUIDED OPEN", 0.13f, 0.66f, 0.95f, () => _controller.TestGuidedOpenCueDevelopment());
-      AddButtonTo(_researchPanel, "ADD 1 GOLD", 0.02f, 0.02f, 0.245f, () => _controller.AddOneGoldDevelopment());
+      AddButtonTo(_researchPanel, "ADD 1 PREMIUM", 0.02f, 0.02f, 0.245f, () => _controller.AddOneGoldDevelopment());
       AddButtonTo(_researchPanel, "FREE 4 STORAGE SLOTS", 0.02f, 0.255f, 0.49f, () => _controller.FreeFourStorageSlotsDevelopment());
       AddButtonTo(_researchPanel, "FORCE UPGRADE CHECK", 0.02f, 0.51f, 0.745f, () => _controller.ForceUpgradeCheckDevelopment());
       AddButtonTo(_researchPanel, "TEST NO-AFFORDABLE-UPGRADE", 0.02f, 0.755f, 0.98f, () => _controller.TestNoAffordableUpgradeDevelopment());
