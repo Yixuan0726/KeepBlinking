@@ -317,13 +317,13 @@ namespace KeepBlinking.CareStation
       if (isActiveAndEnabled) StartCoroutine(PlayLightHapticPulses(1));
     }
 
-    public void CancelAction()
+    public void CancelAction(bool stopRoutineMusic = true)
     {
       if (_runtime == null) return;
       _runtime.Cancel();
       if (!IsDevelopmentTest) _gameplay?.SetCareActionActive(false);
       CareAudioFeedbackController.EnsureExists().StopGuidedCue();
-      CareAudioFeedbackController.EnsureExists().StopActionAmbience(true);
+      if (stopRoutineMusic) CareAudioFeedbackController.EnsureExists().StopActionAmbience();
       CareVoiceService.EnsureExists().Stop();
       IsDevelopmentTest = false;
     }
@@ -453,7 +453,6 @@ namespace KeepBlinking.CareStation
       if (_runtime != null && _runtime.TryConsumeCompletionSignal())
       {
         PlayCompletionCueOnce();
-        CareAudioFeedbackController.EnsureExists().StopActionAmbience();
         if (!IsDevelopmentTest) _gameplay?.SetCareActionActive(false);
         CareActionCompleted?.Invoke(ActionType);
         if (IsDevelopmentTest)
@@ -1029,7 +1028,8 @@ namespace KeepBlinking.CareStation
       {
         _eyesOpenPausedSeconds = 0f;
       }
-      if (Stage == CareActionStage.Completed) audio.StopClosedEyeMusic();
+      // Closed-Eye Rest is still part of the same Routine. The Routine owner
+      // performs the single fade-out after it consumes the final completion.
     }
 
     private System.Collections.IEnumerator PlayHapticPulses(int count)

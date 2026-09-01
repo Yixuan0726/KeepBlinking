@@ -1681,7 +1681,7 @@ namespace KeepBlinking.CareStation
       _researchRecorder?.RecordStepReplacement(original, CareActionType.ClosedEyeRest, reason);
       _view.HideCareStepChangeConfirmation();
       _view.ConfigureRecipe(_save.currentRecipe);
-      _careActions?.CancelAction();
+      _careActions?.CancelAction(false);
       _save.careAction?.Reset();
 
       if (replacement.SatisfiedByCompletedRest)
@@ -1717,7 +1717,7 @@ namespace KeepBlinking.CareStation
     private bool StartStationCareAction(CareActionType type, bool restore)
     {
       if (_careActions == null || type == CareActionType.None) return false;
-      if (_careActions.IsRunning) _careActions.CancelAction();
+      if (_careActions.IsRunning) _careActions.CancelAction(false);
       var canRestore = restore && _save.careAction != null &&
                        _save.careAction.actionType == type &&
                        _save.careAction.internalPhase != CareActionInternalPhase.None;
@@ -1986,6 +1986,7 @@ namespace KeepBlinking.CareStation
       _save.careActionCompleted = _save.currentRecipe != null && _save.currentRecipe.recipeCompleted;
       if (_save.careActionCompleted)
       {
+        CareAudioFeedbackController.EnsureExists().StopActionAmbience();
         if (!_save.inspectionActive)
           CareRecipeGenerator.ApplyCompletionToProgress(_save, _save.currentRecipe);
         CareEconomyRules.TryGrantRecipeCareEnergy(_save, _economyConfiguration, out var reconciled);
@@ -3733,6 +3734,8 @@ namespace KeepBlinking.CareStation
     private void OnDestroy()
     {
       _stationAudio?.StopWork();
+      if (CareAudioFeedbackController.Instance != null)
+        CareAudioFeedbackController.Instance.StopActionAmbience();
       SaveNow();
       Unsubscribe();
       if (_view != null)

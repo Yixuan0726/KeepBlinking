@@ -1,5 +1,7 @@
 using KeepBlinking.CareStation;
 using UnityEngine;
+using UnityEngine.Audio;
+using UnityEngine.Serialization;
 
 #if UNITY_IOS && !UNITY_EDITOR
 using System.Runtime.InteropServices;
@@ -9,15 +11,19 @@ namespace KeepBlinking.Gameplay
 {
   public sealed class CareAudioFeedbackController : MonoBehaviour
   {
-    [Header("Care Action Mix")]
-    [SerializeField, Range(0f, 1f)] private float _ambienceVolume = 0.075f;
-    [SerializeField, Range(0.25f, 3f)] private float _ambienceFadeInSeconds = 1.5f;
-    [SerializeField, Range(0.25f, 2f)] private float _ambienceFadeOutSeconds = 1f;
+    [Header("Care Routine Music")]
+    [FormerlySerializedAs("_ambienceVolume")]
+    [SerializeField, Range(0f, 1f)] private float _routineMusicVolume = 0.075f;
+    [FormerlySerializedAs("_ambienceFadeInSeconds")]
+    [SerializeField, Range(0.25f, 3f)] private float _routineMusicFadeInSeconds = 1.5f;
+    [FormerlySerializedAs("_ambienceFadeOutSeconds")]
+    [SerializeField, Range(0.25f, 2f)] private float _routineMusicFadeOutSeconds = 1f;
     [SerializeField, Range(-12f, -3f)] private float _voiceDuckDecibels = -6f;
-    [SerializeField] private AudioClip _focusAmbienceOverride;
-    [SerializeField] private AudioClip _pilotAmbienceOverride;
-    [SerializeField] private AudioClip _guidedAmbienceOverride;
-    [SerializeField] private AudioClip _restAmbienceOverride;
+    [SerializeField] private AudioClip _routineMusicOverride;
+    [SerializeField] private string _routineMusicResourcePath =
+      "CareStation/Audio/Music/LongNight_Aventure";
+    [SerializeField] private string _routineMixerResourcePath =
+      "CareStation/Audio/Music/CareRoutineMixer";
 
     [SerializeField, Range(0f, 1f)] private float _fragmentVolume = 0.13f;
     [SerializeField, Range(0f, 1f)] private float _stepVolume = 0.25f;
@@ -54,15 +60,13 @@ namespace KeepBlinking.Gameplay
     private AudioClip _pilotAxis;
     private AudioClip _pilotCompletion;
     private AudioClip _restOpen;
-    private AudioClip _focusAmbience;
-    private AudioClip _pilotAmbience;
-    private AudioClip _guidedAmbience;
-    private AudioClip _restAmbience;
+    private AudioClip _routineMusic;
+    private AudioMixerGroup _musicMixerGroup;
     private AudioClip _careComplete;
     private Coroutine _musicFade;
     private bool _musicDucked;
     private bool _musicStopping;
-    private bool _musicSwitching;
+    private bool _routineMusicRequested;
     private bool _actionAudioPaused;
     private CareActionType _activeAmbienceAction;
     private int _noteIndex;
@@ -93,6 +97,7 @@ namespace KeepBlinking.Gameplay
         return;
       }
       Instance = this;
+      if (Application.isPlaying) DontDestroyOnLoad(gameObject);
       _source = gameObject.AddComponent<AudioSource>();
       ConfigureSource(_source, 128);
       // Safety instructions use their own voice so a simultaneous station,
@@ -106,6 +111,9 @@ namespace KeepBlinking.Gameplay
       _musicSource = gameObject.AddComponent<AudioSource>();
       ConfigureSource(_musicSource, 180);
       _musicSource.loop = true;
+      _musicSource.ignoreListenerPause = false;
+      LoadRoutineMusicAndMixer();
+      ApplyMusicMixerRouting();
       EnsureListenerState();
       _fragmentNotes = new[]
       {
@@ -185,7 +193,6 @@ namespace KeepBlinking.Gameplay
       _pilotAxis = CreateChord("Pilot Axis", 349.23f, 523.25f, 0.40f);
       _pilotCompletion = CreateToneSequence("Pilot Four Note", new[] { 349.23f, 440f, 523.25f, 698.46f }, 0.18f);
       _restOpen = CreateRisingTone("Rest Ready To Open", 440f, 622.25f, 0.82f);
-      LoadActionAmbience();
       _careComplete = CreateToneSequence("Care Complete Three Tone", new[] { 523.25f, 659.25f, 783.99f }, 0.24f);
     }
 
@@ -303,27 +310,36 @@ namespace KeepBlinking.Gameplay
       EnsureAudioOutputs();
       var clip = GetAmbienceClip(action);
       if (_musicSource == null || clip == null) return;
-      if (_musicSource.isPlaying && _musicSource.clip == clip && _activeAmbienceAction == action)
+      _activeAmbienceAction = action;
+      _actionAudioPaused = startPaused;
+      if (_musicSource.clip == clip && (_routineMusicRequested || _musicSource.isPlaying))
       {
-        SetActionAudioPaused(startPaused);
+        _routineMusicRequested = true;
+        _musicStopping = false;
+        StopMusicFade();
+        if (startPaused)
+        {
+          if (_musicSource.isPlaying) _musicSource.Pause();
+        }
+        else
+        {
+          _musicSource.UnPause();
+          if (!_musicSource.isPlaying) _musicSource.Play();
+          if (!Mathf.Approximately(_musicSource.volume, MusicTargetVolume))
+            _musicFade = StartCoroutine(FadeMusic(0.25f, false));
+        }
         return;
       }
       StopMusicFade();
       _musicStopping = false;
-      _actionAudioPaused = startPaused;
-      if (_musicSource.isPlaying && _musicSource.clip != null)
-      {
-        if (startPaused) _musicSource.Pause();
-        _musicSwitching = true;
-        _musicFade = StartCoroutine(SwitchMusic(clip, action));
-        return;
-      }
-      _activeAmbienceAction = action;
+      _routineMusicRequested = true;
       _musicSource.Stop();
       _musicSource.clip = clip;
+      _musicSource.loop = true;
+      _musicSource.timeSamples = 0;
       _musicSource.volume = 0f;
       if (!startPaused) _musicSource.Play();
-      _musicFade = StartCoroutine(FadeMusic(_ambienceFadeInSeconds, false));
+      _musicFade = StartCoroutine(FadeMusic(_routineMusicFadeInSeconds, false));
     }
 
     public void StopActionAmbience(bool immediate = false)
@@ -333,17 +349,20 @@ namespace KeepBlinking.Gameplay
       if (immediate)
       {
         StopMusicFade();
+        _routineMusicRequested = false;
         _musicStopping = false;
-        _musicSwitching = false;
         _activeAmbienceAction = CareActionType.None;
         _musicSource.volume = 0f;
         _musicSource.Stop();
+        _musicSource.timeSamples = 0;
         return;
       }
       if (_musicStopping) return;
       StopMusicFade();
+      _routineMusicRequested = false;
       _musicStopping = true;
-      _musicFade = StartCoroutine(FadeMusic(_ambienceFadeOutSeconds, true));
+      if (!_musicSource.isPlaying && _musicSource.clip != null) _musicSource.UnPause();
+      _musicFade = StartCoroutine(FadeMusic(_routineMusicFadeOutSeconds, true));
     }
 
     public void StartClosedEyeMusic() => StartActionAmbience(CareActionType.ClosedEyeRest);
@@ -368,7 +387,7 @@ namespace KeepBlinking.Gameplay
         if (_guidedSource != null && _guidedSource.clip != null) _guidedSource.UnPause();
         if (_completionSource != null && _completionSource.clip != null) _completionSource.UnPause();
         if (_musicSource != null && _musicSource.clip != null && !_musicSource.isPlaying &&
-            _activeAmbienceAction != CareActionType.None && !_musicStopping)
+            _routineMusicRequested && !_musicStopping)
           _musicSource.Play();
       }
     }
@@ -376,7 +395,7 @@ namespace KeepBlinking.Gameplay
     public void SetVoiceDucking(bool active)
     {
       _musicDucked = active;
-      if (_musicSource != null && _musicSource.isPlaying && !_musicStopping && !_musicSwitching)
+      if (_musicSource != null && _musicSource.isPlaying && !_musicStopping)
       {
         StopMusicFade();
         _musicFade = StartCoroutine(FadeMusic(active ? 0.18f : 0.6f, false));
@@ -384,8 +403,8 @@ namespace KeepBlinking.Gameplay
     }
 
     private float MusicTargetVolume => _musicDucked
-      ? _ambienceVolume * Mathf.Pow(10f, _voiceDuckDecibels / 20f)
-      : _ambienceVolume;
+      ? _routineMusicVolume * Mathf.Pow(10f, _voiceDuckDecibels / 20f)
+      : _routineMusicVolume;
 
     private System.Collections.IEnumerator FadeMusic(float seconds, bool stopAtEnd)
     {
@@ -393,7 +412,7 @@ namespace KeepBlinking.Gameplay
       var elapsed = 0f;
       while (_musicSource != null && elapsed < seconds)
       {
-        if (_actionAudioPaused)
+        if (_actionAudioPaused && !stopAtEnd)
         {
           yield return null;
           continue;
@@ -409,6 +428,7 @@ namespace KeepBlinking.Gameplay
         {
           _musicSource.volume = 0f;
           _musicSource.Stop();
+          _musicSource.timeSamples = 0;
           _activeAmbienceAction = CareActionType.None;
         }
         else
@@ -420,86 +440,39 @@ namespace KeepBlinking.Gameplay
       _musicFade = null;
     }
 
-    private System.Collections.IEnumerator SwitchMusic(AudioClip nextClip, CareActionType nextAction)
-    {
-      var start = _musicSource != null ? _musicSource.volume : 0f;
-      var elapsed = 0f;
-      while (_musicSource != null && elapsed < _ambienceFadeOutSeconds)
-      {
-        if (_actionAudioPaused)
-        {
-          yield return null;
-          continue;
-        }
-        elapsed += Time.unscaledDeltaTime;
-        _musicSource.volume = Mathf.Lerp(start, 0f,
-          Mathf.Clamp01(elapsed / Mathf.Max(0.01f, _ambienceFadeOutSeconds)));
-        yield return null;
-      }
-      if (_musicSource == null) yield break;
-      _musicSource.Stop();
-      _musicSource.clip = nextClip;
-      _musicSource.volume = 0f;
-      _activeAmbienceAction = nextAction;
-      if (!_actionAudioPaused) _musicSource.Play();
-      elapsed = 0f;
-      while (_musicSource != null && elapsed < _ambienceFadeInSeconds)
-      {
-        if (_actionAudioPaused)
-        {
-          yield return null;
-          continue;
-        }
-        if (!_musicSource.isPlaying) _musicSource.Play();
-        elapsed += Time.unscaledDeltaTime;
-        _musicSource.volume = Mathf.Lerp(0f, MusicTargetVolume,
-          Mathf.Clamp01(elapsed / Mathf.Max(0.01f, _ambienceFadeInSeconds)));
-        yield return null;
-      }
-      if (_musicSource != null) _musicSource.volume = MusicTargetVolume;
-      _musicSwitching = false;
-      _musicFade = null;
-    }
-
     public AudioClip GetAmbienceClip(CareActionType action)
     {
-      switch (action)
-      {
-        case CareActionType.FocusShift: return _focusAmbience;
-        case CareActionType.PilotEyeRoutine: return _pilotAmbience;
-        case CareActionType.GuidedEyeCircles: return _guidedAmbience;
-        case CareActionType.ClosedEyeRest: return _restAmbience;
-        default: return null;
-      }
+      return action == CareActionType.FocusShift || action == CareActionType.PilotEyeRoutine ||
+             action == CareActionType.GuidedEyeCircles || action == CareActionType.ClosedEyeRest
+        ? _routineMusic
+        : null;
     }
 
     public CareActionType ActiveAmbienceAction => _activeAmbienceAction;
     public bool ActionAudioPaused => _actionAudioPaused;
-    public float UnduckedAmbienceVolume => _ambienceVolume;
-    public float DuckedAmbienceVolume => _ambienceVolume * Mathf.Pow(10f, _voiceDuckDecibels / 20f);
+    public bool RoutineMusicRequested => _routineMusicRequested;
+    public bool RoutineMusicPlaying => _musicSource != null && _musicSource.isPlaying;
+    public AudioMixerGroup MusicMixerGroup => _musicMixerGroup;
+    public float UnduckedAmbienceVolume => _routineMusicVolume;
+    public float DuckedAmbienceVolume => _routineMusicVolume * Mathf.Pow(10f, _voiceDuckDecibels / 20f);
 
-    private void LoadActionAmbience()
+    private void LoadRoutineMusicAndMixer()
     {
-      _focusAmbience = _focusAmbienceOverride != null
-        ? _focusAmbienceOverride
-        : Resources.Load<AudioClip>("CareStation/Audio/Ambience/Focus_Ambience");
-      _pilotAmbience = _pilotAmbienceOverride != null
-        ? _pilotAmbienceOverride
-        : Resources.Load<AudioClip>("CareStation/Audio/Ambience/Pilot_Ambience");
-      _guidedAmbience = _guidedAmbienceOverride != null
-        ? _guidedAmbienceOverride
-        : Resources.Load<AudioClip>("CareStation/Audio/Ambience/Guided_Ambience");
-      _restAmbience = _restAmbienceOverride != null
-        ? _restAmbienceOverride
-        : Resources.Load<AudioClip>("CareStation/Audio/Ambience/Rest_Ambience");
+      if (_routineMusic == null)
+        _routineMusic = _routineMusicOverride != null
+          ? _routineMusicOverride
+          : Resources.Load<AudioClip>(_routineMusicResourcePath);
+      if (_musicMixerGroup != null) return;
+      var mixer = Resources.Load<AudioMixer>(_routineMixerResourcePath);
+      if (mixer == null) return;
+      var groups = mixer.FindMatchingGroups("Music");
+      if (groups != null && groups.Length > 0) _musicMixerGroup = groups[0];
+    }
 
-      // Deterministic, low-cost fallbacks keep tests and clean checkouts audible
-      // before Unity has imported the authored WAV files. Each action uses a
-      // genuinely different spectrum and modulation rather than renamed copies.
-      if (_focusAmbience == null) _focusAmbience = CreateActionAmbientFallback("Focus Ambience Fallback", 73f, 0.10f, 0.31f);
-      if (_pilotAmbience == null) _pilotAmbience = CreateActionAmbientFallback("Pilot Ambience Fallback", 97f, 0.16f, 0.47f);
-      if (_guidedAmbience == null) _guidedAmbience = CreateActionAmbientFallback("Guided Ambience Fallback", 131f, 0.07f, 0.19f);
-      if (_restAmbience == null) _restAmbience = CreateActionAmbientFallback("Rest Ambience Fallback", 55f, 0.04f, 0.11f);
+    private void ApplyMusicMixerRouting()
+    {
+      if (_musicSource != null && _musicMixerGroup != null)
+        _musicSource.outputAudioMixerGroup = _musicMixerGroup;
     }
 
     private void StopMusicFade()
@@ -507,7 +480,6 @@ namespace KeepBlinking.Gameplay
       if (_musicFade == null) return;
       StopCoroutine(_musicFade);
       _musicFade = null;
-      _musicSwitching = false;
     }
 
     public void PlayGuidedTrackingPause()
@@ -561,7 +533,10 @@ namespace KeepBlinking.Gameplay
         _musicSource = gameObject.AddComponent<AudioSource>();
         ConfigureSource(_musicSource, 180);
         _musicSource.loop = true;
+        _musicSource.ignoreListenerPause = false;
       }
+      LoadRoutineMusicAndMixer();
+      ApplyMusicMixerRouting();
       EnsureListenerState();
     }
 
@@ -643,7 +618,9 @@ namespace KeepBlinking.Gameplay
         var age = _lastGuidedCueAt < 0f ? -1f : Mathf.Max(0f, Time.unscaledTime - _lastGuidedCueAt);
         return
           $"Audio Listeners: {listenerCount}  Paused: {AudioListener.pause}  Volume: {AudioListener.volume:0.00}\n" +
-          $"Ambience: {_activeAmbienceAction}  Clip: {(_musicSource != null && _musicSource.clip != null ? _musicSource.clip.name : "NONE")}  " +
+          $"Routine Music: {(_routineMusicRequested ? "ACTIVE" : "STOPPED")}  " +
+          $"Clip: {(_musicSource != null && _musicSource.clip != null ? _musicSource.clip.name : "NONE")}  " +
+          $"Mixer: {(_musicMixerGroup != null ? _musicMixerGroup.name : "NONE")}  " +
           $"Ducked: {_musicDucked}  Action Paused: {_actionAudioPaused}\n" +
           $"Cue: {_lastGuidedCue}  Age: {(age < 0f ? "--" : age.ToString("0.0") + "s")}  " +
           $"Playing: {(_guidedSource != null && _guidedSource.isPlaying)}  Source: {(_guidedSource != null ? _guidedSource.volume : 0f):0.00}";
@@ -869,10 +846,6 @@ namespace KeepBlinking.Gameplay
       DestroyClip(_pilotAxis);
       DestroyClip(_pilotCompletion);
       DestroyClip(_restOpen);
-      DestroyGeneratedAmbience(_focusAmbience);
-      DestroyGeneratedAmbience(_pilotAmbience);
-      DestroyGeneratedAmbience(_guidedAmbience);
-      DestroyGeneratedAmbience(_restAmbience);
       DestroyClip(_careComplete);
       if (Instance == this) Instance = null;
     }

@@ -591,9 +591,9 @@ namespace KeepBlinking.Tests
     }
 
     [Test]
-    public void FourFinalActionsResolveFourDistinctAuthoredAmbienceClips()
+    public void FormalActionsResolveOneContinuousRoutineMusicClip()
     {
-      var owner = new GameObject("Care Ambience Runtime Mapping Test");
+      var owner = new GameObject("Care Routine Music Mapping Test");
       try
       {
         var audio = owner.AddComponent<CareAudioFeedbackController>();
@@ -607,11 +607,9 @@ namespace KeepBlinking.Tests
         var clips = actions.Select(audio.GetAmbienceClip).ToArray();
 
         Assert.That(clips, Has.All.Not.Null);
-        Assert.That(clips.Distinct().Count(), Is.EqualTo(actions.Length),
-          "Every formal action must use its own authored ambience rather than a renamed copy.");
-        CollectionAssert.AreEqual(
-          new[] { "Focus_Ambience", "Pilot_Ambience", "Guided_Ambience", "Rest_Ambience" },
-          clips.Select(clip => clip.name).ToArray());
+        Assert.That(clips.Distinct().Count(), Is.EqualTo(1),
+          "Action transitions must retain one authored Routine track instead of restarting action music.");
+        Assert.That(clips[0].name, Is.EqualTo("LongNight_Aventure"));
       }
       finally
       {
