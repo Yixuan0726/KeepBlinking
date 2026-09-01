@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="7" result="Passed" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-08-31 10:25:21Z" end-time="2026-08-31 10:25:21Z" duration="0.675273">
+  <test-suite type="TestSuite" id="1075" name="KeepBlinking" fullname="KeepBlinking" runstate="Runnable" testcasecount="59" result="Passed" start-time="2026-08-31 10:25:21Z" end-time="2026-08-31 10:25:21Z" duration="0.675273" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="PlayMode" />
+    </properties>
+    <test-suite type="Assembly" id="1068" name="KeepBlinking.PlayModeTests.dll" fullname="D:/111/KeepBlinking/Library/ScriptAssemblies/KeepBlinking.PlayModeTests.dll" runstate="Runnable" testcasecount="59" result="Passed" start-time="2026-08-31 10:25:21Z" end-time="2026-08-31 10:25:21Z" duration="0.668170" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="39512" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="PlayMode" />
+        <property name="EditorOnly" value="False" />
+      </properties>
+      <test-suite type="TestSuite" id="1069" name="KeepBlinking" fullname="KeepBlinking" runstate="Runnable" testcasecount="59" result="Passed" start-time="2026-08-31 10:25:21Z" end-time="2026-08-31 10:25:21Z" duration="0.665916" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-suite type="TestSuite" id="1070" name="Tests" fullname="KeepBlinking.Tests" runstate="Runnable" testcasecount="59" result="Passed" start-time="2026-08-31 10:25:21Z" end-time="2026-08-31 10:25:21Z" duration="0.663794" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-suite type="TestSuite" id="1071" name="PlayMode" fullname="KeepBlinking.Tests.PlayMode" runstate="Runnable" testcasecount="10" result="Passed" start-time="2026-08-31 10:25:21Z" end-time="2026-08-31 10:25:21Z" duration="0.661808" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <test-suite type="TestFixture" id="1058" name="CareStationPhaseFourLayoutPlayModeTests" fullname="KeepBlinking.Tests.PlayMode.CareStationPhaseFourLayoutPlayModeTests" classname="KeepBlinking.Tests.PlayMode.CareStationPhaseFourLayoutPlayModeTests" runstate="Runnable" testcasecount="7" result="Passed" start-time="2026-08-31 10:25:21Z" end-time="2026-08-31 10:25:21Z" duration="0.658980" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1062" name="BottleStartsAtFillerAndFollowsManualHandoffsToPackerAndStorage" fullname="KeepBlinking.Tests.PlayMode.CareStationPhaseFourLayoutPlayModeTests.BottleStartsAtFillerAndFollowsManualHandoffsToPackerAndStorage" methodname="BottleStartsAtFillerAndFollowsManualHandoffsToPackerAndStorage" classname="KeepBlinking.Tests.PlayMode.CareStationPhaseFourLayoutPlayModeTests" runstate="Runnable" seed="1768011360" result="Passed" start-time="2026-08-31 10:25:21Z" end-time="2026-08-31 10:25:21Z" duration="0.331727" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1065" name="CommonPortraitRatiosKeepDevicesRoutineAndNavigationSeparated" fullname="KeepBlinking.Tests.PlayMode.CareStationPhaseFourLayoutPlayModeTests.CommonPortraitRatiosKeepDevicesRoutineAndNavigationSeparated" methodname="CommonPortraitRatiosKeepDevicesRoutineAndNavigationSeparated" classname="KeepBlinking.Tests.PlayMode.CareStationPhaseFourLayoutPlayModeTests" runstate="Runnable" seed="1792479969" result="Passed" start-time="2026-08-31 10:25:21Z" end-time="2026-08-31 10:25:21Z" duration="0.060517" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1059" name="FactoryTopology_UsesOneAuthoredFilterAndUniqueWorkshopDevicesWithoutWorkers" fullname="KeepBlinking.Tests.PlayMode.CareStationPhaseFourLayoutPlayModeTests.FactoryTopology_UsesOneAuthoredFilterAndUniqueWorkshopDevicesWithoutWorkers" methodname="FactoryTopology_UsesOneAuthoredFilterAndUniqueWorkshopDevicesWithoutWorkers" classname="KeepBlinking.Tests.PlayMode.CareStationPhaseFourLayoutPlayModeTests" runstate="Runnable" seed="1818215229" result="Passed" start-time="2026-08-31 10:25:21Z" end-time="2026-08-31 10:25:21Z" duration="0.046958" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1060" name="LevelOne_HasSoftLiquidHoseManualCarryPathAndNoConveyor" fullname="KeepBlinking.Tests.PlayMode.CareStationPhaseFourLayoutPlayModeTests.LevelOne_HasSoftLiquidHoseManualCarryPathAndNoConveyor" methodname="LevelOne_HasSoftLiquidHoseManualCarryPathAndNoConveyor" classname="KeepBlinking.Tests.PlayMode.CareStationPhaseFourLayoutPlayModeTests" runstate="Runnable" seed="1578034661" result="Passed" start-time="2026-08-31 10:25:21Z" end-time="2026-08-31 10:25:21Z" duration="0.043514" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1061" name="LevelTwoSwitchesToFixedPipeAndBasicConveyorWithoutChangingDevices" fullname="KeepBlinking.Tests.PlayMode.CareStationPhaseFourLayoutPlayModeTests.LevelTwoSwitchesToFixedPipeAndBasicConveyorWithoutChangingDevices" methodname="LevelTwoSwitchesToFixedPipeAndBasicConveyorWithoutChangingDevices" classname="KeepBlinking.Tests.PlayMode.CareStationPhaseFourLayoutPlayModeTests" runstate="Runnable" seed="746312821" result="Passed" start-time="2026-08-31 10:25:21Z" end-time="2026-08-31 10:25:21Z" duration="0.043502" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1064" name="RealPhoneViewKeepsFilterLargeAndWorkshopShellInsideSafeArea" fullname="KeepBlinking.Tests.PlayMode.CareStationPhaseFourLayoutPlayModeTests.RealPhoneViewKeepsFilterLargeAndWorkshopShellInsideSafeArea" methodname="RealPhoneViewKeepsFilterLargeAndWorkshopShellInsideSafeArea" classname="KeepBlinking.Tests.PlayMode.CareStationPhaseFourLayoutPlayModeTests" runstate="Runnable" seed="736875478" result="Passed" start-time="2026-08-31 10:25:21Z" end-time="2026-08-31 10:25:21Z" duration="0.044607" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1063" name="RequiredStatusesAppearOnlyBesideTheWorkingDevice" fullname="KeepBlinking.Tests.PlayMode.CareStationPhaseFourLayoutPlayModeTests.RequiredStatusesAppearOnlyBesideTheWorkingDevice" methodname="RequiredStatusesAppearOnlyBesideTheWorkingDevice" classname="KeepBlinking.Tests.PlayMode.CareStationPhaseFourLayoutPlayModeTests" runstate="Runnable" seed="877829259" result="Passed" start-time="2026-08-31 10:25:21Z" end-time="2026-08-31 10:25:21Z" duration="0.076706" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <output><![CDATA[<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: [TestRunnerNoThrottle] Restored Interaction Mode after test run.
+Saving results to: C:/Users/yuyixuan/AppData/LocalLow/DefaultCompany/KeepBlinking\TestResults.xml
+]]></output>
+              </test-case>
+            </test-suite>
+          </test-suite>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

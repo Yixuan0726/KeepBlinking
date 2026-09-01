@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="8" result="Passed" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-08-31 10:38:00Z" end-time="2026-08-31 10:38:00Z" duration="0.1382651">
+  <test-suite type="TestSuite" id="1000" name="KeepBlinking" fullname="KeepBlinking" runstate="Runnable" testcasecount="392" result="Passed" start-time="2026-08-31 10:38:00Z" end-time="2026-08-31 10:38:00Z" duration="0.138265" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="1439" name="KeepBlinking.EditorTests.dll" fullname="D:/111/KeepBlinking/Library/ScriptAssemblies/KeepBlinking.EditorTests.dll" runstate="Runnable" testcasecount="392" result="Passed" start-time="2026-08-31 10:38:00Z" end-time="2026-08-31 10:38:00Z" duration="0.125849" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="38808" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestSuite" id="1440" name="KeepBlinking" fullname="KeepBlinking" runstate="Runnable" testcasecount="392" result="Passed" start-time="2026-08-31 10:38:00Z" end-time="2026-08-31 10:38:00Z" duration="0.123160" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-suite type="TestSuite" id="1441" name="Tests" fullname="KeepBlinking.Tests" runstate="Runnable" testcasecount="392" result="Passed" start-time="2026-08-31 10:38:00Z" end-time="2026-08-31 10:38:00Z" duration="0.121022" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-suite type="TestFixture" id="1091" name="CareProductionPhaseThreeTests" fullname="KeepBlinking.Tests.CareProductionPhaseThreeTests" classname="KeepBlinking.Tests.CareProductionPhaseThreeTests" runstate="Runnable" testcasecount="8" result="Passed" start-time="2026-08-31 10:38:00Z" end-time="2026-08-31 10:38:00Z" duration="0.112519" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <test-case id="1097" name="ActiveCycleReservesItsStorageSlotFromOfflineProduction" fullname="KeepBlinking.Tests.CareProductionPhaseThreeTests.ActiveCycleReservesItsStorageSlotFromOfflineProduction" methodname="ActiveCycleReservesItsStorageSlotFromOfflineProduction" classname="KeepBlinking.Tests.CareProductionPhaseThreeTests" runstate="Runnable" seed="1485967126" result="Passed" start-time="2026-08-31 10:38:00Z" end-time="2026-08-31 10:38:00Z" duration="0.015052" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1093" name="EmptyBottleDoesNotExistBeforeFillerStage" fullname="KeepBlinking.Tests.CareProductionPhaseThreeTests.EmptyBottleDoesNotExistBeforeFillerStage" methodname="EmptyBottleDoesNotExistBeforeFillerStage" classname="KeepBlinking.Tests.CareProductionPhaseThreeTests" runstate="Runnable" seed="1998706093" result="Passed" start-time="2026-08-31 10:38:00Z" end-time="2026-08-31 10:38:00Z" duration="0.002537" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1092" name="ForegroundCycleUsesEveryStageInOrderAndConsumesEnergyOnce" fullname="KeepBlinking.Tests.CareProductionPhaseThreeTests.ForegroundCycleUsesEveryStageInOrderAndConsumesEnergyOnce" methodname="ForegroundCycleUsesEveryStageInOrderAndConsumesEnergyOnce" classname="KeepBlinking.Tests.CareProductionPhaseThreeTests" runstate="Runnable" seed="131788068" result="Passed" start-time="2026-08-31 10:38:00Z" end-time="2026-08-31 10:38:00Z" duration="0.001737" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1095" name="FullStoragePausesBeforeCycleAndPreservesCareEnergy" fullname="KeepBlinking.Tests.CareProductionPhaseThreeTests.FullStoragePausesBeforeCycleAndPreservesCareEnergy" methodname="FullStoragePausesBeforeCycleAndPreservesCareEnergy" classname="KeepBlinking.Tests.CareProductionPhaseThreeTests" runstate="Runnable" seed="1183960199" result="Passed" start-time="2026-08-31 10:38:00Z" end-time="2026-08-31 10:38:00Z" duration="0.000986" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1096" name="InProgressPackedBottleSurvivesFullStorageThenSettlesOnceAfterCart" fullname="KeepBlinking.Tests.CareProductionPhaseThreeTests.InProgressPackedBottleSurvivesFullStorageThenSettlesOnceAfterCart" methodname="InProgressPackedBottleSurvivesFullStorageThenSettlesOnceAfterCart" classname="KeepBlinking.Tests.CareProductionPhaseThreeTests" runstate="Runnable" seed="2041285899" result="Passed" start-time="2026-08-31 10:38:00Z" end-time="2026-08-31 10:38:00Z" duration="0.001136" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1094" name="MidStageReloadPreservesStageProgressAndDoesNotDeductAgain" fullname="KeepBlinking.Tests.CareProductionPhaseThreeTests.MidStageReloadPreservesStageProgressAndDoesNotDeductAgain" methodname="MidStageReloadPreservesStageProgressAndDoesNotDeductAgain" classname="KeepBlinking.Tests.CareProductionPhaseThreeTests" runstate="Runnable" seed="1820128003" result="Passed" start-time="2026-08-31 10:38:00Z" end-time="2026-08-31 10:38:00Z" duration="0.052707" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1098" name="OfflineFastForwardUsesCareEnergyCapacityAndCartCoinRules" fullname="KeepBlinking.Tests.CareProductionPhaseThreeTests.OfflineFastForwardUsesCareEnergyCapacityAndCartCoinRules" methodname="OfflineFastForwardUsesCareEnergyCapacityAndCartCoinRules" classname="KeepBlinking.Tests.CareProductionPhaseThreeTests" runstate="Runnable" seed="964884868" result="Passed" start-time="2026-08-31 10:38:00Z" end-time="2026-08-31 10:38:00Z" duration="0.001304" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1099" name="VersionTwentyOnePendingBottleMigratesIntoProductionLineWithoutAnotherCharge" fullname="KeepBlinking.Tests.CareProductionPhaseThreeTests.VersionTwentyOnePendingBottleMigratesIntoProductionLineWithoutAnotherCharge" methodname="VersionTwentyOnePendingBottleMigratesIntoProductionLineWithoutAnotherCharge" classname="KeepBlinking.Tests.CareProductionPhaseThreeTests" runstate="Runnable" seed="1538195579" result="Passed" start-time="2026-08-31 10:38:00Z" end-time="2026-08-31 10:38:00Z" duration="0.026614" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <output><![CDATA[<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: [TestRunnerNoThrottle] Restored Interaction Mode after test run.
+Saving results to: C:/Users/yuyixuan/AppData/LocalLow/DefaultCompany/KeepBlinking\TestResults.xml
+]]></output>
+            </test-case>
+          </test-suite>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

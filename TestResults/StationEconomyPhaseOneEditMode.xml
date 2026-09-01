@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="15" result="Passed" total="15" passed="15" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-08-31 10:38:21Z" end-time="2026-08-31 10:38:21Z" duration="0.1218032">
+  <test-suite type="TestSuite" id="1000" name="KeepBlinking" fullname="KeepBlinking" runstate="Runnable" testcasecount="392" result="Passed" start-time="2026-08-31 10:38:21Z" end-time="2026-08-31 10:38:21Z" duration="0.121803" total="15" passed="15" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="1439" name="KeepBlinking.EditorTests.dll" fullname="D:/111/KeepBlinking/Library/ScriptAssemblies/KeepBlinking.EditorTests.dll" runstate="Runnable" testcasecount="392" result="Passed" start-time="2026-08-31 10:38:21Z" end-time="2026-08-31 10:38:21Z" duration="0.111935" total="15" passed="15" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="36052" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestSuite" id="1440" name="KeepBlinking" fullname="KeepBlinking" runstate="Runnable" testcasecount="392" result="Passed" start-time="2026-08-31 10:38:21Z" end-time="2026-08-31 10:38:21Z" duration="0.111022" total="15" passed="15" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-suite type="TestSuite" id="1441" name="Tests" fullname="KeepBlinking.Tests" runstate="Runnable" testcasecount="392" result="Passed" start-time="2026-08-31 10:38:21Z" end-time="2026-08-31 10:38:21Z" duration="0.110392" total="15" passed="15" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-suite type="TestFixture" id="1073" name="CareEconomyPhaseOneTests" fullname="KeepBlinking.Tests.CareEconomyPhaseOneTests" classname="KeepBlinking.Tests.CareEconomyPhaseOneTests" runstate="Runnable" testcasecount="15" result="Passed" start-time="2026-08-31 10:38:21Z" end-time="2026-08-31 10:38:21Z" duration="0.106488" total="15" passed="15" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <test-suite type="ParameterizedMethod" id="1079" name="CompletedRecipeGrantsCareEnergyExactlyOnce" fullname="KeepBlinking.Tests.CareEconomyPhaseOneTests.CompletedRecipeGrantsCareEnergyExactlyOnce" classname="KeepBlinking.Tests.CareEconomyPhaseOneTests" runstate="Runnable" testcasecount="5" result="Passed" start-time="2026-08-31 10:38:21Z" end-time="2026-08-31 10:38:21Z" duration="0.026630" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1074" name="CompletedRecipeGrantsCareEnergyExactlyOnce(Training,1,12)" fullname="KeepBlinking.Tests.CareEconomyPhaseOneTests.CompletedRecipeGrantsCareEnergyExactlyOnce(Training,1,12)" methodname="CompletedRecipeGrantsCareEnergyExactlyOnce" classname="KeepBlinking.Tests.CareEconomyPhaseOneTests" runstate="Runnable" seed="373340286" result="Passed" start-time="2026-08-31 10:38:21Z" end-time="2026-08-31 10:38:21Z" duration="0.016830" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1075" name="CompletedRecipeGrantsCareEnergyExactlyOnce(Single,1,12)" fullname="KeepBlinking.Tests.CareEconomyPhaseOneTests.CompletedRecipeGrantsCareEnergyExactlyOnce(Single,1,12)" methodname="CompletedRecipeGrantsCareEnergyExactlyOnce" classname="KeepBlinking.Tests.CareEconomyPhaseOneTests" runstate="Runnable" seed="1447931818" result="Passed" start-time="2026-08-31 10:38:21Z" end-time="2026-08-31 10:38:21Z" duration="0.001177" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1076" name="CompletedRecipeGrantsCareEnergyExactlyOnce(Double,2,24)" fullname="KeepBlinking.Tests.CareEconomyPhaseOneTests.CompletedRecipeGrantsCareEnergyExactlyOnce(Double,2,24)" methodname="CompletedRecipeGrantsCareEnergyExactlyOnce" classname="KeepBlinking.Tests.CareEconomyPhaseOneTests" runstate="Runnable" seed="1538306359" result="Passed" start-time="2026-08-31 10:38:21Z" end-time="2026-08-31 10:38:21Z" duration="0.000913" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1077" name="CompletedRecipeGrantsCareEnergyExactlyOnce(Triple,3,36)" fullname="KeepBlinking.Tests.CareEconomyPhaseOneTests.CompletedRecipeGrantsCareEnergyExactlyOnce(Triple,3,36)" methodname="CompletedRecipeGrantsCareEnergyExactlyOnce" classname="KeepBlinking.Tests.CareEconomyPhaseOneTests" runstate="Runnable" seed="1408558195" result="Passed" start-time="2026-08-31 10:38:21Z" end-time="2026-08-31 10:38:21Z" duration="0.001217" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1078" name="CompletedRecipeGrantsCareEnergyExactlyOnce(Inspection,3,36)" fullname="KeepBlinking.Tests.CareEconomyPhaseOneTests.CompletedRecipeGrantsCareEnergyExactlyOnce(Inspection,3,36)" methodname="CompletedRecipeGrantsCareEnergyExactlyOnce" classname="KeepBlinking.Tests.CareEconomyPhaseOneTests" runstate="Runnable" seed="1943532834" result="Passed" start-time="2026-08-31 10:38:21Z" end-time="2026-08-31 10:38:21Z" duration="0.001146" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-case id="1080" name="ForegroundBottleConsumesOneEnergyAndCannotReserveTwice" fullname="KeepBlinking.Tests.CareEconomyPhaseOneTests.ForegroundBottleConsumesOneEnergyAndCannotReserveTwice" methodname="ForegroundBottleConsumesOneEnergyAndCannotReserveTwice" classname="KeepBlinking.Tests.CareEconomyPhaseOneTests" runstate="Runnable" seed="1782122031" result="Passed" start-time="2026-08-31 10:38:21Z" end-time="2026-08-31 10:38:21Z" duration="0.001531" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1082" name="FullAndPremiumProductsSellForConfiguredCoinsAtomically" fullname="KeepBlinking.Tests.CareEconomyPhaseOneTests.FullAndPremiumProductsSellForConfiguredCoinsAtomically" methodname="FullAndPremiumProductsSellForConfiguredCoinsAtomically" classname="KeepBlinking.Tests.CareEconomyPhaseOneTests" runstate="Runnable" seed="842341862" result="Passed" start-time="2026-08-31 10:38:21Z" end-time="2026-08-31 10:38:21Z" duration="0.001291" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1081" name="FullStoragePreservesEnergyAndCartStillFreesSpace" fullname="KeepBlinking.Tests.CareEconomyPhaseOneTests.FullStoragePreservesEnergyAndCartStillFreesSpace" methodname="FullStoragePreservesEnergyAndCartStillFreesSpace" classname="KeepBlinking.Tests.CareEconomyPhaseOneTests" runstate="Runnable" seed="1168200152" result="Passed" start-time="2026-08-31 10:38:21Z" end-time="2026-08-31 10:38:21Z" duration="0.001050" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1085" name="InsufficientCoinsReportsExactNeedWithoutChangingLevel" fullname="KeepBlinking.Tests.CareEconomyPhaseOneTests.InsufficientCoinsReportsExactNeedWithoutChangingLevel" methodname="InsufficientCoinsReportsExactNeedWithoutChangingLevel" classname="KeepBlinking.Tests.CareEconomyPhaseOneTests" runstate="Runnable" seed="896669583" result="Passed" start-time="2026-08-31 10:38:21Z" end-time="2026-08-31 10:38:21Z" duration="0.002040" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-suite type="ParameterizedMethod" id="1089" name="LegacyBlockingStatesRecoverToNonModalFlow" fullname="KeepBlinking.Tests.CareEconomyPhaseOneTests.LegacyBlockingStatesRecoverToNonModalFlow" classname="KeepBlinking.Tests.CareEconomyPhaseOneTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-08-31 10:38:21Z" end-time="2026-08-31 10:38:21Z" duration="0.035512" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1087" name="LegacyBlockingStatesRecoverToNonModalFlow(WaitStorageSpace)" fullname="KeepBlinking.Tests.CareEconomyPhaseOneTests.LegacyBlockingStatesRecoverToNonModalFlow(WaitStorageSpace)" methodname="LegacyBlockingStatesRecoverToNonModalFlow" classname="KeepBlinking.Tests.CareEconomyPhaseOneTests" runstate="Runnable" seed="156873834" result="Passed" start-time="2026-08-31 10:38:21Z" end-time="2026-08-31 10:38:21Z" duration="0.020776" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1088" name="LegacyBlockingStatesRecoverToNonModalFlow(UpgradeSelection)" fullname="KeepBlinking.Tests.CareEconomyPhaseOneTests.LegacyBlockingStatesRecoverToNonModalFlow(UpgradeSelection)" methodname="LegacyBlockingStatesRecoverToNonModalFlow" classname="KeepBlinking.Tests.CareEconomyPhaseOneTests" runstate="Runnable" seed="1677718473" result="Passed" start-time="2026-08-31 10:38:21Z" end-time="2026-08-31 10:38:21Z" duration="0.010288" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-case id="1083" name="ReloadCannotRepeatCartSaleOrCoins" fullname="KeepBlinking.Tests.CareEconomyPhaseOneTests.ReloadCannotRepeatCartSaleOrCoins" methodname="ReloadCannotRepeatCartSaleOrCoins" classname="KeepBlinking.Tests.CareEconomyPhaseOneTests" runstate="Runnable" seed="621992182" result="Passed" start-time="2026-08-31 10:38:21Z" end-time="2026-08-31 10:38:21Z" duration="0.018331" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1090" name="RetiredIncidentAndGoldGeneratorsStayDisabled" fullname="KeepBlinking.Tests.CareEconomyPhaseOneTests.RetiredIncidentAndGoldGeneratorsStayDisabled" methodname="RetiredIncidentAndGoldGeneratorsStayDisabled" classname="KeepBlinking.Tests.CareEconomyPhaseOneTests" runstate="Runnable" seed="1351313226" result="Passed" start-time="2026-08-31 10:38:21Z" end-time="2026-08-31 10:38:21Z" duration="0.001324" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1084" name="UpgradeUsesCoinsOnlyAndConvertedCostIsCentralized" fullname="KeepBlinking.Tests.CareEconomyPhaseOneTests.UpgradeUsesCoinsOnlyAndConvertedCostIsCentralized" methodname="UpgradeUsesCoinsOnlyAndConvertedCostIsCentralized" classname="KeepBlinking.Tests.CareEconomyPhaseOneTests" runstate="Runnable" seed="1154794543" result="Passed" start-time="2026-08-31 10:38:21Z" end-time="2026-08-31 10:38:21Z" duration="0.001240" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1086" name="VersionTwentyIncidentAndGoldMigrateWithoutResettingRecipeOrLevels" fullname="KeepBlinking.Tests.CareEconomyPhaseOneTests.VersionTwentyIncidentAndGoldMigrateWithoutResettingRecipeOrLevels" methodname="VersionTwentyIncidentAndGoldMigrateWithoutResettingRecipeOrLevels" classname="KeepBlinking.Tests.CareEconomyPhaseOneTests" runstate="Runnable" seed="2065749194" result="Passed" start-time="2026-08-31 10:38:21Z" end-time="2026-08-31 10:38:21Z" duration="0.009787" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <output><![CDATA[<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: [TestRunnerNoThrottle] Restored Interaction Mode after test run.
+Saving results to: C:/Users/yuyixuan/AppData/LocalLow/DefaultCompany/KeepBlinking\TestResults.xml
+]]></output>
+            </test-case>
+          </test-suite>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

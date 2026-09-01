@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="1" result="Passed" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-08-31 10:30:49Z" end-time="2026-08-31 10:30:50Z" duration="0.4108025">
+  <test-suite type="TestSuite" id="1075" name="KeepBlinking" fullname="KeepBlinking" runstate="Runnable" testcasecount="59" result="Passed" start-time="2026-08-31 10:30:49Z" end-time="2026-08-31 10:30:50Z" duration="0.410803" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="PlayMode" />
+    </properties>
+    <test-suite type="Assembly" id="1068" name="KeepBlinking.PlayModeTests.dll" fullname="D:/111/KeepBlinking/Library/ScriptAssemblies/KeepBlinking.PlayModeTests.dll" runstate="Runnable" testcasecount="59" result="Passed" start-time="2026-08-31 10:30:49Z" end-time="2026-08-31 10:30:50Z" duration="0.401685" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="28908" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="PlayMode" />
+        <property name="EditorOnly" value="False" />
+      </properties>
+      <test-suite type="TestSuite" id="1069" name="KeepBlinking" fullname="KeepBlinking" runstate="Runnable" testcasecount="59" result="Passed" start-time="2026-08-31 10:30:49Z" end-time="2026-08-31 10:30:50Z" duration="0.398907" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-suite type="TestSuite" id="1070" name="Tests" fullname="KeepBlinking.Tests" runstate="Runnable" testcasecount="59" result="Passed" start-time="2026-08-31 10:30:49Z" end-time="2026-08-31 10:30:50Z" duration="0.396492" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-suite type="TestSuite" id="1071" name="PlayMode" fullname="KeepBlinking.Tests.PlayMode" runstate="Runnable" testcasecount="10" result="Passed" start-time="2026-08-31 10:30:49Z" end-time="2026-08-31 10:30:50Z" duration="0.393826" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <test-suite type="TestFixture" id="1066" name="CareStationPhaseFourScreenshotPlayModeTests" fullname="KeepBlinking.Tests.PlayMode.CareStationPhaseFourScreenshotPlayModeTests" classname="KeepBlinking.Tests.PlayMode.CareStationPhaseFourScreenshotPlayModeTests" runstate="Runnable" testcasecount="1" result="Passed" start-time="2026-08-31 10:30:49Z" end-time="2026-08-31 10:30:50Z" duration="0.390915" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1067" name="CaptureIdleProducingAndStorageWaitingGameViews" fullname="KeepBlinking.Tests.PlayMode.CareStationPhaseFourScreenshotPlayModeTests.CaptureIdleProducingAndStorageWaitingGameViews" methodname="CaptureIdleProducingAndStorageWaitingGameViews" classname="KeepBlinking.Tests.PlayMode.CareStationPhaseFourScreenshotPlayModeTests" runstate="Runnable" seed="423337094" result="Passed" start-time="2026-08-31 10:30:49Z" end-time="2026-08-31 10:30:50Z" duration="0.379505" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <output><![CDATA[<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: [TestRunnerNoThrottle] Restored Interaction Mode after test run.
+Saving results to: C:/Users/yuyixuan/AppData/LocalLow/DefaultCompany/KeepBlinking\TestResults.xml
+]]></output>
+              </test-case>
+            </test-suite>
+          </test-suite>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

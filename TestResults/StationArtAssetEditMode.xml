@@ -1,0 +1,220 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="30" result="Passed" total="30" passed="30" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-08-31 10:38:53Z" end-time="2026-08-31 10:38:54Z" duration="1.6024133">
+  <test-suite type="TestSuite" id="1000" name="KeepBlinking" fullname="KeepBlinking" runstate="Runnable" testcasecount="392" result="Passed" start-time="2026-08-31 10:38:53Z" end-time="2026-08-31 10:38:54Z" duration="1.602413" total="30" passed="30" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="1439" name="KeepBlinking.EditorTests.dll" fullname="D:/111/KeepBlinking/Library/ScriptAssemblies/KeepBlinking.EditorTests.dll" runstate="Runnable" testcasecount="392" result="Passed" start-time="2026-08-31 10:38:53Z" end-time="2026-08-31 10:38:54Z" duration="1.592147" total="30" passed="30" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="3112" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestSuite" id="1440" name="KeepBlinking" fullname="KeepBlinking" runstate="Runnable" testcasecount="392" result="Passed" start-time="2026-08-31 10:38:53Z" end-time="2026-08-31 10:38:54Z" duration="1.590781" total="30" passed="30" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-suite type="TestSuite" id="1441" name="Tests" fullname="KeepBlinking.Tests" runstate="Runnable" testcasecount="392" result="Passed" start-time="2026-08-31 10:38:53Z" end-time="2026-08-31 10:38:54Z" duration="1.589624" total="30" passed="30" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-suite type="TestFixture" id="1154" name="CareStationArtAssetTests" fullname="KeepBlinking.Tests.CareStationArtAssetTests" classname="KeepBlinking.Tests.CareStationArtAssetTests" runstate="Runnable" testcasecount="30" result="Passed" start-time="2026-08-31 10:38:53Z" end-time="2026-08-31 10:38:54Z" duration="1.585987" total="30" passed="30" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <test-suite type="ParameterizedMethod" id="1167" name="CrewPrefabHasStableRequiredHierarchy" fullname="KeepBlinking.Tests.CareStationArtAssetTests.CrewPrefabHasStableRequiredHierarchy" classname="KeepBlinking.Tests.CareStationArtAssetTests" runstate="Runnable" testcasecount="4" result="Passed" start-time="2026-08-31 10:38:53Z" end-time="2026-08-31 10:38:53Z" duration="0.023284" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1163" name="CrewPrefabHasStableRequiredHierarchy(&quot;DustKeeper&quot;)" fullname="KeepBlinking.Tests.CareStationArtAssetTests.CrewPrefabHasStableRequiredHierarchy(&quot;DustKeeper&quot;)" methodname="CrewPrefabHasStableRequiredHierarchy" classname="KeepBlinking.Tests.CareStationArtAssetTests" runstate="Runnable" seed="2047366700" result="Passed" start-time="2026-08-31 10:38:53Z" end-time="2026-08-31 10:38:53Z" duration="0.012483" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1164" name="CrewPrefabHasStableRequiredHierarchy(&quot;DrySpotMender&quot;)" fullname="KeepBlinking.Tests.CareStationArtAssetTests.CrewPrefabHasStableRequiredHierarchy(&quot;DrySpotMender&quot;)" methodname="CrewPrefabHasStableRequiredHierarchy" classname="KeepBlinking.Tests.CareStationArtAssetTests" runstate="Runnable" seed="1543025728" result="Passed" start-time="2026-08-31 10:38:53Z" end-time="2026-08-31 10:38:53Z" duration="0.002003" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1165" name="CrewPrefabHasStableRequiredHierarchy(&quot;CareCourier&quot;)" fullname="KeepBlinking.Tests.CareStationArtAssetTests.CrewPrefabHasStableRequiredHierarchy(&quot;CareCourier&quot;)" methodname="CrewPrefabHasStableRequiredHierarchy" classname="KeepBlinking.Tests.CareStationArtAssetTests" runstate="Runnable" seed="453632220" result="Passed" start-time="2026-08-31 10:38:53Z" end-time="2026-08-31 10:38:53Z" duration="0.001554" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1166" name="CrewPrefabHasStableRequiredHierarchy(&quot;RestGuide&quot;)" fullname="KeepBlinking.Tests.CareStationArtAssetTests.CrewPrefabHasStableRequiredHierarchy(&quot;RestGuide&quot;)" methodname="CrewPrefabHasStableRequiredHierarchy" classname="KeepBlinking.Tests.CareStationArtAssetTests" runstate="Runnable" seed="1887322584" result="Passed" start-time="2026-08-31 10:38:53Z" end-time="2026-08-31 10:38:53Z" duration="0.000913" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-case id="1168" name="EmptyBottleInteriorIsActuallyTransparent" fullname="KeepBlinking.Tests.CareStationArtAssetTests.EmptyBottleInteriorIsActuallyTransparent" methodname="EmptyBottleInteriorIsActuallyTransparent" classname="KeepBlinking.Tests.CareStationArtAssetTests" runstate="Runnable" seed="383249543" result="Passed" start-time="2026-08-31 10:38:53Z" end-time="2026-08-31 10:38:53Z" duration="0.030530" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1188" name="FilterCatalogContainsThreeIndependentAnimatedLevels" fullname="KeepBlinking.Tests.CareStationArtAssetTests.FilterCatalogContainsThreeIndependentAnimatedLevels" methodname="FilterCatalogContainsThreeIndependentAnimatedLevels" classname="KeepBlinking.Tests.CareStationArtAssetTests" runstate="Runnable" seed="1534374785" result="Passed" start-time="2026-08-31 10:38:53Z" end-time="2026-08-31 10:38:53Z" duration="0.016080" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1187" name="FilterLayersHaveRealAlphaAndKeepFourPixelEdgesTransparent" fullname="KeepBlinking.Tests.CareStationArtAssetTests.FilterLayersHaveRealAlphaAndKeepFourPixelEdgesTransparent" methodname="FilterLayersHaveRealAlphaAndKeepFourPixelEdgesTransparent" classname="KeepBlinking.Tests.CareStationArtAssetTests" runstate="Runnable" seed="1452664051" result="Passed" start-time="2026-08-31 10:38:53Z" end-time="2026-08-31 10:38:54Z" duration="1.381886" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1186" name="FilterSpritesUseHighQualityRuntimeImports" fullname="KeepBlinking.Tests.CareStationArtAssetTests.FilterSpritesUseHighQualityRuntimeImports" methodname="FilterSpritesUseHighQualityRuntimeImports" classname="KeepBlinking.Tests.CareStationArtAssetTests" runstate="Runnable" seed="1214301666" result="Passed" start-time="2026-08-31 10:38:54Z" end-time="2026-08-31 10:38:54Z" duration="0.102025" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1169" name="FilterUsesStableSeparatedAuthoredSpriteLayers" fullname="KeepBlinking.Tests.CareStationArtAssetTests.FilterUsesStableSeparatedAuthoredSpriteLayers" methodname="FilterUsesStableSeparatedAuthoredSpriteLayers" classname="KeepBlinking.Tests.CareStationArtAssetTests" runstate="Runnable" seed="1403633369" result="Passed" start-time="2026-08-31 10:38:54Z" end-time="2026-08-31 10:38:54Z" duration="0.002134" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-suite type="ParameterizedMethod" id="1162" name="ImportSettingsPreserveTransparentUncompressedSprites" fullname="KeepBlinking.Tests.CareStationArtAssetTests.ImportSettingsPreserveTransparentUncompressedSprites" classname="KeepBlinking.Tests.CareStationArtAssetTests" runstate="Runnable" testcasecount="3" result="Passed" start-time="2026-08-31 10:38:54Z" end-time="2026-08-31 10:38:54Z" duration="0.005209" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1159" name="ImportSettingsPreserveTransparentUncompressedSprites(&quot;Assets/KeepBlinking/Art/CareStation/Crew/eye-care-crew-cart-grip.png&quot;)" fullname="KeepBlinking.Tests.CareStationArtAssetTests.ImportSettingsPreserveTransparentUncompressedSprites(&quot;Assets/KeepBlinking/Art/CareStation/Crew/eye-care-crew-cart-grip.png&quot;)" methodname="ImportSettingsPreserveTransparentUncompressedSprites" classname="KeepBlinking.Tests.CareStationArtAssetTests" runstate="Runnable" seed="580046184" result="Passed" start-time="2026-08-31 10:38:54Z" end-time="2026-08-31 10:38:54Z" duration="0.000598" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1160" name="ImportSettingsPreserveTransparentUncompressedSprites(&quot;Assets/KeepBlinking/Art/CareStation/Carts/care-cart-upgrades-double-decker.png&quot;)" fullname="KeepBlinking.Tests.CareStationArtAssetTests.ImportSettingsPreserveTransparentUncompressedSprites(&quot;Assets/KeepBlinking/Art/CareStation/Carts/care-cart-upgrades-double-decker.png&quot;)" methodname="ImportSettingsPreserveTransparentUncompressedSprites" classname="KeepBlinking.Tests.CareStationArtAssetTests" runstate="Runnable" seed="685679649" result="Passed" start-time="2026-08-31 10:38:54Z" end-time="2026-08-31 10:38:54Z" duration="0.000246" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1161" name="ImportSettingsPreserveTransparentUncompressedSprites(&quot;Assets/KeepBlinking/Art/CareStation/Bottles/care-sample-bottles-clear-empty-full-gold.png&quot;)" fullname="KeepBlinking.Tests.CareStationArtAssetTests.ImportSettingsPreserveTransparentUncompressedSprites(&quot;Assets/KeepBlinking/Art/CareStation/Bottles/care-sample-bottles-clear-empty-full-gold.png&quot;)" methodname="ImportSettingsPreserveTransparentUncompressedSprites" classname="KeepBlinking.Tests.CareStationArtAssetTests" runstate="Runnable" seed="1125941197" result="Passed" start-time="2026-08-31 10:38:54Z" end-time="2026-08-31 10:38:54Z" duration="0.000207" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="ParameterizedMethod" id="1185" name="LevelOneSpritesUsePhoneTargetPixelCanvases" fullname="KeepBlinking.Tests.CareStationArtAssetTests.LevelOneSpritesUsePhoneTargetPixelCanvases" classname="KeepBlinking.Tests.CareStationArtAssetTests" runstate="Runnable" testcasecount="15" result="Passed" start-time="2026-08-31 10:38:54Z" end-time="2026-08-31 10:38:54Z" duration="0.001994" total="15" passed="15" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1170" name="LevelOneSpritesUsePhoneTargetPixelCanvases(&quot;FilterL1_MachineBase.png&quot;,500,750)" fullname="KeepBlinking.Tests.CareStationArtAssetTests.LevelOneSpritesUsePhoneTargetPixelCanvases(&quot;FilterL1_MachineBase.png&quot;,500,750)" methodname="LevelOneSpritesUsePhoneTargetPixelCanvases" classname="KeepBlinking.Tests.CareStationArtAssetTests" runstate="Runnable" seed="1541380727" result="Passed" start-time="2026-08-31 10:38:54Z" end-time="2026-08-31 10:38:54Z" duration="0.000273" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1171" name="LevelOneSpritesUsePhoneTargetPixelCanvases(&quot;FilterL1_RawLiquidBody.png&quot;,164,164)" fullname="KeepBlinking.Tests.CareStationArtAssetTests.LevelOneSpritesUsePhoneTargetPixelCanvases(&quot;FilterL1_RawLiquidBody.png&quot;,164,164)" methodname="LevelOneSpritesUsePhoneTargetPixelCanvases" classname="KeepBlinking.Tests.CareStationArtAssetTests" runstate="Runnable" seed="1458255126" result="Passed" start-time="2026-08-31 10:38:54Z" end-time="2026-08-31 10:38:54Z" duration="0.000064" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1172" name="LevelOneSpritesUsePhoneTargetPixelCanvases(&quot;FilterL1_RawLiquidSurface.png&quot;,176,28)" fullname="KeepBlinking.Tests.CareStationArtAssetTests.LevelOneSpritesUsePhoneTargetPixelCanvases(&quot;FilterL1_RawLiquidSurface.png&quot;,176,28)" methodname="LevelOneSpritesUsePhoneTargetPixelCanvases" classname="KeepBlinking.Tests.CareStationArtAssetTests" runstate="Runnable" seed="958206569" result="Passed" start-time="2026-08-31 10:38:54Z" end-time="2026-08-31 10:38:54Z" duration="0.000043" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1173" name="LevelOneSpritesUsePhoneTargetPixelCanvases(&quot;FilterL1_FilterBed.png&quot;,196,88)" fullname="KeepBlinking.Tests.CareStationArtAssetTests.LevelOneSpritesUsePhoneTargetPixelCanvases(&quot;FilterL1_FilterBed.png&quot;,196,88)" methodname="LevelOneSpritesUsePhoneTargetPixelCanvases" classname="KeepBlinking.Tests.CareStationArtAssetTests" runstate="Runnable" seed="473157282" result="Passed" start-time="2026-08-31 10:38:54Z" end-time="2026-08-31 10:38:54Z" duration="0.000041" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1174" name="LevelOneSpritesUsePhoneTargetPixelCanvases(&quot;FilterL1_FilterDrips_01.png&quot;,84,108)" fullname="KeepBlinking.Tests.CareStationArtAssetTests.LevelOneSpritesUsePhoneTargetPixelCanvases(&quot;FilterL1_FilterDrips_01.png&quot;,84,108)" methodname="LevelOneSpritesUsePhoneTargetPixelCanvases" classname="KeepBlinking.Tests.CareStationArtAssetTests" runstate="Runnable" seed="1059955487" result="Passed" start-time="2026-08-31 10:38:54Z" end-time="2026-08-31 10:38:54Z" duration="0.000038" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1175" name="LevelOneSpritesUsePhoneTargetPixelCanvases(&quot;FilterL1_FilterDrips_02.png&quot;,84,108)" fullname="KeepBlinking.Tests.CareStationArtAssetTests.LevelOneSpritesUsePhoneTargetPixelCanvases(&quot;FilterL1_FilterDrips_02.png&quot;,84,108)" methodname="LevelOneSpritesUsePhoneTargetPixelCanvases" classname="KeepBlinking.Tests.CareStationArtAssetTests" runstate="Runnable" seed="1361917219" result="Passed" start-time="2026-08-31 10:38:54Z" end-time="2026-08-31 10:38:54Z" duration="0.000041" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1176" name="LevelOneSpritesUsePhoneTargetPixelCanvases(&quot;FilterL1_FilterDrips_03.png&quot;,84,108)" fullname="KeepBlinking.Tests.CareStationArtAssetTests.LevelOneSpritesUsePhoneTargetPixelCanvases(&quot;FilterL1_FilterDrips_03.png&quot;,84,108)" methodname="LevelOneSpritesUsePhoneTargetPixelCanvases" classname="KeepBlinking.Tests.CareStationArtAssetTests" runstate="Runnable" seed="1831609014" result="Passed" start-time="2026-08-31 10:38:54Z" end-time="2026-08-31 10:38:54Z" duration="0.000099" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1177" name="LevelOneSpritesUsePhoneTargetPixelCanvases(&quot;FilterL1_FilterDrips_04.png&quot;,84,108)" fullname="KeepBlinking.Tests.CareStationArtAssetTests.LevelOneSpritesUsePhoneTargetPixelCanvases(&quot;FilterL1_FilterDrips_04.png&quot;,84,108)" methodname="LevelOneSpritesUsePhoneTargetPixelCanvases" classname="KeepBlinking.Tests.CareStationArtAssetTests" runstate="Runnable" seed="138288821" result="Passed" start-time="2026-08-31 10:38:54Z" end-time="2026-08-31 10:38:54Z" duration="0.000050" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1178" name="LevelOneSpritesUsePhoneTargetPixelCanvases(&quot;FilterL1_OutletFlow_01.png&quot;,68,176)" fullname="KeepBlinking.Tests.CareStationArtAssetTests.LevelOneSpritesUsePhoneTargetPixelCanvases(&quot;FilterL1_OutletFlow_01.png&quot;,68,176)" methodname="LevelOneSpritesUsePhoneTargetPixelCanvases" classname="KeepBlinking.Tests.CareStationArtAssetTests" runstate="Runnable" seed="1005450336" result="Passed" start-time="2026-08-31 10:38:54Z" end-time="2026-08-31 10:38:54Z" duration="0.000044" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1179" name="LevelOneSpritesUsePhoneTargetPixelCanvases(&quot;FilterL1_OutletFlow_02.png&quot;,68,176)" fullname="KeepBlinking.Tests.CareStationArtAssetTests.LevelOneSpritesUsePhoneTargetPixelCanvases(&quot;FilterL1_OutletFlow_02.png&quot;,68,176)" methodname="LevelOneSpritesUsePhoneTargetPixelCanvases" classname="KeepBlinking.Tests.CareStationArtAssetTests" runstate="Runnable" seed="956999780" result="Passed" start-time="2026-08-31 10:38:54Z" end-time="2026-08-31 10:38:54Z" duration="0.000043" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1180" name="LevelOneSpritesUsePhoneTargetPixelCanvases(&quot;FilterL1_OutletFlow_03.png&quot;,68,176)" fullname="KeepBlinking.Tests.CareStationArtAssetTests.LevelOneSpritesUsePhoneTargetPixelCanvases(&quot;FilterL1_OutletFlow_03.png&quot;,68,176)" methodname="LevelOneSpritesUsePhoneTargetPixelCanvases" classname="KeepBlinking.Tests.CareStationArtAssetTests" runstate="Runnable" seed="491982717" result="Passed" start-time="2026-08-31 10:38:54Z" end-time="2026-08-31 10:38:54Z" duration="0.000042" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1181" name="LevelOneSpritesUsePhoneTargetPixelCanvases(&quot;FilterL1_OutletFlow_04.png&quot;,68,176)" fullname="KeepBlinking.Tests.CareStationArtAssetTests.LevelOneSpritesUsePhoneTargetPixelCanvases(&quot;FilterL1_OutletFlow_04.png&quot;,68,176)" methodname="LevelOneSpritesUsePhoneTargetPixelCanvases" classname="KeepBlinking.Tests.CareStationArtAssetTests" runstate="Runnable" seed="1579912037" result="Passed" start-time="2026-08-31 10:38:54Z" end-time="2026-08-31 10:38:54Z" duration="0.000040" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1182" name="LevelOneSpritesUsePhoneTargetPixelCanvases(&quot;FilterL1_BottleGlass.png&quot;,144,216)" fullname="KeepBlinking.Tests.CareStationArtAssetTests.LevelOneSpritesUsePhoneTargetPixelCanvases(&quot;FilterL1_BottleGlass.png&quot;,144,216)" methodname="LevelOneSpritesUsePhoneTargetPixelCanvases" classname="KeepBlinking.Tests.CareStationArtAssetTests" runstate="Runnable" seed="1941413479" result="Passed" start-time="2026-08-31 10:38:54Z" end-time="2026-08-31 10:38:54Z" duration="0.000051" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1183" name="LevelOneSpritesUsePhoneTargetPixelCanvases(&quot;FilterL1_BottleLiquidBody.png&quot;,86,124)" fullname="KeepBlinking.Tests.CareStationArtAssetTests.LevelOneSpritesUsePhoneTargetPixelCanvases(&quot;FilterL1_BottleLiquidBody.png&quot;,86,124)" methodname="LevelOneSpritesUsePhoneTargetPixelCanvases" classname="KeepBlinking.Tests.CareStationArtAssetTests" runstate="Runnable" seed="679227941" result="Passed" start-time="2026-08-31 10:38:54Z" end-time="2026-08-31 10:38:54Z" duration="0.000040" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1184" name="LevelOneSpritesUsePhoneTargetPixelCanvases(&quot;FilterL1_BottleLiquidSurface.png&quot;,90,24)" fullname="KeepBlinking.Tests.CareStationArtAssetTests.LevelOneSpritesUsePhoneTargetPixelCanvases(&quot;FilterL1_BottleLiquidSurface.png&quot;,90,24)" methodname="LevelOneSpritesUsePhoneTargetPixelCanvases" classname="KeepBlinking.Tests.CareStationArtAssetTests" runstate="Runnable" seed="943004558" result="Passed" start-time="2026-08-31 10:38:54Z" end-time="2026-08-31 10:38:54Z" duration="0.000040" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+            </test-suite>
+            <test-suite type="ParameterizedMethod" id="1158" name="SourceSheetsHaveStableNamedSpriteCounts" fullname="KeepBlinking.Tests.CareStationArtAssetTests.SourceSheetsHaveStableNamedSpriteCounts" classname="KeepBlinking.Tests.CareStationArtAssetTests" runstate="Runnable" testcasecount="3" result="Passed" start-time="2026-08-31 10:38:54Z" end-time="2026-08-31 10:38:54Z" duration="0.015792" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1155" name="SourceSheetsHaveStableNamedSpriteCounts(&quot;Assets/KeepBlinking/Art/CareStation/Crew/eye-care-crew-cart-grip.png&quot;,12)" fullname="KeepBlinking.Tests.CareStationArtAssetTests.SourceSheetsHaveStableNamedSpriteCounts(&quot;Assets/KeepBlinking/Art/CareStation/Crew/eye-care-crew-cart-grip.png&quot;,12)" methodname="SourceSheetsHaveStableNamedSpriteCounts" classname="KeepBlinking.Tests.CareStationArtAssetTests" runstate="Runnable" seed="1628062594" result="Passed" start-time="2026-08-31 10:38:54Z" end-time="2026-08-31 10:38:54Z" duration="0.004395" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1156" name="SourceSheetsHaveStableNamedSpriteCounts(&quot;Assets/KeepBlinking/Art/CareStation/Carts/care-cart-upgrades-double-decker.png&quot;,3)" fullname="KeepBlinking.Tests.CareStationArtAssetTests.SourceSheetsHaveStableNamedSpriteCounts(&quot;Assets/KeepBlinking/Art/CareStation/Carts/care-cart-upgrades-double-decker.png&quot;,3)" methodname="SourceSheetsHaveStableNamedSpriteCounts" classname="KeepBlinking.Tests.CareStationArtAssetTests" runstate="Runnable" seed="856342286" result="Passed" start-time="2026-08-31 10:38:54Z" end-time="2026-08-31 10:38:54Z" duration="0.003413" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1157" name="SourceSheetsHaveStableNamedSpriteCounts(&quot;Assets/KeepBlinking/Art/CareStation/Bottles/care-sample-bottles-clear-empty-full-gold.png&quot;,3)" fullname="KeepBlinking.Tests.CareStationArtAssetTests.SourceSheetsHaveStableNamedSpriteCounts(&quot;Assets/KeepBlinking/Art/CareStation/Bottles/care-sample-bottles-clear-empty-full-gold.png&quot;,3)" methodname="SourceSheetsHaveStableNamedSpriteCounts" classname="KeepBlinking.Tests.CareStationArtAssetTests" runstate="Runnable" seed="2040047607" result="Passed" start-time="2026-08-31 10:38:54Z" end-time="2026-08-31 10:38:54Z" duration="0.007459" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <output><![CDATA[<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: [TestRunnerNoThrottle] Restored Interaction Mode after test run.
+Saving results to: C:/Users/yuyixuan/AppData/LocalLow/DefaultCompany/KeepBlinking\TestResults.xml
+]]></output>
+              </test-case>
+            </test-suite>
+          </test-suite>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

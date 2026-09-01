@@ -1,0 +1,227 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="28" result="Passed" total="28" passed="28" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-08-31 10:49:18Z" end-time="2026-08-31 10:49:21Z" duration="2.811701">
+  <test-suite type="TestSuite" id="1075" name="KeepBlinking" fullname="KeepBlinking" runstate="Runnable" testcasecount="59" result="Passed" start-time="2026-08-31 10:49:18Z" end-time="2026-08-31 10:49:21Z" duration="2.811701" total="28" passed="28" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="PlayMode" />
+    </properties>
+    <test-suite type="Assembly" id="1068" name="KeepBlinking.PlayModeTests.dll" fullname="D:/111/KeepBlinking/Library/ScriptAssemblies/KeepBlinking.PlayModeTests.dll" runstate="Runnable" testcasecount="59" result="Passed" start-time="2026-08-31 10:49:18Z" end-time="2026-08-31 10:49:21Z" duration="2.804383" total="28" passed="28" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="35204" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="PlayMode" />
+        <property name="EditorOnly" value="False" />
+      </properties>
+      <test-suite type="TestSuite" id="1069" name="KeepBlinking" fullname="KeepBlinking" runstate="Runnable" testcasecount="59" result="Passed" start-time="2026-08-31 10:49:18Z" end-time="2026-08-31 10:49:21Z" duration="2.802720" total="28" passed="28" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-suite type="TestSuite" id="1070" name="Tests" fullname="KeepBlinking.Tests" runstate="Runnable" testcasecount="59" result="Passed" start-time="2026-08-31 10:49:18Z" end-time="2026-08-31 10:49:21Z" duration="2.801036" total="28" passed="28" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-suite type="TestFixture" id="1001" name="CareStationGrayboxPlayModeTests" fullname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests" classname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests" runstate="Runnable" testcasecount="28" result="Passed" start-time="2026-08-31 10:49:18Z" end-time="2026-08-31 10:49:21Z" duration="2.798200" total="28" passed="28" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <test-case id="1024" name="CareChecksStartUnselectedAndUseOneTouchScreen" fullname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests.CareChecksStartUnselectedAndUseOneTouchScreen" methodname="CareChecksStartUnselectedAndUseOneTouchScreen" classname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests" runstate="Runnable" seed="501667323" result="Passed" start-time="2026-08-31 10:49:18Z" end-time="2026-08-31 10:49:19Z" duration="0.289632" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1022" name="ChangeStepConfirmationAndShiftEndUseExplicitButtons" fullname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests.ChangeStepConfirmationAndShiftEndUseExplicitButtons" methodname="ChangeStepConfirmationAndShiftEndUseExplicitButtons" classname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests" runstate="Runnable" seed="777565654" result="Passed" start-time="2026-08-31 10:49:19Z" end-time="2026-08-31 10:49:19Z" duration="0.038004" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1025" name="DisabledUpgradeExplainsExactResourceShortfall" fullname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests.DisabledUpgradeExplainsExactResourceShortfall" methodname="DisabledUpgradeExplainsExactResourceShortfall" classname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests" runstate="Runnable" seed="1965151859" result="Passed" start-time="2026-08-31 10:49:19Z" end-time="2026-08-31 10:49:19Z" duration="0.046494" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1023" name="EndedAutoShiftDoesNotCreateAnotherShiftWithoutOfflineGate" fullname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests.EndedAutoShiftDoesNotCreateAnotherShiftWithoutOfflineGate" methodname="EndedAutoShiftDoesNotCreateAnotherShiftWithoutOfflineGate" classname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests" runstate="Runnable" seed="2021870839" result="Passed" start-time="2026-08-31 10:49:19Z" end-time="2026-08-31 10:49:19Z" duration="0.005715" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1029" name="FilterArtUsesStationLevelAndProductionStateWithoutChangingEconomy" fullname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests.FilterArtUsesStationLevelAndProductionStateWithoutChangingEconomy" methodname="FilterArtUsesStationLevelAndProductionStateWithoutChangingEconomy" classname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests" runstate="Runnable" seed="366534386" result="Passed" start-time="2026-08-31 10:49:19Z" end-time="2026-08-31 10:49:20Z" duration="1.447616" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1028" name="FinalStationLayoutKeepsProductionAnimationVisualOnly" fullname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests.FinalStationLayoutKeepsProductionAnimationVisualOnly" methodname="FinalStationLayoutKeepsProductionAnimationVisualOnly" classname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests" runstate="Runnable" seed="221687566" result="Passed" start-time="2026-08-31 10:49:20Z" end-time="2026-08-31 10:49:20Z" duration="0.037735" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1011" name="FocusShiftDevelopmentSequenceStillRequiresSixCompleteCycles" fullname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests.FocusShiftDevelopmentSequenceStillRequiresSixCompleteCycles" methodname="FocusShiftDevelopmentSequenceStillRequiresSixCompleteCycles" classname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests" runstate="Runnable" seed="659933652" result="Passed" start-time="2026-08-31 10:49:20Z" end-time="2026-08-31 10:49:20Z" duration="0.007506" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1027" name="FullStorageStationStillShowsCareEntryAndUsableNavigation" fullname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests.FullStorageStationStillShowsCareEntryAndUsableNavigation" methodname="FullStorageStationStillShowsCareEntryAndUsableNavigation" classname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests" runstate="Runnable" seed="1516462088" result="Passed" start-time="2026-08-31 10:49:20Z" end-time="2026-08-31 10:49:20Z" duration="0.036716" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1012" name="GuidedAndPilotDevelopmentFlowsUseTheirFinalCadence" fullname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests.GuidedAndPilotDevelopmentFlowsUseTheirFinalCadence" methodname="GuidedAndPilotDevelopmentFlowsUseTheirFinalCadence" classname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests" runstate="Runnable" seed="1949998408" result="Passed" start-time="2026-08-31 10:49:20Z" end-time="2026-08-31 10:49:20Z" duration="0.004676" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1020" name="LostCareBundleRecoveryPreservesArrivalsAndCompletesOneRemainingFlight" fullname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests.LostCareBundleRecoveryPreservesArrivalsAndCompletesOneRemainingFlight" methodname="LostCareBundleRecoveryPreservesArrivalsAndCompletesOneRemainingFlight" classname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests" runstate="Runnable" seed="2079662649" result="Passed" start-time="2026-08-31 10:49:20Z" end-time="2026-08-31 10:49:20Z" duration="0.003965" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1005" name="NewSaveCompletesDistanceResetThenOneCareCollectionBeforeShiftComplete" fullname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests.NewSaveCompletesDistanceResetThenOneCareCollectionBeforeShiftComplete" methodname="NewSaveCompletesDistanceResetThenOneCareCollectionBeforeShiftComplete" classname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests" runstate="Runnable" seed="1509946560" result="Passed" start-time="2026-08-31 10:49:20Z" end-time="2026-08-31 10:49:20Z" duration="0.004723" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1004" name="OfflineProductionAndCareBottlesUseSeparateSettlementAndDistanceGate" fullname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests.OfflineProductionAndCareBottlesUseSeparateSettlementAndDistanceGate" methodname="OfflineProductionAndCareBottlesUseSeparateSettlementAndDistanceGate" classname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests" runstate="Runnable" seed="1984585733" result="Passed" start-time="2026-08-31 10:49:20Z" end-time="2026-08-31 10:49:20Z" duration="0.003720" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1007" name="OfflineRewardAutoStoresBeforeIndependentDistanceResetAndCareCollection" fullname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests.OfflineRewardAutoStoresBeforeIndependentDistanceResetAndCareCollection" methodname="OfflineRewardAutoStoresBeforeIndependentDistanceResetAndCareCollection" classname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests" runstate="Runnable" seed="456429437" result="Passed" start-time="2026-08-31 10:49:20Z" end-time="2026-08-31 10:49:20Z" duration="0.003732" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1015" name="PilotFullscreenOverlayHidesStationAndUsesMostOfTheSafeArea" fullname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests.PilotFullscreenOverlayHidesStationAndUsesMostOfTheSafeArea" methodname="PilotFullscreenOverlayHidesStationAndUsesMostOfTheSafeArea" classname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests" runstate="Runnable" seed="2062955949" result="Passed" start-time="2026-08-31 10:49:20Z" end-time="2026-08-31 10:49:20Z" duration="0.041139" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1014" name="PilotGrayboxUsesAxisLabelsAndKeepsPupilsInsideTheEyes" fullname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests.PilotGrayboxUsesAxisLabelsAndKeepsPupilsInsideTheEyes" methodname="PilotGrayboxUsesAxisLabelsAndKeepsPupilsInsideTheEyes" classname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests" runstate="Runnable" seed="1593463860" result="Passed" start-time="2026-08-31 10:49:20Z" end-time="2026-08-31 10:49:20Z" duration="0.035364" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1013" name="PilotStepAdvancesOnlyToAdjacentGuidedWithoutProducingBottles" fullname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests.PilotStepAdvancesOnlyToAdjacentGuidedWithoutProducingBottles" methodname="PilotStepAdvancesOnlyToAdjacentGuidedWithoutProducingBottles" classname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests" runstate="Runnable" seed="1789214809" result="Passed" start-time="2026-08-31 10:49:20Z" end-time="2026-08-31 10:49:20Z" duration="0.005855" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1016" name="PilotToGuidedKeepsOneFullscreenOverlayUntilReliableOpenCompletes" fullname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests.PilotToGuidedKeepsOneFullscreenOverlayUntilReliableOpenCompletes" methodname="PilotToGuidedKeepsOneFullscreenOverlayUntilReliableOpenCompletes" classname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests" runstate="Runnable" seed="344906185" result="Passed" start-time="2026-08-31 10:49:20Z" end-time="2026-08-31 10:49:21Z" duration="0.539490" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1006" name="PushTimelineUsesAwayThenNewCloserOrigin" fullname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests.PushTimelineUsesAwayThenNewCloserOrigin" methodname="PushTimelineUsesAwayThenNewCloserOrigin" classname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests" runstate="Runnable" seed="1850036653" result="Passed" start-time="2026-08-31 10:49:21Z" end-time="2026-08-31 10:49:21Z" duration="0.003660" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1017" name="RecipeOnlyUnlocksCareBottleProductionAfterItsFinalAction" fullname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests.RecipeOnlyUnlocksCareBottleProductionAfterItsFinalAction" methodname="RecipeOnlyUnlocksCareBottleProductionAfterItsFinalAction" classname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests" runstate="Runnable" seed="1809514143" result="Passed" start-time="2026-08-31 10:49:21Z" end-time="2026-08-31 10:49:21Z" duration="0.003696" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1018" name="RecipeViewShowsTrainingAndPipelineProgressWithoutChangingResources" fullname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests.RecipeViewShowsTrainingAndPipelineProgressWithoutChangingResources" methodname="RecipeViewShowsTrainingAndPipelineProgressWithoutChangingResources" classname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests" runstate="Runnable" seed="1976308838" result="Passed" start-time="2026-08-31 10:49:21Z" end-time="2026-08-31 10:49:21Z" duration="0.037133" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1021" name="RetiredScreenTaskAndDeveloperSkipAreNotAvailable" fullname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests.RetiredScreenTaskAndDeveloperSkipAreNotAvailable" methodname="RetiredScreenTaskAndDeveloperSkipAreNotAvailable" classname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests" runstate="Runnable" seed="299069190" result="Passed" start-time="2026-08-31 10:49:21Z" end-time="2026-08-31 10:49:21Z" duration="0.036007" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1019" name="StationInspectionCompletesFourActionsBeforeRewardCanSettle" fullname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests.StationInspectionCompletesFourActionsBeforeRewardCanSettle" methodname="StationInspectionCompletesFourActionsBeforeRewardCanSettle" classname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests" runstate="Runnable" seed="960491765" result="Passed" start-time="2026-08-31 10:49:21Z" end-time="2026-08-31 10:49:21Z" duration="0.004894" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1003" name="ThreeShiftGrayboxLoopSettlesOnArrivalThenContinues" fullname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests.ThreeShiftGrayboxLoopSettlesOnArrivalThenContinues" methodname="ThreeShiftGrayboxLoopSettlesOnArrivalThenContinues" classname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests" runstate="Runnable" seed="1228982471" result="Passed" start-time="2026-08-31 10:49:21Z" end-time="2026-08-31 10:49:21Z" duration="0.004553" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1009" name="UnifiedCareActionLibraryCompletesWithoutChangingStationResources" fullname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests.UnifiedCareActionLibraryCompletesWithoutChangingStationResources" methodname="UnifiedCareActionLibraryCompletesWithoutChangingStationResources" classname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests" runstate="Runnable" seed="409484168" result="Passed" start-time="2026-08-31 10:49:21Z" end-time="2026-08-31 10:49:21Z" duration="0.003582" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1002" name="UnifiedClosedEyeRunnerPlaysEachCueOnlyOnce" fullname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests.UnifiedClosedEyeRunnerPlaysEachCueOnlyOnce" methodname="UnifiedClosedEyeRunnerPlaysEachCueOnlyOnce" classname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests" runstate="Runnable" seed="859495426" result="Passed" start-time="2026-08-31 10:49:21Z" end-time="2026-08-31 10:49:21Z" duration="0.036659" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <output><![CDATA[[CareVoice:rest-close] GENTLY CLOSE YOUR EYES.
+[CareVoice:rest-ready-open] REST COMPLETE. GENTLY OPEN YOUR EYES.
+]]></output>
+            </test-case>
+            <test-case id="1026" name="UpgradeOverlayKeepsNavigationAndBackToStationClickable" fullname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests.UpgradeOverlayKeepsNavigationAndBackToStationClickable" methodname="UpgradeOverlayKeepsNavigationAndBackToStationClickable" classname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests" runstate="Runnable" seed="36527780" result="Passed" start-time="2026-08-31 10:49:21Z" end-time="2026-08-31 10:49:21Z" duration="0.036272" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1010" name="WorkerLevelsRemainEconomicDataWhileWorkshopWorkersStayHidden" fullname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests.WorkerLevelsRemainEconomicDataWhileWorkshopWorkersStayHidden" methodname="WorkerLevelsRemainEconomicDataWhileWorkshopWorkersStayHidden" classname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests" runstate="Runnable" seed="622581212" result="Passed" start-time="2026-08-31 10:49:21Z" end-time="2026-08-31 10:49:21Z" duration="0.030166" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1008" name="WorkshopStationVisualPassHidesLegacyWorkers" fullname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests.WorkshopStationVisualPassHidesLegacyWorkers" methodname="WorkshopStationVisualPassHidesLegacyWorkers" classname="KeepBlinking.Tests.CareStationGrayboxPlayModeTests" runstate="Runnable" seed="135747098" result="Passed" start-time="2026-08-31 10:49:21Z" end-time="2026-08-31 10:49:21Z" duration="0.036669" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <output><![CDATA[<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: [TestRunnerNoThrottle] Restored Interaction Mode after test run.
+Saving results to: C:/Users/yuyixuan/AppData/LocalLow/DefaultCompany/KeepBlinking\TestResults.xml
+]]></output>
+            </test-case>
+          </test-suite>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

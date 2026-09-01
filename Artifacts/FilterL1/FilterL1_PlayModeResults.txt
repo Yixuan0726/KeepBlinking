@@ -1,0 +1,8 @@
+Result=Passed
+Passed=2
+Failed=0
+Skipped=0
+Inconclusive=0
+DurationSeconds=1.744
+[Passed] KeepBlinking.Tests.CareStationGrayboxPlayModeTests.FilterArtUsesStationLevelAndProductionStateWithoutChangingEconomy (1.659s)
+[Passed] KeepBlinking.Tests.FilterLevelOneScreenshotPlayModeTests.CaptureStationStartHalfAndCompleteGameViews (0.062s)

@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="7" result="Passed" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-08-31 10:20:52Z" end-time="2026-08-31 10:20:53Z" duration="0.083649">
+  <test-suite type="TestSuite" id="1000" name="KeepBlinking" fullname="KeepBlinking" runstate="Runnable" testcasecount="392" result="Passed" start-time="2026-08-31 10:20:52Z" end-time="2026-08-31 10:20:53Z" duration="0.083649" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="1439" name="KeepBlinking.EditorTests.dll" fullname="D:/111/KeepBlinking/Library/ScriptAssemblies/KeepBlinking.EditorTests.dll" runstate="Runnable" testcasecount="392" result="Passed" start-time="2026-08-31 10:20:52Z" end-time="2026-08-31 10:20:53Z" duration="0.075540" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="38552" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestSuite" id="1440" name="KeepBlinking" fullname="KeepBlinking" runstate="Runnable" testcasecount="392" result="Passed" start-time="2026-08-31 10:20:52Z" end-time="2026-08-31 10:20:53Z" duration="0.074509" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-suite type="TestSuite" id="1441" name="Tests" fullname="KeepBlinking.Tests" runstate="Runnable" testcasecount="392" result="Passed" start-time="2026-08-31 10:20:52Z" end-time="2026-08-31 10:20:53Z" duration="0.073764" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-suite type="TestFixture" id="1100" name="CareProductionTransportTests" fullname="KeepBlinking.Tests.CareProductionTransportTests" classname="KeepBlinking.Tests.CareProductionTransportTests" runstate="Runnable" testcasecount="7" result="Passed" start-time="2026-08-31 10:20:52Z" end-time="2026-08-31 10:20:53Z" duration="0.070498" total="7" passed="7" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <test-case id="1103" name="BasicConveyorAndOneShotFlagSurviveReload" fullname="KeepBlinking.Tests.CareProductionTransportTests.BasicConveyorAndOneShotFlagSurviveReload" methodname="BasicConveyorAndOneShotFlagSurviveReload" classname="KeepBlinking.Tests.CareProductionTransportTests" runstate="Runnable" seed="1552182539" result="Passed" start-time="2026-08-31 10:20:52Z" end-time="2026-08-31 10:20:52Z" duration="0.034811" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1101" name="LevelOneAlwaysUsesManualCarryWithoutUnlockPresentation" fullname="KeepBlinking.Tests.CareProductionTransportTests.LevelOneAlwaysUsesManualCarryWithoutUnlockPresentation" methodname="LevelOneAlwaysUsesManualCarryWithoutUnlockPresentation" classname="KeepBlinking.Tests.CareProductionTransportTests" runstate="Runnable" seed="300073448" result="Passed" start-time="2026-08-31 10:20:52Z" end-time="2026-08-31 10:20:53Z" duration="0.001116" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1107" name="LevelOneCannotKeepAnInvalidConveyorFlagFromAStaleSave" fullname="KeepBlinking.Tests.CareProductionTransportTests.LevelOneCannotKeepAnInvalidConveyorFlagFromAStaleSave" methodname="LevelOneCannotKeepAnInvalidConveyorFlagFromAStaleSave" classname="KeepBlinking.Tests.CareProductionTransportTests" runstate="Runnable" seed="1073388484" result="Passed" start-time="2026-08-31 10:20:53Z" end-time="2026-08-31 10:20:53Z" duration="0.001159" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1102" name="LevelTwoMilestoneUnlocksBasicConveyorExactlyOnce" fullname="KeepBlinking.Tests.CareProductionTransportTests.LevelTwoMilestoneUnlocksBasicConveyorExactlyOnce" methodname="LevelTwoMilestoneUnlocksBasicConveyorExactlyOnce" classname="KeepBlinking.Tests.CareProductionTransportTests" runstate="Runnable" seed="1230685571" result="Passed" start-time="2026-08-31 10:20:53Z" end-time="2026-08-31 10:20:53Z" duration="0.001091" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1108" name="StorageFullStopsReservedBottleAtWaitingPositionWithoutLosingEnergy" fullname="KeepBlinking.Tests.CareProductionTransportTests.StorageFullStopsReservedBottleAtWaitingPositionWithoutLosingEnergy" methodname="StorageFullStopsReservedBottleAtWaitingPositionWithoutLosingEnergy" classname="KeepBlinking.Tests.CareProductionTransportTests" runstate="Runnable" seed="1573185203" result="Passed" start-time="2026-08-31 10:20:53Z" end-time="2026-08-31 10:20:53Z" duration="0.002065" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-suite type="ParameterizedMethod" id="1106" name="VersionTwentyTwoSaveMigratesWithoutFalseOrRepeatedUnlock" fullname="KeepBlinking.Tests.CareProductionTransportTests.VersionTwentyTwoSaveMigratesWithoutFalseOrRepeatedUnlock" classname="KeepBlinking.Tests.CareProductionTransportTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-08-31 10:20:53Z" end-time="2026-08-31 10:20:53Z" duration="0.021871" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1104" name="VersionTwentyTwoSaveMigratesWithoutFalseOrRepeatedUnlock(1,ManualCarry,False)" fullname="KeepBlinking.Tests.CareProductionTransportTests.VersionTwentyTwoSaveMigratesWithoutFalseOrRepeatedUnlock(1,ManualCarry,False)" methodname="VersionTwentyTwoSaveMigratesWithoutFalseOrRepeatedUnlock" classname="KeepBlinking.Tests.CareProductionTransportTests" runstate="Runnable" seed="542493760" result="Passed" start-time="2026-08-31 10:20:53Z" end-time="2026-08-31 10:20:53Z" duration="0.009865" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1105" name="VersionTwentyTwoSaveMigratesWithoutFalseOrRepeatedUnlock(2,BasicConveyor,True)" fullname="KeepBlinking.Tests.CareProductionTransportTests.VersionTwentyTwoSaveMigratesWithoutFalseOrRepeatedUnlock(2,BasicConveyor,True)" methodname="VersionTwentyTwoSaveMigratesWithoutFalseOrRepeatedUnlock" classname="KeepBlinking.Tests.CareProductionTransportTests" runstate="Runnable" seed="1175501951" result="Passed" start-time="2026-08-31 10:20:53Z" end-time="2026-08-31 10:20:53Z" duration="0.007949" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <output><![CDATA[<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: [TestRunnerNoThrottle] Restored Interaction Mode after test run.
+Saving results to: C:/Users/yuyixuan/AppData/LocalLow/DefaultCompany/KeepBlinking\TestResults.xml
+]]></output>
+              </test-case>
+            </test-suite>
+          </test-suite>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="14" result="Passed" total="14" passed="14" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-08-31 10:39:41Z" end-time="2026-08-31 10:39:42Z" duration="0.9889615">
+  <test-suite type="TestSuite" id="1075" name="KeepBlinking" fullname="KeepBlinking" runstate="Runnable" testcasecount="59" result="Passed" start-time="2026-08-31 10:39:41Z" end-time="2026-08-31 10:39:42Z" duration="0.988962" total="14" passed="14" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="PlayMode" />
+    </properties>
+    <test-suite type="Assembly" id="1068" name="KeepBlinking.PlayModeTests.dll" fullname="D:/111/KeepBlinking/Library/ScriptAssemblies/KeepBlinking.PlayModeTests.dll" runstate="Runnable" testcasecount="59" result="Passed" start-time="2026-08-31 10:39:41Z" end-time="2026-08-31 10:39:42Z" duration="0.982459" total="14" passed="14" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="7756" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="PlayMode" />
+        <property name="EditorOnly" value="False" />
+      </properties>
+      <test-suite type="TestSuite" id="1069" name="KeepBlinking" fullname="KeepBlinking" runstate="Runnable" testcasecount="59" result="Passed" start-time="2026-08-31 10:39:41Z" end-time="2026-08-31 10:39:42Z" duration="0.980670" total="14" passed="14" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-suite type="TestSuite" id="1070" name="Tests" fullname="KeepBlinking.Tests" runstate="Runnable" testcasecount="59" result="Passed" start-time="2026-08-31 10:39:41Z" end-time="2026-08-31 10:39:42Z" duration="0.977534" total="14" passed="14" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-suite type="TestFixture" id="1030" name="CareStationUiInputPlayModeTests" fullname="KeepBlinking.Tests.CareStationUiInputPlayModeTests" classname="KeepBlinking.Tests.CareStationUiInputPlayModeTests" runstate="Runnable" testcasecount="14" result="Passed" start-time="2026-08-31 10:39:41Z" end-time="2026-08-31 10:39:42Z" duration="0.974749" total="14" passed="14" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <test-case id="1039" name="DesynchronizedGuidanceWithoutVisibilitySnapshot_RestoresCompleteStationShell" fullname="KeepBlinking.Tests.CareStationUiInputPlayModeTests.DesynchronizedGuidanceWithoutVisibilitySnapshot_RestoresCompleteStationShell" methodname="DesynchronizedGuidanceWithoutVisibilitySnapshot_RestoresCompleteStationShell" classname="KeepBlinking.Tests.CareStationUiInputPlayModeTests" runstate="Runnable" seed="186610042" result="Passed" start-time="2026-08-31 10:39:41Z" end-time="2026-08-31 10:39:41Z" duration="0.318157" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1040" name="ExpectedGuidanceWithHiddenShield_ReleasesStaleModeAndRestoresFourPrimaryButtons" fullname="KeepBlinking.Tests.CareStationUiInputPlayModeTests.ExpectedGuidanceWithHiddenShield_ReleasesStaleModeAndRestoresFourPrimaryButtons" methodname="ExpectedGuidanceWithHiddenShield_ReleasesStaleModeAndRestoresFourPrimaryButtons" classname="KeepBlinking.Tests.CareStationUiInputPlayModeTests" runstate="Runnable" seed="1548832567" result="Passed" start-time="2026-08-31 10:39:41Z" end-time="2026-08-31 10:39:41Z" duration="0.057467" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1035" name="FactoryDevices_HaveThreeDistinctNonOverlappingClickAreas" fullname="KeepBlinking.Tests.CareStationUiInputPlayModeTests.FactoryDevices_HaveThreeDistinctNonOverlappingClickAreas" methodname="FactoryDevices_HaveThreeDistinctNonOverlappingClickAreas" classname="KeepBlinking.Tests.CareStationUiInputPlayModeTests" runstate="Runnable" seed="1270685623" result="Passed" start-time="2026-08-31 10:39:41Z" end-time="2026-08-31 10:39:41Z" duration="0.044045" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1036" name="HiddenModalsDisableCanvasGroupsAndGraphicsAndNeverWinRaycasts" fullname="KeepBlinking.Tests.CareStationUiInputPlayModeTests.HiddenModalsDisableCanvasGroupsAndGraphicsAndNeverWinRaycasts" methodname="HiddenModalsDisableCanvasGroupsAndGraphicsAndNeverWinRaycasts" classname="KeepBlinking.Tests.CareStationUiInputPlayModeTests" runstate="Runnable" seed="986705135" result="Passed" start-time="2026-08-31 10:39:41Z" end-time="2026-08-31 10:39:41Z" duration="0.051144" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1042" name="LegacyStaleUiSave_LoadsAtStationWithoutInputLockOrEconomyLoss" fullname="KeepBlinking.Tests.CareStationUiInputPlayModeTests.LegacyStaleUiSave_LoadsAtStationWithoutInputLockOrEconomyLoss" methodname="LegacyStaleUiSave_LoadsAtStationWithoutInputLockOrEconomyLoss" classname="KeepBlinking.Tests.CareStationUiInputPlayModeTests" runstate="Runnable" seed="28989398" result="Passed" start-time="2026-08-31 10:39:41Z" end-time="2026-08-31 10:39:42Z" duration="0.068021" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1043" name="NoVisibleModal_TransparentFullscreenGraphicCannotBeFirstRaycastResult" fullname="KeepBlinking.Tests.CareStationUiInputPlayModeTests.NoVisibleModal_TransparentFullscreenGraphicCannotBeFirstRaycastResult" methodname="NoVisibleModal_TransparentFullscreenGraphicCannotBeFirstRaycastResult" classname="KeepBlinking.Tests.CareStationUiInputPlayModeTests" runstate="Runnable" seed="380705677" result="Passed" start-time="2026-08-31 10:39:42Z" end-time="2026-08-31 10:39:42Z" duration="0.045726" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1038" name="PauseResumeOwnershipSynchronization_RecoversStationInput" fullname="KeepBlinking.Tests.CareStationUiInputPlayModeTests.PauseResumeOwnershipSynchronization_RecoversStationInput" methodname="PauseResumeOwnershipSynchronization_RecoversStationInput" classname="KeepBlinking.Tests.CareStationUiInputPlayModeTests" runstate="Runnable" seed="1511632073" result="Passed" start-time="2026-08-31 10:39:42Z" end-time="2026-08-31 10:39:42Z" duration="0.051941" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1034" name="ProductionWaitingAndStorageFull_AllBottomNavigationButtonsRemainClickable" fullname="KeepBlinking.Tests.CareStationUiInputPlayModeTests.ProductionWaitingAndStorageFull_AllBottomNavigationButtonsRemainClickable" methodname="ProductionWaitingAndStorageFull_AllBottomNavigationButtonsRemainClickable" classname="KeepBlinking.Tests.CareStationUiInputPlayModeTests" runstate="Runnable" seed="3892371" result="Passed" start-time="2026-08-31 10:39:42Z" end-time="2026-08-31 10:39:42Z" duration="0.056608" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1037" name="RebuildAndFilterRefresh_PreserveOneWorkingBindingPerButton" fullname="KeepBlinking.Tests.CareStationUiInputPlayModeTests.RebuildAndFilterRefresh_PreserveOneWorkingBindingPerButton" methodname="RebuildAndFilterRefresh_PreserveOneWorkingBindingPerButton" classname="KeepBlinking.Tests.CareStationUiInputPlayModeTests" runstate="Runnable" seed="72520821" result="Passed" start-time="2026-08-31 10:39:42Z" end-time="2026-08-31 10:39:42Z" duration="0.045922" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1044" name="RepeatedRebind_OnePhysicalClickInvokesEachEventOnlyOnce" fullname="KeepBlinking.Tests.CareStationUiInputPlayModeTests.RepeatedRebind_OnePhysicalClickInvokesEachEventOnlyOnce" methodname="RepeatedRebind_OnePhysicalClickInvokesEachEventOnlyOnce" classname="KeepBlinking.Tests.CareStationUiInputPlayModeTests" runstate="Runnable" seed="422305318" result="Passed" start-time="2026-08-31 10:39:42Z" end-time="2026-08-31 10:39:42Z" duration="0.044707" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1031" name="StationLoad_AllFourPrimaryButtonsReceiveRealRaycastClicks" fullname="KeepBlinking.Tests.CareStationUiInputPlayModeTests.StationLoad_AllFourPrimaryButtonsReceiveRealRaycastClicks" methodname="StationLoad_AllFourPrimaryButtonsReceiveRealRaycastClicks" classname="KeepBlinking.Tests.CareStationUiInputPlayModeTests" runstate="Runnable" seed="1527234360" result="Passed" start-time="2026-08-31 10:39:42Z" end-time="2026-08-31 10:39:42Z" duration="0.044734" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1033" name="StorageFull_AllThreeBottomNavigationButtonsRemainClickable" fullname="KeepBlinking.Tests.CareStationUiInputPlayModeTests.StorageFull_AllThreeBottomNavigationButtonsRemainClickable" methodname="StorageFull_AllThreeBottomNavigationButtonsRemainClickable" classname="KeepBlinking.Tests.CareStationUiInputPlayModeTests" runstate="Runnable" seed="1137084400" result="Passed" start-time="2026-08-31 10:39:42Z" end-time="2026-08-31 10:39:42Z" duration="0.042262" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1032" name="StorageTwentyFourOfTwentyFourWithoutPendingReward_StartCareStillClicks" fullname="KeepBlinking.Tests.CareStationUiInputPlayModeTests.StorageTwentyFourOfTwentyFourWithoutPendingReward_StartCareStillClicks" methodname="StorageTwentyFourOfTwentyFourWithoutPendingReward_StartCareStillClicks" classname="KeepBlinking.Tests.CareStationUiInputPlayModeTests" runstate="Runnable" seed="649703325" result="Passed" start-time="2026-08-31 10:39:42Z" end-time="2026-08-31 10:39:42Z" duration="0.040101" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1041" name="TimeScaleZeroThenOne_DoesNotLeaveGuidanceShieldOrInputLock" fullname="KeepBlinking.Tests.CareStationUiInputPlayModeTests.TimeScaleZeroThenOne_DoesNotLeaveGuidanceShieldOrInputLock" methodname="TimeScaleZeroThenOne_DoesNotLeaveGuidanceShieldOrInputLock" classname="KeepBlinking.Tests.CareStationUiInputPlayModeTests" runstate="Runnable" seed="1538447116" result="Passed" start-time="2026-08-31 10:39:42Z" end-time="2026-08-31 10:39:42Z" duration="0.052714" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <output><![CDATA[<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: [TestRunnerNoThrottle] Restored Interaction Mode after test run.
+Saving results to: C:/Users/yuyixuan/AppData/LocalLow/DefaultCompany/KeepBlinking\TestResults.xml
+]]></output>
+            </test-case>
+          </test-suite>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

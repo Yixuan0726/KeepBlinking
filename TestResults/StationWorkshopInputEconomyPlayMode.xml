@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="2" result="Passed" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-08-31 10:33:46Z" end-time="2026-08-31 10:33:47Z" duration="0.377293">
+  <test-suite type="TestSuite" id="1075" name="KeepBlinking" fullname="KeepBlinking" runstate="Runnable" testcasecount="59" result="Passed" start-time="2026-08-31 10:33:46Z" end-time="2026-08-31 10:33:47Z" duration="0.377293" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="PlayMode" />
+    </properties>
+    <test-suite type="Assembly" id="1068" name="KeepBlinking.PlayModeTests.dll" fullname="D:/111/KeepBlinking/Library/ScriptAssemblies/KeepBlinking.PlayModeTests.dll" runstate="Runnable" testcasecount="59" result="Passed" start-time="2026-08-31 10:33:46Z" end-time="2026-08-31 10:33:47Z" duration="0.364804" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="35092" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="PlayMode" />
+        <property name="EditorOnly" value="False" />
+      </properties>
+      <test-suite type="TestSuite" id="1069" name="KeepBlinking" fullname="KeepBlinking" runstate="Runnable" testcasecount="59" result="Passed" start-time="2026-08-31 10:33:46Z" end-time="2026-08-31 10:33:47Z" duration="0.361831" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-suite type="TestSuite" id="1070" name="Tests" fullname="KeepBlinking.Tests" runstate="Runnable" testcasecount="59" result="Passed" start-time="2026-08-31 10:33:46Z" end-time="2026-08-31 10:33:47Z" duration="0.359160" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-suite type="TestSuite" id="1071" name="PlayMode" fullname="KeepBlinking.Tests.PlayMode" runstate="Runnable" testcasecount="10" result="Passed" start-time="2026-08-31 10:33:46Z" end-time="2026-08-31 10:33:47Z" duration="0.356473" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <test-suite type="TestFixture" id="1055" name="CareEconomyPhaseOnePlayModeTests" fullname="KeepBlinking.Tests.PlayMode.CareEconomyPhaseOnePlayModeTests" classname="KeepBlinking.Tests.PlayMode.CareEconomyPhaseOnePlayModeTests" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-08-31 10:33:46Z" end-time="2026-08-31 10:33:47Z" duration="0.353334" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1056" name="GrayboxShowsNewResourcesAndProductionNamesWithoutIncidentCard" fullname="KeepBlinking.Tests.PlayMode.CareEconomyPhaseOnePlayModeTests.GrayboxShowsNewResourcesAndProductionNamesWithoutIncidentCard" methodname="GrayboxShowsNewResourcesAndProductionNamesWithoutIncidentCard" classname="KeepBlinking.Tests.PlayMode.CareEconomyPhaseOnePlayModeTests" runstate="Runnable" seed="735062304" result="Passed" start-time="2026-08-31 10:33:46Z" end-time="2026-08-31 10:33:47Z" duration="0.286203" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1057" name="ProductionGrayboxHasOneFilterAndBottleStartsAtFiller" fullname="KeepBlinking.Tests.PlayMode.CareEconomyPhaseOnePlayModeTests.ProductionGrayboxHasOneFilterAndBottleStartsAtFiller" methodname="ProductionGrayboxHasOneFilterAndBottleStartsAtFiller" classname="KeepBlinking.Tests.PlayMode.CareEconomyPhaseOnePlayModeTests" runstate="Runnable" seed="64143557" result="Passed" start-time="2026-08-31 10:33:47Z" end-time="2026-08-31 10:33:47Z" duration="0.057030" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <output><![CDATA[<b><color=#2EA3FF>MCP-FOR-UNITY</color></b>: [TestRunnerNoThrottle] Restored Interaction Mode after test run.
+Saving results to: C:/Users/yuyixuan/AppData/LocalLow/DefaultCompany/KeepBlinking\TestResults.xml
+]]></output>
+              </test-case>
+            </test-suite>
+          </test-suite>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
